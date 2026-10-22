@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -129,7 +130,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	local := func(prefix string) []string {
 		return []string{fmt.Sprintf("%s127.0.0.1:%d", prefix, s.port), fmt.Sprintf("%slocalhost:%d", prefix, s.port)}
 	}
-	if !has(local(""), r.Host) { // block DNS rebinding
+	if !slices.Contains(local(""), r.Host) { // block DNS rebinding
 		w.WriteHeader(403)
 		return
 	}
@@ -152,7 +153,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		s.writeJSON(w, 200, toPayload(sn), "cache-control", "no-store")
 	case "POST /focus":
-		if o := r.Header.Get("Origin"); (o != "" && !has(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		if o := r.Header.Get("Origin"); (o != "" && !slices.Contains(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 			w.WriteHeader(403)
 			return
 		}

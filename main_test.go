@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -313,7 +314,7 @@ func TestReusedPidReResolved(t *testing.T) {
 	})
 	s.cache[100] = E(func(e *cacheEntry) { e.cwd, e.etime = "/x/old", "05:00" })
 	a := mustList(t, s, 1000)
-	if !has(calls, "lsof") || a[0].Project != "new" {
+	if !slices.Contains(calls, "lsof") || a[0].Project != "new" {
 		t.Errorf("calls %v project %v", calls, a[0].Project)
 	}
 }
@@ -782,9 +783,11 @@ func TestTwoClaudeInCwdParentPidNull(t *testing.T) {
 
 func TestSubagentEdgeCases(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
-	mk(t, root, "/w/a", "bad", "bad", "{", 3, now)
-	if got := subs(root, now, claude(100, "/w/a")); len(got) != 0 {
-		t.Error("bad json")
+	for _, meta := range []string{"{", "null", "[]", "true", "42", `"text"`, `{"description":"partial","model":}`} {
+		mk(t, root, "/w/a", "bad", "bad", meta, 3, now)
+		if got := subs(root, now, claude(100, "/w/a")); len(got) != 0 {
+			t.Errorf("invalid metadata %q: %+v", meta, got)
+		}
 	}
 	if got := subs(root, now, Agent{Pid: 5, Kind: "codex", Cwd: sp("/w/a")}, claude(6, "/nope")); got == nil || len(got) != 0 {
 		t.Errorf("got %#v", got)

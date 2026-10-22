@@ -3,6 +3,7 @@ package main
 import (
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -25,7 +26,7 @@ func tmuxTaskTitle(window, pane string) string {
 	}
 	window = strings.TrimSpace(window)
 	base := strings.ToLower(path.Base(strings.TrimPrefix(window, "-")))
-	if has([]string{"sh", "bash", "zsh", "fish", "dash", "ksh", "nu", "nushell", "pwsh", "shell"}, base) || has(kinds, base) || has(runtimes, base) {
+	if slices.Contains([]string{"sh", "bash", "zsh", "fish", "dash", "ksh", "nu", "nushell", "pwsh", "shell"}, base) || slices.Contains(kinds, base) || slices.Contains(runtimes, base) {
 		return ""
 	}
 	return window
