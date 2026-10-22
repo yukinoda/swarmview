@@ -68,6 +68,11 @@ The repository uses conventional commit subjects such as `fix: ...`,
 `feat: ...`, and `docs: ...`. A pull request should explain the user-visible
 change, how it was verified, and the platforms/terminals affected.
 
+Changes to `main` go through pull requests with passing macOS and Linux CI.
+Owner approval from **@yukinoda** is required. The repository's sole admin,
+@yukinoda, can bypass the approval requirement for a pull request (including
+their own); required CI still applies. Public access does not grant merge access.
+
 ## Dependency maintenance
 
 [Dependabot](.github/dependabot.yml) checks GitHub Actions weekly with a three-day
