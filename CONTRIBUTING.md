@@ -86,7 +86,7 @@ configuration file alone does not enable them.
 
 ## Adding an agent
 
-Executable names live in `kinds` in `main.go`; runtime wrappers and daemon
+Executable names live in `kinds` in `process.go`; runtime wrappers and daemon
 filters are nearby. Add a realistic process-table regression example. Detection
 alone does not establish native session status or subagent support: document
 those separately. The UI uses a monogram when no agent icon is available.
