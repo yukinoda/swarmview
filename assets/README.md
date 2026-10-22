@@ -15,9 +15,10 @@ vector artwork is included under the repository's [MIT license](../LICENSE).
   logo colors do not indicate agent status.
 
 The README dashboard screenshot uses illustrative demo data, not real sessions.
-`dashboard-guide.svg` is the annotated README illustration, also using synthetic
-tasks and metrics. Keep its labels aligned with the dashboard when changing UI
-terminology; `screenshot.png` shows the fuller multi-repository layout.
+`dashboard-guide.svg` is the annotated dashboard illustration linked from the
+README, also using synthetic tasks and metrics. Keep its labels aligned with the
+dashboard when changing UI terminology; `screenshot.png` shows the fuller
+multi-repository layout.
 
 `installer-light.svg` is the selected installer artwork, exported as vectors
 with outlined typography from the maintainer's private Figma source. The

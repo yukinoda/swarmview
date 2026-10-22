@@ -16,8 +16,8 @@ right tmux pane instead of checking every terminal.
 Works with **Claude Code, Codex, OpenCode, Gemini, Aider, and Cursor Agent**.
 Runs locally: one Go binary, no account, no analytics, no hosted service.
 
-<p align="center"><img src="assets/dashboard-guide.svg" width="960" height="620" alt="Illustrated Swarmview dashboard: 1, a waiting task that may need attention; 2, agents grouped by repository; 3, approximate agent RAM; 4, process age and CPU usage, not progress; 5, agent identity and tmux pane to return to."></p>
-<p align="center"><sub>Illustrative data. Activity is inferred from CPU use, not a native completion signal.</sub></p>
+<p align="center"><img src="assets/screenshot.png" width="720" alt="Swarmview dashboard showing tasks that may need attention, agents grouped by repository and worktree, and per-agent status, approximate RAM, process age, and CPU usage."></p>
+<p align="center"><sub>Dashboard screenshot with illustrative data. Activity is inferred from CPU use, not a native completion signal.</sub></p>
 
 ### Check → choose → continue
 
@@ -88,7 +88,7 @@ and metric.
 ## Learn more
 
 - [Dashboard guide](GUIDE.md) — statuses, search filters, tmux workflow, and resource use
-- [Full dashboard screenshot](assets/screenshot.png) — illustrative multi-repository view
+- [Annotated dashboard illustration](assets/dashboard-guide.svg) — a numbered guide to task rows and metrics
 - [Compatibility](COMPATIBILITY.md) — platforms, terminals, dependencies, and limitations
 - [Contributing](CONTRIBUTING.md) — development checks and release process
 - [Security](SECURITY.md) · [Issues](https://github.com/yukinoda/swarmview/issues) · [Brand assets](assets/README.md)
