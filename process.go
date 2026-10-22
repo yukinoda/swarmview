@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,15 +22,6 @@ var (
 	runtimes         = []string{"node", "bun", "deno", "python", "python3"}
 	daemonSubcommand = []string{"app-server", "mcp", "mcp-server", "daemon"}
 )
-
-func has(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
-}
 
 // Runner returns (stdout, err). Only the lsof caller uses stdout when err != nil.
 type Runner func(cmd string, args ...string) (string, error)
@@ -126,7 +118,7 @@ func parsePs(text string, selfPid int) ([]psRow, []procRow) {
 		tokens := f[5:]
 		i := 0
 		// limitation: runtime flags that take a value (`node --require x.js agent`) are missed
-		if has(runtimes, path.Base(tokens[0])) {
+		if slices.Contains(runtimes, path.Base(tokens[0])) {
 			i = -1
 			for j := 1; j < len(tokens); j++ {
 				if !strings.HasPrefix(tokens[j], "-") && tokens[j] != "run" {
@@ -145,7 +137,7 @@ func parsePs(text string, selfPid int) ([]psRow, []procRow) {
 				break
 			}
 		}
-		if !has(kinds, kind) {
+		if !slices.Contains(kinds, kind) {
 			continue
 		}
 		rest := tokens[i+1:]
@@ -157,7 +149,7 @@ func parsePs(text string, selfPid int) ([]psRow, []procRow) {
 				break
 			}
 		}
-		if has(daemonSubcommand, sub) || pid == selfPid {
+		if slices.Contains(daemonSubcommand, sub) || pid == selfPid {
 			continue
 		}
 		cands = append(cands, cand{psRow{pid, ppid, cpuSeconds(f[3]), f[4], kind}, strings.Join(rest, " ")})
@@ -273,13 +265,6 @@ type cacheEntry struct {
 	title        sessionTitle
 }
 
-func bn(p string) string {
-	if b := path.Base(p); b != "" {
-		return b
-	}
-	return p
-}
-
 // lsof retry interval for pids whose cwd it can't read (e.g. other users' processes)
 const cwdRetryMs = 30e3
 
@@ -381,7 +366,7 @@ func (s *server) listAgents(now int64) ([]Agent, error) {
 			c.etime = r.Etime
 			cwd, repo, wt := c.cwd, c.git.repo, c.git.worktree
 			a.Cwd, a.Repo, a.Worktree = &cwd, &repo, &wt
-			a.Project, a.RepoName = bn(cwd), c.git.repoName
+			a.Project, a.RepoName = path.Base(cwd), c.git.repoName
 			if c.active {
 				idle := float64(now-c.lastActiveAt) / 1000
 				a.IdleSec = &idle

@@ -239,12 +239,8 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				c, ok := metaCache[mp]
 				if !ok || c.mt != mmt {
 					b, err := os.ReadFile(mp)
-					var v any
 					var obj map[string]any
-					if err == nil && json.Unmarshal(b, &v) == nil {
-						obj, _ = v.(map[string]any)
-					}
-					if obj == nil {
+					if err != nil || json.Unmarshal(b, &obj) != nil || obj == nil {
 						continue
 					}
 					fin, _ := obj["finished"].(bool)
