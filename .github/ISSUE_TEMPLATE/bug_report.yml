@@ -1,0 +1,31 @@
+name: Bug report
+description: Report a reproducible problem with monitoring, labels, notifications, or focus.
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the swarmview commit/release, OS/architecture, browser, agent CLI, terminal, tmux version, and whether Ghostty is installed.
+      placeholder: "macOS arm64; swarmview commit …; Chrome …; OpenCode …; Ghostty …; tmux …"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include how swarmview and the agent were started, whether tmux was attached, and relevant window/tab/session layout. Redact sensitive titles and paths.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Screenshots or the exact row error help. Do not include credentials or conversation transcripts.
+    validations:
+      required: true

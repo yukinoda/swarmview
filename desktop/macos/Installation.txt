@@ -1,0 +1,24 @@
+Swarmview — Your agents. One view.
+
+1. Drag Swarmview.app onto Applications in this window.
+2. Open Swarmview from Applications, not from the mounted installer.
+3. Once the installed app is running, you can eject the installer and move the
+   downloaded DMG to Trash. The installed app stays in Applications.
+
+After a successful launch from Applications, Swarmview offers to eject the
+matching mounted installer and move its download to Trash. Choose Keep Installer
+to leave it in place.
+
+Updating an existing copy? Quit Swarmview before replacing it in Applications.
+
+This open-source prototype is ad-hoc signed, not notarized. If macOS blocks the
+downloaded app, try opening it once, then use System Settings > Privacy & Security
+> Open Anyway, if offered, and confirm that you trust the download. Do not disable
+Gatekeeper globally. Building from source remains available.
+
+Requires macOS 13.3 or later. Ghostty terminal activation may request Automation
+permission. The app does not install a privileged service, launch-at-login item,
+or background updater. Quitting it also stops its bundled monitoring server.
+
+Source, documentation, and issue reports:
+https://github.com/yukinoda/swarmview

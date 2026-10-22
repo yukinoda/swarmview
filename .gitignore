@@ -1,0 +1,25 @@
+# Build and release output
+/swarmview
+/dist/
+/*.test
+/coverage.out
+/swarmview_*.tar.gz
+/swarmview_*.app.zip
+/swarmview_*.dmg
+/SHA256SUMS
+
+# macOS filesystem metadata
+.DS_Store
+._*
+
+# Local agent tooling and credentials
+.opencode/
+.claude/
+.env
+.env.*
+!.env.example
+
+# Python development caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/

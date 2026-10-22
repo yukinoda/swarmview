@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="620" viewBox="0 0 960 620" role="img" aria-labelledby="title desc">
+  <title id="title">Your coding agents, explained in one view</title>
+  <desc id="desc">Illustrative swarmview dashboard with five numbered explanations: waiting tasks may need you, repository groups, approximate agent RAM, process age and CPU rather than progress, and agent identity with a clickable tmux target.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #c9d1d9; font-size: 16px; }
+    .muted { fill: #a0a8b5; font-size: 14px; }
+    .heading { font-weight: 600; }
+    .green { fill: #3fb950; }
+    .amber { fill: #e3b341; }
+    .number { fill: #5eead4; stroke: #0b0d12; stroke-width: 2; }
+    .digit { fill: #0b0d12; font-size: 13px; font-weight: 700; text-anchor: middle; }
+    .rule { stroke: #303745; fill: none; }
+  </style>
+  <rect width="960" height="620" rx="16" fill="#0b0d12"/>
+  <rect x="20" y="20" width="920" height="388" rx="12" fill="#10141c" stroke="#303745"/>
+  <text x="44" y="58" class="heading" style="font-size:22px">Swarmview</text>
+  <text x="188" y="57" class="muted">Your agents. One view.</text>
+  <text x="862" y="57" class="muted">Search</text>
+  <path d="M44 76H916" class="rule"/>
+  <text x="44" y="105" class="muted">2 agents · 1 working</text>
+  <text x="560" y="105" class="muted">swap 0 MB · RAM 62% free</text>
+  <text x="44" y="130" class="muted">Last updated 0s ago</text>
+
+  <circle cx="55" cy="163" r="12" class="number"/><text x="55" y="168" class="digit">1</text>
+  <text x="77" y="169" class="heading" style="font-size:13px;letter-spacing:1px">NEEDS YOU</text>
+  <text x="70" y="200" class="heading">Review API changes</text>
+  <text x="70" y="223" class="muted">Claude Code · atlas-api · dev:%2</text>
+  <rect x="777" y="181" width="122" height="28" rx="14" fill="#332b18"/>
+  <text x="792" y="201" class="amber">waiting 1m</text>
+
+  <path d="M44 242H916" class="rule"/>
+  <circle cx="55" cy="265" r="12" class="number"/><text x="55" y="270" class="digit">2</text>
+  <text x="77" y="271" class="heading">▾ atlas-api</text>
+  <text x="680" y="271" class="green" style="font-size:14px">● 1 working</text>
+  <text x="800" y="271" class="amber" style="font-size:14px">● 1 waiting</text>
+  <path d="M54 286V391M54 315H66M54 374H66" stroke="#3fb950" fill="none"/>
+  <text x="78" y="312" class="heading">Add request tracing</text>
+  <text x="78" y="338" class="muted">Codex · dev:%3</text>
+  <circle cx="218" cy="333" r="12" class="number"/><text x="218" y="338" class="digit">5</text>
+  <rect x="433" y="294" width="88" height="27" rx="14" fill="#192d20"/>
+  <text x="446" y="313" class="green">working</text>
+  <text x="550" y="313" class="muted">RAM ~420 MB</text>
+  <circle cx="601" cy="337" r="12" class="number"/><text x="601" y="342" class="digit">3</text>
+  <text x="705" y="313" class="muted">up 24m</text>
+  <text x="811" y="313" class="muted">CPU 13%</text>
+  <circle cx="793" cy="337" r="12" class="number"/><text x="793" y="342" class="digit">4</text>
+  <text x="78" y="370" class="heading">Review API changes</text>
+  <text x="78" y="392" class="muted">Claude Code · dev:%2</text>
+  <rect x="433" y="352" width="88" height="27" rx="14" fill="#332b18"/>
+  <text x="446" y="371" class="amber">waiting</text>
+  <text x="550" y="371" class="muted">RAM ~240 MB</text>
+  <text x="705" y="371" class="muted">up 31m</text>
+
+  <circle cx="45" cy="447" r="12" class="number"/><text x="45" y="452" class="digit">1</text>
+  <text x="67" y="452" class="heading">Spot quiet tasks</text>
+  <text x="67" y="476" class="muted">May need input; not proof of completion.</text>
+  <circle cx="505" cy="447" r="12" class="number"/><text x="505" y="452" class="digit">2</text>
+  <text x="527" y="452" class="heading">Find the right project</text>
+  <text x="527" y="476" class="muted">Agents grouped by repository and worktree.</text>
+  <circle cx="45" cy="513" r="12" class="number"/><text x="45" y="518" class="digit">3</text>
+  <text x="67" y="518" class="heading">Compare agent RAM</text>
+  <text x="67" y="542" class="muted">Approximate memory, including child processes.</text>
+  <circle cx="505" cy="513" r="12" class="number"/><text x="505" y="518" class="digit">4</text>
+  <text x="527" y="518" class="heading">Age + CPU, not progress</text>
+  <text x="527" y="542" class="muted">Process age; 100% CPU = one core.</text>
+  <circle cx="45" cy="579" r="12" class="number"/><text x="45" y="584" class="digit">5</text>
+  <text x="67" y="584" class="heading">Return to its terminal</text>
+  <text x="330" y="584" class="muted">Agent · tmux target. Click an enabled task row to select its pane.</text>
+</svg>

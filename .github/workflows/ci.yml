@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            chrome: google-chrome
+          - os: macos-latest
+            chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+    runs-on: ${{ matrix.os }}
+    env:
+      CHROME_BIN: ${{ matrix.chrome }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tmux lsof
+      - if: runner.os == 'macOS'
+        run: command -v tmux || brew install tmux
+      - name: Check formatting
+        run: test -z "$(gofmt -l ./*.go)" || { gofmt -d ./*.go; exit 1; }
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: python3 memory_check.py --self-test
+      - run: go build -trimpath -ldflags='-s -w' -o swarmview .
+      - name: Build and check the macOS WebView app
+        if: runner.os == 'macOS'
+        run: |
+          bash desktop/macos/build.sh
+          python3 desktop/macos/check.py dist/Swarmview.app
+          bash desktop/macos/dmg.sh

@@ -1,0 +1,17 @@
+name: Feature request
+description: Describe a workflow swarmview could support better.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you solving?
+      description: Describe the task, your current workaround, and the platforms/terminals involved.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: What is the smallest change that would make this workflow useful?
+    validations:
+      required: true
