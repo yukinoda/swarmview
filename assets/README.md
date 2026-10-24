@@ -39,5 +39,10 @@ distortion. The app icon uses the same logo with transparent macOS canvas paddin
 switcher all use the generated bundle icon.
 
 Agent glyphs in `index.html` come from [Simple Icons](https://simpleicons.org/)
-(CC0), including the OpenCode mark. These identify third-party tools; they are
-separate from Swarmview's own logo and do not imply endorsement.
+(CC0), including the OpenCode and Cursor marks, except for Aider's lowercase
+"a", taken from its upstream [Safari pinned-tab icon](https://github.com/Aider-AI/aider/blob/main/aider/website/assets/icons/safari-pinned-tab.svg)
+([Apache-2.0](aider-LICENSE.txt)). The Aider glyph is extracted from the background
+and scaled to the dashboard's 24×24 view box. The license is included in CLI
+release assets and macOS app resources. All agent glyphs are embedded locally and use
+the dashboard's status color. These identify third-party tools; they are separate
+from Swarmview's own logo and do not imply endorsement.
