@@ -87,6 +87,8 @@ func TestUI(t *testing.T) {
 				}
 				if scenario.reduced {
 					args = append(args, "--force-prefers-reduced-motion")
+				} else {
+					args = append(args, "--force-prefers-no-reduced-motion")
 				}
 				size := "compact"
 				if strings.HasPrefix(scenario.size, "680,") {
