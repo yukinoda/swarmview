@@ -13,6 +13,7 @@
 ._*
 
 # Local agent tooling and credentials
+.aider*
 .opencode/
 .claude/
 .env
