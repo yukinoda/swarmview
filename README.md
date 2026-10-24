@@ -17,19 +17,20 @@ Works with **Claude Code, Codex, OpenCode, Gemini, Aider, and Cursor Agent**.
 Runs locally: one Go binary, no account, no analytics, no hosted service.
 
 <p align="center"><img src="assets/screenshot.png" width="720" alt="Swarmview dashboard showing tasks that may need attention, agents grouped by repository and worktree, and per-agent status, approximate RAM, process age, and CPU usage."></p>
-<p align="center"><sub>Dashboard screenshot with illustrative data. Activity is inferred from CPU use, not a native completion signal.</sub></p>
+<p align="center"><sub>Illustrative data in an earlier dashboard layout; CPU and process age now live in Details. Activity is inferred, not a native completion or human-request signal.</sub></p>
 
 ### Check → choose → continue
 
 1. **Check what might need you.** Recently active agents that go quiet appear
-   under **Needs you** after 15 seconds; optionally enable desktop notifications.
+   under **Recently quiet** as bounded observations; optionally enable desktop
+   notifications. Quiet activity is not a confirmed request for help.
 2. **Choose a task.** Browse by repository/worktree or press **⌘ K / Ctrl K**
    to search task names, agents, and repositories.
-3. **Continue in its terminal.** Click an enabled row to select its tmux pane.
+3. **Continue in its terminal.** Click an enabled task identity to select its tmux pane.
    With Ghostty on macOS, Swarmview also brings the matching terminal view forward.
 
-**Waiting is a hint, not proof that a task is done.** Network and I/O waits can
-look quiet too. Monitoring works with any terminal; agents outside tmux are
+**Quiet is a hint, not proof that a task is done or needs you.** Network and I/O
+waits can look quiet too. Monitoring works with any terminal; agents outside tmux are
 monitoring-only.
 
 ## Download
@@ -67,28 +68,35 @@ Requires macOS 13.3+; ad-hoc signed, not notarized.
 ## Read a task row
 
 ```text
-Add request tracing     working   RAM ~420 MB   up 24m   CPU 13%
-└ Task title            Status    Agent RAM    Age      CPU use
+Task                    State     RAM
+Add request tracing     working   ~420 MB
+└ Task title            State     Agent RAM
   Codex · dev:%3
   └ Agent · tmux target (click the row to return to this pane)
+
+State / RAM → Details: CPU 13% · Process age: 24m
+            (separate disclosure, not a terminal action)
 ```
 
 | You see | It means |
 | --- | --- |
-| `RAM ~420 MB` | Approximate RAM of the agent and its child processes; not guaranteed reclaimable memory |
-| `up 24m` | How long the process has been running, not time spent on this task |
-| `CPU 13%` | Recent CPU use, **not percent complete**. 100% = one core; can exceed 100% |
-| `● 2 working` | Two working agents in that repository or worktree |
+| `~420 MB` in RAM | Approximate RAM of the agent and its child processes; not guaranteed reclaimable memory |
+| `—` in RAM | Memory is unavailable, not zero |
+| `Process age: 24m` in Details | How long the process has been running, not time spent on this task |
+| `CPU 13%` in Details | Recent CPU use, **not percent complete**. 100% = one core; can exceed 100% |
+| `2 working` | Two working agents in that repository or worktree |
 | `swap … · RAM …% free` | Machine-wide memory indicators on macOS |
 
-Expand **What do these numbers mean?** in the app, or read the
-[dashboard guide](GUIDE.md#reading-the-dashboard) for every status, memory color,
-and metric.
+RAM stays neutral regardless of agent size. Warning colors reflect actual OS
+memory pressure, not swap usage or low free RAM alone. Native human requests and
+communication events are unavailable: no CPU- or nesting-derived message pulses.
+Click a task's **State / RAM** cells for **Details**, or read the
+[dashboard guide](GUIDE.md#reading-the-dashboard) for status and metric definitions.
 
 ## Learn more
 
 - [Dashboard guide](GUIDE.md) — statuses, search filters, tmux workflow, and resource use
-- [Annotated dashboard illustration](assets/dashboard-guide.svg) — a numbered guide to task rows and metrics
+- [Annotated dashboard illustration](assets/dashboard-guide.svg) — an earlier layout's numbered guide to task rows and metrics
 - [Compatibility](COMPATIBILITY.md) — platforms, terminals, dependencies, and limitations
 - [Contributing](CONTRIBUTING.md) — development checks and release process
 - [Security](SECURITY.md) · [Issues](https://github.com/yukinoda/swarmview/issues) · [Brand assets](assets/README.md)

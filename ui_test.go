@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +43,16 @@ func TestUI(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
+		if r.URL.Path == "/" {
+			// New headless Chrome clamps top-level windows to >=500px. A same-origin
+			// frame exercises the real requested viewport; checks report to this body.
+			width, height := 375, 812
+			if r.URL.Query().Get("size") == "native" {
+				width, height = 680, 820
+			}
+			fmt.Fprintf(w, `<!doctype html><body style="margin:0"><iframe title="Synthetic UI checks" style="display:block;border:0;width:%dpx;height:%dpx" src="/test?%s"></iframe>`, width, height, r.URL.Query().Encode())
+			return
+		}
 		platform := "Linux"
 		if r.URL.Query().Get("platform") == "MacIntel" {
 			platform = "MacIntel"
@@ -49,15 +61,39 @@ func TestUI(t *testing.T) {
 		w.Write([]byte(strings.Replace(page, "<script>", "<script>"+init, 1)))
 	}))
 	defer srv.Close()
-	for _, platform := range []string{"MacIntel", "Linux"} {
-		t.Run(platform, func(t *testing.T) {
+	// Four runs cover both shortcut platforms, compact/native widths, themes,
+	// and reduced motion without launching a browser for every combination.
+	for _, scenario := range []struct {
+		name, platform, size, theme string
+		reduced                     bool
+	}{
+		{"MacCompactDarkReduced", "MacIntel", "375,812", "dark", true},
+		{"LinuxCompactLight", "Linux", "375,812", "light", false},
+		{"MacNativeLight", "MacIntel", "680,820", "light", false},
+		{"LinuxNativeDarkReduced", "Linux", "680,820", "dark", true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
 			var out []byte
 			var err error
 			// A cold Chrome on a fresh CI runner can hang at launch; one retry absorbs it.
 			for attempt := 0; attempt < 2; attempt++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
-					"--user-data-dir="+t.TempDir(), "--window-size=375,812", "--dump-dom", "--timeout=10000", srv.URL+"?platform="+platform)
+				args := []string{"--headless", "--no-sandbox", "--disable-gpu",
+					"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size, "--dump-dom", "--timeout=10000"}
+				if scenario.theme == "dark" {
+					args = append(args, "--force-dark-mode")
+				} else {
+					args = append(args, "--blink-settings=preferredColorScheme=1")
+				}
+				if scenario.reduced {
+					args = append(args, "--force-prefers-reduced-motion")
+				}
+				size := "compact"
+				if strings.HasPrefix(scenario.size, "680,") {
+					size = "native"
+				}
+				args = append(args, srv.URL+"?platform="+scenario.platform+"&theme="+scenario.theme+"&reduced="+strconv.FormatBool(scenario.reduced)+"&size="+size)
+				cmd := exec.CommandContext(ctx, chrome, args...)
 				cmd.WaitDelay = 5 * time.Second // Chrome helpers can hold the output pipe open after the kill
 				out, err = cmd.CombinedOutput()
 				if errors.Is(err, exec.ErrWaitDelay) {

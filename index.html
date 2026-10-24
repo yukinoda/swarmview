@@ -1,7 +1,7 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="A local dashboard for your coding agents. See activity, waiting tasks, and memory use in one view.">
+<meta name="description" content="A local dashboard for your coding agents. See observed activity, terminal context, and approximate memory use in one view.">
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <title>Swarmview</title>
 <style>
@@ -11,14 +11,16 @@
     --working: #1a7f37; --waiting: #9a6700; --idle: #57606a; --new: #0969da; --exiting: #cf222e; } }
   * { box-sizing: border-box; }
   body { margin: 0 auto; padding: 12px 16px; max-width: 560px; background: var(--bg); color: var(--fg); font: 14px/1.4 system-ui, sans-serif; }
-  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 0 16px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
-  .brand img { flex: none; border-radius: 9px; }
-  .brand h1 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.03em; }
-  .brand p { margin: 1px 0 0; font-size: 12px; color: var(--mut); }
-  header { color: var(--mut); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .brand { display: flex; align-items: center; gap: 8px; padding: 0 0 8px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .brand img { flex: none; border-radius: 6px; }
+  .brand h1 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -.03em; }
+  header { color: var(--mut); font-size: 12px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
   .bar { display: flex; gap: 4px; align-items: center; }
-  .bar button { all: unset; cursor: pointer; font-size: 12px; padding: 2px 8px; border-radius: 6px; color: var(--mut); }
+  .bar button { all: unset; box-sizing: border-box; cursor: pointer; font-size: 12px; min-height: 44px; padding: 2px 8px; border-radius: 6px; color: var(--mut); }
   .bar button:hover, .bar button:focus-visible { background: var(--hov); color: var(--fg); }
+  header .bar { gap: 2px; }
+  header .bar button { padding-inline: 4px; }
+  #notify { min-width: 44px; text-align: center; }
   .search-launch { margin-left: auto; }
   .search-launch button { min-height: 44px; }
   .search-launch button:focus-visible { outline: 2px solid var(--mut); }
@@ -40,7 +42,8 @@
   .search button, .search-head button { min-width: 44px; min-height: 44px; border: 0; background: transparent; color: var(--mut); padding: 8px 0; font: inherit; cursor: pointer; }
   .search button:focus-visible, .search-head button:focus-visible { outline: 2px solid var(--mut); outline-offset: 2px; }
   #close-search { color: var(--fg); font-weight: 500; }
-  #search-help, #search-count { color: var(--mut); font-size: 12px; }
+  #search-help, #search-count, #search-freshness { color: var(--mut); font-size: 12px; }
+  #search-freshness { margin: 8px 0 0; }
   #search-help { margin: 8px 0 0; }
   .fold:disabled, .bar button:disabled { cursor: default; }
   .bar button:disabled { opacity: .45; }
@@ -48,7 +51,7 @@
   .context { display: block; color: var(--mut); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .agent-kind:not(:empty) + .target:not(:empty)::before { content: " · "; }
   .target:empty { display: none; }
-  .hl { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .hl { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
   #mem.warn { color: var(--waiting); } #mem.crit { color: var(--exiting); }
   .sec { margin-bottom: 14px; }
   .sec .agent::before { display: none; }
@@ -59,55 +62,66 @@
   .mem { min-width: 0; }
   .mem:empty { display: none; }
   .mem, .up, .cpu { flex: none; white-space: nowrap; }
-  .mem.warn { color: var(--waiting); } .mem.crit { color: var(--exiting); }
   #empty { color: var(--mut); padding: 24px 0; text-align: center; }
   [hidden] { display: none !important; }
   .s-working, .h-working { --c: var(--working); --tc: var(--working); }
-  .s-waiting, .h-waiting { --c: var(--waiting); --tc: var(--waiting); }
+  .s-waiting, .h-waiting { --c: var(--idle); --tc: var(--idle); }
   .s-idle, .h-idle { --c: var(--idle); --tc: var(--idle); }
   .s-new, .h-new { --c: var(--new); --tc: var(--new); }
   .s-exiting, .h-exiting { --c: var(--exiting); --tc: var(--exiting); }
+  .s-unknown, .h-unknown { --c: var(--idle); --tc: var(--idle); }
   .group { margin-bottom: 14px; }
   .gh { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 15px; padding: 2px 0 4px; }
   .gl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fold { all: unset; flex: 1; cursor: pointer; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .fold { all: unset; flex: 1; cursor: pointer; display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 44px; }
   .fold:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; border-radius: 4px; }
   .chev { color: var(--mut); font-size: 10px; width: 10px; }
   .counts { flex: none; white-space: nowrap; display: flex; gap: 8px; font-size: 12px; font-weight: 400; }
   .counts span { color: var(--c); }
   .wt { margin: 2px 0 6px; }
-  .node .node .node > .kids { margin-left: 8px; padding-left: 6px; }
-  @media (max-width: 300px) { .up, .cpu { display: none; } }
   .wt > .gh { font-size: 14px; font-weight: 500; }
-  .pin { all: unset; flex: none; cursor: pointer; font-size: 12px; opacity: 0; padding: 0 4px; border-radius: 4px; }
+  .pin { all: unset; flex: none; cursor: pointer; font-size: 12px; opacity: 0; min-width: 44px; min-height: 44px; text-align: center; border-radius: 4px; }
   .pin:focus-visible { opacity: 1; outline: 2px solid var(--mut); }
   @media (hover: none) { .pin { opacity: .45; } }
   .gh:hover .pin { opacity: .45; }
   .pin[aria-pressed="true"] { opacity: 1; }
-  .group > .kids { margin-left: 8px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--tc) 55%, transparent); }
-  .group:has(.agent:not(:disabled):hover) > .kids { border-left-color: var(--tc); }
-  .node > .kids { margin-left: 17px; padding-left: 10px; border-left: 1px solid color-mix(in srgb, var(--c) 55%, transparent); }
-  .node:has(> .agent:not(:disabled):hover) > .kids { border-left-color: var(--c); }
+  .kids { position: relative; }
+  .group > .kids::before, .node > .kids::before { content: ""; position: absolute; z-index: -1; left: 8px; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--tc) 55%, transparent); }
+  .node > .kids::before { left: calc(22px + var(--depth, 0) * 14px); border-color: color-mix(in srgb, var(--c) 55%, transparent); }
+  .group { isolation: isolate; }
   .kids:empty { display: none; }
-  .agent { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; gap: 6px; width: 100%;
+  .agent { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 47px;
     padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--fg); }
+  .row-line { display: grid; grid-template-columns: minmax(0, 1fr) 152px; gap: 8px; min-height: 47px; }
+  .row-line > .agent { padding-left: calc(16px + var(--depth, 0) * 14px); min-width: 0; }
+  .metrics { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 64px 64px; gap: 8px; align-items: center; padding: 5px 8px; min-height: 47px; border-radius: 6px; }
+  .metrics:hover, .metrics:focus-visible { background: var(--hov); }
+  .metrics:focus-visible { outline: 2px solid var(--mut); outline-offset: -2px; }
+  .metrics .mem { text-align: right; color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .metrics .st { text-align: center; padding: 2px 0; font-size: 12px; }
+  .agent-details { padding: 8px 10px; margin: 2px 0 8px 16px; background: var(--hov); border-radius: 6px; color: var(--mut); font-size: 12px; overflow-wrap: anywhere; }
+  .agent-details p { margin: 4px 0; }
+  .agent-details button { min-height: 44px; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; font: inherit; padding: 4px 8px; }
+  .agent-details button:focus-visible { outline: 2px solid var(--mut); }
+  .column-head { display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px; gap: 8px; padding-inline: 8px; color: var(--mut); font-size: 11px; margin-bottom: 2px; }
+  .column-head span:nth-child(2) { text-align: center; } .column-head span:last-child { text-align: right; }
   .agent:not(:disabled):hover, .agent:focus-visible, #search-results .agent:focus { background: var(--hov); }
   .agent:focus-visible, #search-results .agent:focus { outline: 2px solid var(--mut); outline-offset: -2px; }
-  .agent::before { content: ""; position: absolute; left: -10px; top: 50%; width: 10px; height: 1px; background: var(--c); opacity: .55; }
+  .row-line > .agent::before { content: ""; position: absolute; left: calc(8px + var(--depth, 0) * 14px); top: 50%; width: 8px; height: 1px; background: var(--c); opacity: .55; }
   .agent:not(:disabled):hover::before { opacity: 1; height: 2px; }
   .agent.busy { cursor: progress; }
   .agent:disabled { cursor: default; }
   .logo { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--c); font-weight: 700; }
-  .s-waiting .logo svg { filter: drop-shadow(0 0 2px color-mix(in srgb, var(--c) 55%, transparent)); }
   .logo svg { fill: currentColor; display: block; }
-  .kind { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kind { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .identity .kind { display: block; font-weight: 500; }
-  @media (max-width: 480px) {
-    .node > .agent { flex-wrap: wrap; }
-    .node > .agent > .identity { flex-basis: calc(100% - 32px); }
-    .node > .agent > .st { margin-left: 26px; }
+  @media (max-width: 420px) {
+    .row-line > .agent { padding-left: calc(12px + var(--depth, 0) * 6px); }
+    .row-line > .agent::before { left: calc(6px + var(--depth, 0) * 6px); width: 6px; }
+    .node > .kids::before { left: calc(12px + var(--depth, 0) * 6px); }
+    .counts { gap: 4px; font-size: 11px; }
   }
-  .st { color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); padding: 1px 8px; border-radius: 10px; font-size: 12px; }
+  .st { color: var(--c); background: color-mix(in srgb, var(--c) 8%, transparent); padding: 1px 8px; border-radius: 10px; font-size: 12px; }
   .up, .cpu, .mut { color: var(--mut); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
   .mut { font-size: 11px; }
   .note { color: var(--exiting); font-size: 12px; padding: 0 6px 2px 30px; }
@@ -119,48 +133,46 @@
   #reading dl { margin: 8px 0; }
   #reading dt { color: var(--fg); font-weight: 600; margin-top: 10px; }
   #reading dd { margin: 2px 0 0; }
-  @keyframes pulse { 50% { opacity: .55; } }
-  @media (prefers-reduced-motion: no-preference) { .s-working .logo { animation: pulse var(--dur, 2.4s) ease-in-out infinite; } }
 </style>
-<div class="brand"><img src="/logo.svg" width="36" height="36" alt=""><div><h1>Swarmview</h1><p>Your agents. One view.</p></div><span class="bar search-launch"><button id="search-toggle" aria-controls="search-panel" aria-expanded="false" title="Search agents (Ctrl/⌘ K)">Search <kbd id="search-key">Ctrl K</kbd></button></span></div>
-<header><span class="hl"><span id="count"></span><span id="mem" title="System-wide swap and macOS-reported available RAM, not just these agents" hidden></span></span><span class="bar"><span id="offline" hidden>offline</span><button id="notify" hidden></button><button id="expand">Expand all</button><button id="collapse">Collapse all</button></span></header>
+<div class="brand"><img src="/logo.svg" width="24" height="24" alt=""><h1>Swarmview</h1><span class="bar search-launch"><button id="search-toggle" aria-controls="search-panel" aria-expanded="false" title="Search agents (Ctrl/⌘ K)">Search <kbd id="search-key">Ctrl K</kbd></button></span></div>
+<header><span class="hl"><span id="count"></span><span id="mem" title="Actual OS memory pressure, system-wide swap and macOS-reported available RAM; not just these agents" hidden></span></span><span class="bar"><span id="offline" hidden>offline</span><button id="notify" hidden></button><button id="expand">Expand all</button><button id="collapse">Collapse all</button></span></header>
 <div id="freshness" role="status">Waiting for first snapshot</div>
 <dialog id="search-panel" aria-labelledby="search-title" hidden>
   <div class="search-head"><h2 id="search-title">Find an agent</h2><button id="close-search" aria-label="Done searching" title="Close search">Done</button></div>
   <div class="search"><input id="search" type="search" aria-label="Search agents" aria-describedby="search-help" aria-controls="search-results" aria-keyshortcuts="Control+k Meta+k" placeholder="Search tasks, agents, repos…" autocomplete="off" spellcheck="false"><button id="clear-search" aria-label="Clear search" hidden>Clear</button></div>
   <span id="search-count" role="status" hidden></span>
+  <p id="search-freshness" role="status" hidden></p>
   <div id="search-results-wrap" hidden><div id="search-results" role="group" aria-label="Search results"></div></div>
   <p id="search-message">Type to search current tasks, agents, and repositories.</p>
-  <p id="search-help">↑/↓ choose · Enter open · Done, Esc, or click outside to close<br>Try agent:opencode status:waiting</p>
+  <p id="search-help">↑/↓ choose · Enter open terminal · Done, Esc, or click outside to close<br>Try agent:opencode status:quiet (waiting is also accepted)</p>
 </dialog>
-<section id="needs" class="sec" hidden><h2>Needs you</h2><div id="needs-list"></div></section>
-<section id="reclaim" class="sec" hidden><h2>Reclaim memory</h2><div id="reclaim-list"></div></section>
+<section id="quiet" class="sec" hidden><h2>Recently quiet</h2><div id="quiet-list"></div></section>
 <div id="empty" hidden>No agents running</div>
+<div class="column-head" aria-hidden="true"><span></span><span>State</span><span>RAM</span></div>
 <main id="tree"></main>
 <div id="legend"></div>
 <details id="reading">
-  <summary>What do these numbers mean?</summary>
+  <summary>Details: CPU, process age &amp; metric definitions</summary>
   <dl>
-    <dt>Agents and repository counts</dt><dd>The header counts detected agents, excluding subagents. Repository and worktree counts show working and waiting agents by name and color.</dd>
-    <dt>Status and Needs you</dt><dd>Working means recent CPU activity, not task progress. Waiting means previously active, now quiet; network or I/O waits can look the same. After 15 seconds waiting, an agent appears in Needs you. New means just started; idle means no recent observed activity; exiting means just disappeared.</dd>
-    <dt>RAM ~1.6 GB</dt><dd>Approximate resident memory of an agent and its child processes. Shared pages may be counted more than once. Amber starts at 500 MB; red at 1.5 GB. These are size hints, not errors or system memory pressure.</dd>
-    <dt>up 1h</dt><dd>Agent process age, not time spent on the current task. Subagent rows show the model here instead.</dd>
-    <dt>CPU 36%</dt><dd>Recent CPU use including child processes. 100% is one CPU core; multi-core work can exceed 100%. This is not percent complete. Shown while working.</dd>
-    <dt>OpenCode · dev:%42</dt><dd>Agent name and tmux session/pane target, not a metric. Click an enabled task row to select its terminal pane. Outside tmux, agents are monitoring-only.</dd>
-    <dt>System swap / RAM free</dt><dd>Machine-wide indicators, available on macOS. Swap is disk space used for virtual memory; RAM free is the macOS-reported available-memory percentage.</dd>
+    <dt>Agents and repository counts</dt><dd>The header counts detected agents, excluding subagents. Repository and worktree counts show working and quiet agents, plus detected workers.</dd>
+    <dt>State and Recently quiet</dt><dd>Working means recent CPU activity (or subagent log writes), not task progress or communication. Quiet means previously active, now quiet; network, tools, workers, and human input cannot be distinguished. Idle means no recent observed activity; new means just started; exiting means just disappeared. Quiet never means finished or a request for help. Unknown means activity telemetry is unavailable.</dd>
+    <dt>RAM ~1.6 GB</dt><dd>Approximate resident memory of an agent and its child processes, excluding separately listed agents. Shared pages may be counted more than once, so values are not exact additive physical RAM or reclaimable memory. Large values alone are not warnings. A dash means unavailable, including per-worker RAM.</dd>
+    <dt>Per-agent details</dt><dd>Click State or RAM to show CPU, process age, model and terminal context where available, or to fold a worker branch. Details work for monitoring-only agents too. Click an enabled task to open its terminal; this is a separate action.</dd>
+    <dt>Process age / CPU 36%</dt><dd>Process age is not time spent on the current task. CPU includes child processes; 100% is one CPU core and multi-core work can exceed 100%. This is not percent complete. Worker CPU and process age are unavailable.</dd>
+    <dt>OpenCode · dev:%42</dt><dd>Agent name and tmux session/pane target, not a metric. Outside tmux, agents are monitoring-only.</dd>
+    <dt>System pressure / swap / RAM free</dt><dd id="system-details">Waiting for system snapshot.</dd><dd>Machine-wide indicators, available on macOS. Only actual OS pressure (normal, warning or critical) sets warning severity. Normal pressure is in the header tooltip and these details when swap/free context is shown. Swap is disk space used for virtual memory, not current pressure; RAM free is the macOS-reported available-memory percentage. Missing pressure telemetry is explicitly unavailable.</dd>
     <dt>Last updated</dt><dd>Age of the last snapshot. If offline appears, the visible data is retained and keeps aging while Swarmview retries.</dd>
-    <dt>Reclaim memory</dt><dd>Up to three idle agents using at least 300 MB each. This is a suggestion; Swarmview does not close them or free their memory.</dd>
+    <dt>Recently quiet notifications</dt><dd>At most three observations are shown, from 15 seconds to 5 minutes quiet, after activity was observed in this page session. Optional notifications and tab counts use that same observation (the tab counts all matches), not a human request. No agents are closed automatically.</dd>
+    <dt>Hierarchy and communication</dt><dd>Lines show detected parentage only. Communication events are unavailable, so there are no send/reply pulses. No conversation contents or extra event polling are collected.</dd>
   </dl>
 </details>
 <script>
 const WORKING_RATE = 0.025; // CPU cores; keep equal to the server's WORKING_RATE
 const POLL_MS = 2000, POLL_HIDDEN_MS = 5000; // hidden tabs keep polling (slower) so the title, favicon and notifications still work
-const NEEDS_IDLE_SEC = 15; // tunable: waiting this long before an agent counts as needing you
+const QUIET_MIN_SEC = 15, QUIET_MAX_SEC = 300, QUIET_LIMIT = 3;
 const MB = 1024 ** 2, GB = 1024 ** 3;
-// tunable: starting points from a machine that froze at ~3.7 GB swapped
-const SWAP_WARN = 2 * GB, SWAP_CRIT = 4 * GB, PRESSURE_WARN = 2, PRESSURE_CRIT = 4;
-const MEM_PILL_WARN = 500 * MB, MEM_PILL_CRIT = 1.5 * GB, RECLAIM_MIN = 300 * MB, RECLAIM_MAX = 3;
-const HEAT = ['working', 'waiting', 'new', 'idle', 'exiting']; // hottest first, for group trunk colour
+const HEAT = ['working', 'waiting', 'new', 'idle', 'unknown', 'exiting']; // activity first, for group trunk colour
+const stateLabel = s => s === 'waiting' ? 'quiet' : s;
 // Simple Icons (CC0) 24x24 paths; original set from simple-icons@13.21.0,
 // OpenCode from https://cdn.simpleicons.org/opencode. Others get a monogram.
 const LOGOS = {
@@ -174,6 +186,7 @@ const $ = id => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
 const rows = new Map(), groups = new Map();
 let last = new Map(), busy = false, timer, lastData = null, nextGroupID = 0;
+const snapshotState = (now = Date.now()) => !$('offline').hidden ? 'offline' : lastData?.at != null && now - lastData.at > 15000 ? 'stale' : null;
 // per-browser UI state: pinned repos (stay on top in pin order, rows never reorder) and folded groups
 const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
@@ -182,7 +195,7 @@ const rerender = () => lastData && render(lastData, true);
 function togglePin(k) { pins = pins.includes(k) ? pins.filter(p => p !== k) : [...pins, k]; save('swarmview.pins', pins); rerender(); }
 function toggleFold(k) { folded.has(k) ? folded.delete(k) : folded.add(k); save('swarmview.folded', [...folded]); rerender(); }
 // fold every repo/worktree on screen (also drops keys of groups that no longer exist), or unfold everything
-const foldAll = on => { folded = new Set(on ? groups.keys() : []); save('swarmview.folded', [...folded]); rerender(); };
+const foldAll = on => { folded = new Set(on ? [...groups.keys(), ...rows.keys()] : []); save('swarmview.folded', [...folded]); rerender(); };
 
 const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
 const txt = (e, v) => { if (e.textContent !== v) e.textContent = v; };
@@ -198,13 +211,22 @@ function logo(kind, size) { // inline svg (monogram if no icon); colour comes fr
 }
 
 function mkRow() {
-  const node = el('div'), btn = el('button', 'agent'), kids = el('div', 'kids');
-  const r = { node, btn, kids, kind: null, size: 0, logo: null, identity: el('span', 'identity'), name: el('span', 'kind'), context: el('span', 'context'), agentKind: el('span', 'agent-kind'), target: el('span', 'target'), st: el('span', 'st'), mem: el('span', 'mem mut'), up: el('span', 'up'), cpu: el('span', 'cpu'), note: null, noteUntil: 0 };
+  const node = el('div'), line = el('div', 'row-line'), btn = el('button', 'agent'), kids = el('div', 'kids');
+  const r = { node, btn, kids, kind: null, size: 0, logo: null, identity: el('span', 'identity'), name: el('span', 'kind'), context: el('span', 'context'), agentKind: el('span', 'agent-kind'), target: el('span', 'target'), st: el('span', 'st'), mem: el('span', 'mem'), up: el('span', 'up'), cpu: el('span', 'cpu'), model: el('span'), terminal: el('p'), detail: el('div', 'agent-details'), toggle: el('button', 'metrics'), branch: el('button'), workers: el('span'), note: null, noteUntil: 0 };
   r.context.append(r.agentKind, r.target); r.identity.append(r.name, r.context);
+  r.context.append(r.workers);
   r.mem.title = 'Approximate agent + child-process RAM (RSS); shared pages may be counted more than once';
   r.cpu.title = 'Recent agent + child-process CPU; 100% = one core, not task progress';
-  r.target.title = 'tmux session/pane target; click an enabled row to select this pane';
-  node.append(btn, kids);
+  r.target.title = 'tmux session/pane target; click an enabled task to select this pane';
+  r.detail.id = 'd' + nextGroupID++; r.detail.hidden = true;
+  r.toggle.setAttribute('aria-controls', r.detail.id); r.toggle.setAttribute('aria-expanded', 'false');
+  r.toggle.title = 'Details: CPU, process age and worker branch';
+  r.toggle.onclick = () => { r.detail.hidden = !r.detail.hidden; r.toggle.setAttribute('aria-expanded', !r.detail.hidden); };
+  r.toggle.append(r.st, r.mem);
+  for (const metric of [r.cpu, r.up, r.model]) { const p = el('p'); p.append(metric); r.detail.append(p); }
+  const help = el('p'); help.textContent = 'Activity is not progress or a request for input. Task opens terminal when available.';
+  r.detail.append(r.terminal, help, r.branch); r.branch.hidden = true;
+  line.append(btn, r.toggle); node.append(line, r.detail, kids);
   btn.onclick = () => focus(r);
   return r;
 }
@@ -215,20 +237,20 @@ function fill(r, it) {
     const l = logo(it.kind, it.size);
     r.logo ? r.logo.replaceWith(l) : r.btn.prepend(l);
     r.logo = l;
-    r.btn.append(r.identity, r.st, r.mem, r.up, r.cpu);
+    r.btn.append(r.identity);
   }
   r.pid = it.pid; // focus target: the agent itself, or a subagent's top-level agent (may be null)
   r.btn.disabled = !it.canFocus || !!it.dying;
   cls(r.node, 'node s-' + it.status);
-  txt(r.name, it.name); txt(r.st, it.stText); txt(r.up, it.up); txt(r.cpu, it.cpu);
+  txt(r.name, it.name); txt(r.st, it.stText); txt(r.up, it.up); txt(r.cpu, it.cpu); txt(r.model, it.model || '');
   txt(r.target, it.target || '');
   txt(r.agentKind, it.agentLabel || '');
-  r.up.title = it.sub ? 'Subagent model' : 'Agent process age, not current task duration';
+  txt(r.terminal, [it.agentName, it.target, it.cwd].filter(Boolean).join(' · '));
+  r.up.title = 'Agent process age, not current task duration';
   r.search = null; // Build lazily only when a query needs current metadata.
-  txt(r.mem, it.mem ? 'RAM ~' + fmtBytes(it.mem) : ''); cls(r.mem, 'mem mut ' + (it.mem >= MEM_PILL_CRIT ? 'crit' : it.mem >= MEM_PILL_WARN ? 'warn' : ''));
+  txt(r.mem, it.mem != null ? '~' + fmtBytes(it.mem) : '—');
+  r.toggle.setAttribute('aria-label', `Details for ${it.name}: ${it.stText}, RAM ${r.mem.textContent}`);
   if (r.btn.title !== it.tip) r.btn.title = it.tip;
-  r.logo.style.opacity = it.fade;
-  r.logo.style.setProperty('--dur', it.dur);
   if (r.note && Date.now() > r.noteUntil) { r.note.remove(); r.note = null; }
 }
 
@@ -244,7 +266,7 @@ async function focus(r) {
   r.btn.classList.remove('busy');
   r.btn.setAttribute('aria-busy', 'false');
   if (err) { // removed by the next poll after 3s; no timer needed
-    if (!r.note) { r.note = el('div', 'note'); r.btn.after(r.note); }
+    if (!r.note) { r.note = el('div', 'note'); r.note.setAttribute('role', 'alert'); (r.detail || r.btn).insertAdjacentElement(r.detail ? 'beforebegin' : 'afterend', r.note); }
     txt(r.note, err); r.noteUntil = Date.now() + 3000;
   }
   return !err;
@@ -260,30 +282,28 @@ const human = e => {
 const fmtBytes = b => b >= GB ? (b / GB).toFixed(1) + ' GB' : Math.round(b / MB) + ' MB';
 const dur = s => s < 60 ? Math.floor(s) + 's' : s < 3600 ? Math.floor(s / 60) + 'm' : s < 86400 ? Math.floor(s / 3600) + 'h' : Math.floor(s / 86400) + 'd';
 
-// "waiting" is a heuristic: an interactive CLI that recently went idle is presumed to be waiting for its user; an agent blocked on a long child process also shows as waiting
-const statusOf = a => a.isNew ? 'new' : a.recentCpu >= WORKING_RATE ? 'working'
-  : a.idleSec !== null && a.idleSec < 1800 ? 'waiting' : 'idle';
+// Keep the existing waiting search alias, but never infer a human request from CPU quietness.
+const statusOf = a => a.isNew ? 'new' : !Number.isFinite(a.recentCpu) ? 'unknown' : a.recentCpu >= WORKING_RATE ? 'working'
+  : a.idleSec != null && a.idleSec < 1800 ? 'waiting' : 'idle';
 
-// the one definition of "needs you": drives the section, the tab title/favicon count and notifications.
-const needsYou = it => it.status === 'waiting' && it.idleSec >= NEEDS_IDLE_SEC;
+const recentlyQuiet = it => it.status === 'waiting' && it.idleSec >= QUIET_MIN_SEC && it.idleSec <= QUIET_MAX_SEC && eps.get(it.pid)?.worked;
+const terminalTarget = a => a.tmuxTarget ? a.tmuxTarget + (a.tmuxAttached ? '' : a.canFocus ? ' · open Ghostty' : ' · attach client') : 'Monitoring only · outside tmux';
 
 function agentItem(a) {
   const status = statusOf(a);
-  const target = a.tmuxTarget ? a.tmuxTarget + (a.tmuxAttached ? '' : a.canFocus ? ' · open Ghostty' : ' · attach client') : 'Monitoring only · outside tmux';
+  const target = terminalTarget(a);
   const agentName = { opencode: 'OpenCode', claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini', aider: 'Aider', 'cursor-agent': 'Cursor' }[a.kind] || a.kind;
   return { key: 'a:' + a.pid, parent: 'a:' + a.ppid, pid: a.pid, cwd: a.cwd, agentName, repo: a.repo ?? a.cwd ?? 'unknown', repoName: a.repoName ?? a.project, wt: a.worktree ?? a.cwd ?? 'unknown',
-    kind: a.kind, size: 20, name: a.title || agentName, agentLabel: a.title ? agentName : '', target, tip: [agentName, a.title, a.cwd, target, a.canFocus ? 'Open terminal at tmux pane' : a.tmuxTarget ? 'Attach a tmux client to select this pane' : 'Monitoring only · start in tmux to select a pane'].filter(Boolean).join(' · '), canFocus: a.canFocus === true, idleSec: a.idleSec, mem: a.memBytes ?? 0, status, stText: status, up: 'up ' + human(a.etime), cpu: status === 'working' ? 'CPU ' + Math.round(a.recentCpu * 100) + '%' : '',
-    dur: a.recentCpu < 0.1 ? '2.4s' : a.recentCpu < 0.5 ? '1.4s' : '0.8s',
-    ord: a.pid, fade: status === 'idle' ? (a.idleSec == null ? 0.4 : Math.max(0.4, 1 - a.idleSec / 7200)) : 1 };
+    kind: a.kind, size: 20, name: a.title || agentName, agentLabel: a.title ? agentName : '', target, tip: [agentName, a.title, a.cwd, target, a.canFocus ? 'Open terminal at tmux pane' : a.tmuxTarget ? 'Attach a tmux client to select this pane' : 'Monitoring only · start in tmux to select a pane'].filter(Boolean).join(' · '), canFocus: a.canFocus === true, idleSec: a.idleSec, mem: Number.isFinite(a.memBytes) && a.memBytes > 0 ? a.memBytes : null, status, stText: stateLabel(status), up: a.etime ? 'Process age: ' + human(a.etime) : 'Process age: unavailable', cpu: Number.isFinite(a.recentCpu) ? 'CPU ' + Math.round(a.recentCpu * 100) + '%' : 'CPU: unavailable', ord: a.pid };
 }
 
 // Claude subagent: nests under the subagent that spawned it, else its claude session, else the worktree.
-// "working" (recent writes) or "running" (alive, quiet); never "waiting"; click focuses the top-level claude (if known)
+// Recent writes are activity, not communication; click focuses the top-level Claude (if known).
 function subItem(s, i, host) {
   return { key: 'sub:' + s.id, parent: s.parentAgentId ? 'sub:' + s.parentAgentId : s.parentPid == null ? null : 'a:' + s.parentPid,
     pid: s.parentPid, cwd: s.cwd, agentName: 'Claude Code', canFocus: s.parentPid != null && host?.pid === s.parentPid && host.canFocus === true, repo: host?.repo ?? s.cwd, repoName: host?.repoName ?? (s.cwd.split('/').pop() || s.cwd), wt: host?.worktree ?? s.cwd,
-    kind: 'claude', size: 16, name: s.description ?? 'subagent', tip: s.description ?? 'subagent', mem: 0, status: s.working ? 'working' : 'idle', stText: s.working ? 'working' : 'running',
-    up: s.model ?? '', cpu: '', dur: '2.4s', fade: 1, ord: 1e9 + i, sub: true };
+    kind: 'claude', size: 16, name: s.description ?? 'subagent', agentLabel: 'Claude Code', target: host ? terminalTarget(host) : 'Worker · parent terminal unavailable', tip: s.description ?? 'subagent', mem: null, status: s.working === true ? 'working' : s.working === false ? 'idle' : 'unknown', stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
+    up: 'Process age: unavailable', cpu: 'CPU: unavailable', model: 'Model: ' + (s.model || 'unavailable'), ord: 1e9 + i, sub: true };
 }
 
 function group(key, wt) { // repo or worktree header: fold toggle, label, status counts, pin (repos only)
@@ -299,7 +319,7 @@ function group(key, wt) { // repo or worktree header: fold toggle, label, status
   return g;
 }
 
-// compact keyed rows shared by "Needs you" and "Reclaim memory"
+// Compact keyed terminal links for bounded quiet observations and search results.
 function mkCard() {
   const node = el('div'), btn = el('button', 'agent');
   const r = { node, btn, kind: null, logo: null, identity: el('span', 'identity'), name: el('span', 'kind'), sub: el('span', 'sub'), meta: el('span', 'st'), note: null, noteUntil: 0 };
@@ -332,12 +352,12 @@ function sync(box, store, list, meta) {
   for (const [k, r] of store) if (!keep.has(k)) { r.node.remove(); store.delete(k); }
   box.parentElement.hidden = !list.length;
 }
-const needRows = new Map(), reclaimRows = new Map();
+const quietRows = new Map();
 
 const SEARCH_LIMIT = 20, searchRows = new Map();
 let firstSearchMatch = null, searchActive = false;
 function searchFields(it) {
-  const fields = { task: it.name, agent: [it.kind, it.agentName].filter(Boolean).join(' '), repo: it.repoName + ' ' + it.repo, path: [it.wt, it.cwd].filter(Boolean).join(' '), status: it.status, pid: String(it.pid ?? ''), pane: it.target || '' };
+  const fields = { task: it.name, agent: [it.kind, it.agentName].filter(Boolean).join(' '), repo: it.repoName + ' ' + it.repo, path: [it.wt, it.cwd].filter(Boolean).join(' '), status: [it.status, it.stText].join(' '), pid: String(it.pid ?? ''), pane: it.target || '' };
   for (const k in fields) fields[k] = String(fields[k] ?? '').toLowerCase();
   fields.text = [fields.task, fields.agent, label(it), it.stText, fields.pane].join(' ').toLowerCase();
   return fields;
@@ -368,8 +388,10 @@ function applySearch() {
     }
   }
   const resultHadFocus = $('search-results').contains(document.activeElement);
-  sync($('search-results'), searchRows, results, it => it.stText);
+  const retained = snapshotState();
+  sync($('search-results'), searchRows, results, it => retained || it.stText);
   for (const [key, r] of searchRows) {
+    if (retained) cls(r.node, 'node s-unknown');
     if (!firstSearchMatch && !r.btn.disabled) firstSearchMatch = r;
     r.btn.onclick = async () => { if (await focus(r) && searchRows.get(key) === r) closeSearch(); };
   }
@@ -439,21 +461,21 @@ document.addEventListener('keydown', e => {
 let lastN = -1;
 const fav = document.querySelector('link[rel="icon"]');
 function ambient(n) {
-  const t = n ? `(${n}) waiting · Swarmview` : 'Swarmview';
+  const t = n ? `(${n}) recently quiet · Swarmview` : 'Swarmview';
   if (document.title !== t) document.title = t;
   if (n === lastN) return;
   lastN = n;
   if (!n) { fav.href = '/logo.svg'; return; }
   const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  const svg = `<svg xmlns="${NS}" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="${n ? css('--waiting') : css('--idle')}"/>`
+  const svg = `<svg xmlns="${NS}" viewBox="0 0 32 32"><circle cx="16" cy="16" r="15" fill="${css('--idle')}"/>`
     + (n ? `<text x="16" y="22" font-size="18" font-weight="700" text-anchor="middle" fill="#fff" font-family="sans-serif">${n > 9 ? '9+' : n}</text>` : '') + '</svg>';
   fav.href = 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
-// notifications: once per waiting episode, only for agents seen working in this page session
+// Notifications describe quiet observations, never requests for human input.
 let notifyOn = load('swarmview.notify', false) === true;
 const bell = $('notify'), eps = new Map(); // pid -> { worked, fired }
-const paintBell = () => { bell.textContent = notifyOn ? '\u{1F514}' : '\u{1F515}'; bell.setAttribute('aria-pressed', notifyOn); bell.title = notifyOn ? 'Notifications on' : 'Notify when an agent needs you'; };
+const paintBell = () => { bell.textContent = notifyOn ? '\u{1F514}' : '\u{1F515}'; bell.setAttribute('aria-pressed', notifyOn); bell.title = 'Recently quiet notifications ' + (notifyOn ? 'on' : 'off') + ' · not requests for input'; bell.setAttribute('aria-label', bell.title); };
 if ('Notification' in window) {
   bell.hidden = false; paintBell();
   bell.onclick = async () => {
@@ -463,7 +485,7 @@ if ('Notification' in window) {
 }
 function fire(it) {
   if (!notifyOn || !('Notification' in window) || Notification.permission !== 'granted') return;
-  const n = new Notification(it.name, { body: 'waiting · ' + label(it), tag: 'swarmview-' + it.pid });
+  const n = new Notification(it.name, { body: 'Recently quiet · ' + label(it) + ' · activity observation, not a request for input', tag: 'swarmview-' + it.pid });
   n.onclick = () => { window.focus(); const r = rows.get('a:' + it.pid); if (r) focus(r); n.close(); };
 }
 function watch(list) {
@@ -473,16 +495,21 @@ function watch(list) {
     let e = eps.get(it.pid);
     if (!e) eps.set(it.pid, e = { worked: false, fired: false });
     if (it.status === 'working') { e.worked = true; e.fired = false; }
-    else if (e.worked && !e.fired && needsYou(it)) { e.fired = true; fire(it); }
+    else if (e.worked && !e.fired && recentlyQuiet(it)) { e.fired = true; fire(it); }
   }
   for (const pid of eps.keys()) if (!alive.has(pid)) eps.delete(pid);
 }
 
 function gauge(sys) {
-  const g = $('mem'), swap = sys?.swapUsedBytes ?? null, free = sys?.freePct ?? null, p = sys?.pressure ?? 0;
-  g.hidden = swap == null && free == null;
-  txt(g, [swap != null && 'swap ' + fmtBytes(swap), free != null && `RAM ${free}% free`].filter(Boolean).join(' · '));
-  cls(g, p >= PRESSURE_CRIT || swap >= SWAP_CRIT ? 'crit' : p >= PRESSURE_WARN || swap >= SWAP_WARN ? 'warn' : '');
+  const g = $('mem'), swap = sys?.swapUsedBytes ?? null, free = sys?.freePct ?? null, p = sys?.pressure;
+  g.hidden = false;
+  const pressure = { 1: 'normal', 2: 'warning', 4: 'critical' }[p] || 'unavailable';
+  const context = [swap != null && 'swap ' + fmtBytes(swap), free != null && `RAM ${free}% free`].filter(Boolean);
+  const full = ['Pressure ' + pressure, ...context].join(' · ');
+  txt(g, pressure === 'normal' && context.length ? context.join(' · ') : full);
+  g.title = full + ' · machine-wide, not just these agents';
+  txt($('system-details'), full);
+  cls(g, p === 4 ? 'crit' : p === 2 ? 'warn' : '');
 }
 
 function render(data, again = false) {
@@ -492,13 +519,27 @@ function render(data, again = false) {
   for (const a of agents) { const it = agentItem(a); cur.set(it.key, it); }
   subagents.forEach((s, i) => { const it = subItem(s, i, byPid.get(s.parentPid) ?? byCwd.get(s.cwd)); cur.set(it.key, it); });
   for (const [k, it] of last) // gone since last poll: one poll in red, then removed
-    if (!cur.has(k) && !it.dying) cur.set(k, { ...it, dying: true, status: 'exiting', stText: 'exiting', cpu: '', fade: 1 });
+    if (!cur.has(k) && !it.dying) cur.set(k, { ...it, dying: true, status: 'exiting', stText: 'exiting' });
+  // Resolve orphaned workers once so counts, indentation and placement share the same parent.
+  for (const it of cur.values()) {
+    if (!it.parent || it.parent === it.key || !cur.has(it.parent)) it.parent = it.sub && it.pid != null && cur.has('a:' + it.pid) ? 'a:' + it.pid : null;
+  }
+  const checked = new Set();
+  for (const it of cur.values()) {
+    const path = new Set();
+    let key = it.key;
+    while (key && !checked.has(key)) {
+      if (path.has(key)) { cur.get(key).parent = null; break; }
+      path.add(key); key = cur.get(key).parent;
+    }
+    for (const k of path) checked.add(k);
+  }
   last = cur;
 
   // repo -> worktrees, with rolled-up status for headers
   const repos = new Map();
-  const stat = () => ({ n: { working: 0, waiting: 0 }, heat: 9 });
-  const add = (s, it) => { if (!it.dying && !it.sub && it.status in s.n) s.n[it.status]++; s.heat = Math.min(s.heat, HEAT.indexOf(it.status)); };
+  const stat = () => ({ n: { working: 0, waiting: 0, workers: 0 }, heat: 9 });
+  const add = (s, it) => { if (!it.dying) { if (it.sub) s.n.workers++; else if (it.status in s.n) s.n[it.status]++; } s.heat = Math.min(s.heat, HEAT.indexOf(it.status)); };
   for (const it of cur.values()) {
     let r = repos.get(it.repo);
     if (!r) repos.set(it.repo, r = { key: it.repo, name: it.repoName, wts: new Map(), ...stat() });
@@ -519,7 +560,7 @@ function render(data, again = false) {
     if (g.ck === ck) return; // nothing changed since last poll
     g.ck = ck; g.kids.hidden = f; g.label.title = title;
     txt(g.chev, f ? '▸' : '▾'); g.fold.setAttribute('aria-expanded', !f);
-    g.counts.replaceChildren(...n.map(([st, v]) => { const e = el('span', 's-' + st); e.textContent = '● ' + v + ' ' + st; e.setAttribute('aria-label', v + ' ' + st); return e; }));
+    g.counts.replaceChildren(...n.map(([st, v]) => { const e = el('span', 's-' + (st === 'workers' ? 'idle' : st)); e.textContent = v + ' ' + stateLabel(st); return e; }));
     if (g.pin) { g.pin.setAttribute('aria-pressed', p); g.pin.title = p ? 'Unpin' : 'Pin to top'; }
   };
   const pi = k => { const i = pins.indexOf(k); return i < 0 ? Infinity : i; };
@@ -535,25 +576,51 @@ function render(data, again = false) {
   }
   const hot = it => !pins.includes(it.repo) && it.status === 'working';
   const items = [...cur.values()].sort((a, b) => hot(b) - hot(a) || a.ord - b.ord);
+  const pending = new Map(), descendants = new Map();
+  for (const it of items) if (it.parent) pending.set(it.parent, (pending.get(it.parent) || 0) + 1);
+  const leaves = items.filter(it => !pending.has(it.key));
+  // Each row contributes once, after its children, regardless of the visual depth cap or folds.
+  for (let i = 0; i < leaves.length; i++) {
+    const it = leaves[i];
+    if (!it.parent) continue;
+    const own = descendants.get(it.key), total = descendants.get(it.parent) || { all: 0, workers: 0 };
+    total.all += 1 + (own?.all || 0); total.workers += (it.sub ? 1 : 0) + (own?.workers || 0);
+    descendants.set(it.parent, total);
+    pending.set(it.parent, pending.get(it.parent) - 1);
+    if (!pending.get(it.parent)) leaves.push(cur.get(it.parent));
+  }
   for (const it of items) { // all rows exist before placement, so a parent sorted later still hosts its children
     let r = rows.get(it.key);
     if (!r) rows.set(it.key, r = mkRow());
     fill(r, it);
+    let ancestor = it, depth = 0;
+    // shortcut: indentation caps at five levels to preserve title space; deeper telemetry still nests in the DOM.
+    while (depth < 4 && ancestor.parent) { depth++; ancestor = cur.get(ancestor.parent); }
+    r.node.style.setProperty('--depth', depth);
+    const total = descendants.get(it.key), count = total?.all || 0, closed = folded.has(it.key);
+    const noun = total?.workers === count ? 'worker' : 'nested agent';
+    txt(r.workers, count ? ` · ${count} ${closed ? 'hidden ' : ''}${noun}${count === 1 ? '' : 's'}` : '');
+    r.kids.hidden = closed; r.branch.hidden = !count;
+    txt(r.branch, `${closed ? 'Show' : 'Hide'} ${count} ${noun}${count === 1 ? '' : 's'}`);
+    r.branch.setAttribute('aria-expanded', !closed); r.branch.onclick = () => toggleFold(it.key);
+    if (!r.kids.id) r.kids.id = 'k' + nextGroupID++;
+    r.branch.setAttribute('aria-controls', r.kids.id);
   }
   for (const it of items) {
-    const p = it.parent && it.parent !== it.key && cur.has(it.parent) ? rows.get(it.parent) : null;
-    if (it.sub && !p) { const top = it.pid != null && rows.get('a:' + it.pid); if (top) { put(top.kids, rows.get(it.key).node); continue; } }
-    put(p ? p.kids : groups.get(box(it)).kids, rows.get(it.key).node);
+    const r = rows.get(it.key), p = it.parent ? rows.get(it.parent) : null;
+    // A changed parent can still be inside this row until its own placement runs.
+    if (p && r.node.contains(p.node)) p.node.remove();
+    put(p ? p.kids : groups.get(box(it)).kids, r.node);
   }
   for (const [k, r] of rows) if (!cur.has(k)) { r.node.remove(); rows.delete(k); }
   for (const [k, g] of groups) if (!live.has(k)) { g.node.remove(); groups.delete(k); }
 
   const mine = items.filter(i => !i.dying && !i.sub);
-  const needs = mine.filter(needsYou).sort((a, b) => b.idleSec - a.idleSec);
-  sync($('needs-list'), needRows, needs, it => 'waiting ' + dur(it.idleSec));
-  const idle = mine.filter(i => i.status === 'idle' && i.mem >= RECLAIM_MIN).sort((a, b) => b.mem - a.mem).slice(0, RECLAIM_MAX);
-  sync($('reclaim-list'), reclaimRows, idle, it => `idle ${(it.idleSec != null ? dur(it.idleSec) : it.up.slice(3))} · ${fmtBytes(it.mem)}`);
-  ambient(needs.length); watch(mine); gauge(data.system);
+  const stale = data.at != null && Date.now() - data.at > 15000;
+  if (!again && !stale) watch(mine);
+  const quiet = stale ? [] : mine.filter(recentlyQuiet).sort((a, b) => a.idleSec - b.idleSec);
+  sync($('quiet-list'), quietRows, quiet.slice(0, QUIET_LIMIT), it => 'quiet ' + dur(it.idleSec));
+  ambient(quiet.length); gauge(data.system);
 
   const n = mine;
   txt($('count'), `${n.length} agents · ${n.filter(i => i.status === 'working').length} working`);
@@ -563,7 +630,18 @@ function render(data, again = false) {
 }
 
 function freshness(now = Date.now()) {
-  txt($('freshness'), lastData?.at ? 'Last updated ' + dur(Math.max(0, (now - lastData.at) / 1000)) + ' ago' : 'Waiting for first snapshot');
+  const retained = snapshotState(now), stale = retained === 'stale', offline = retained === 'offline';
+  txt($('freshness'), lastData?.at != null ? `${offline ? 'Offline · ' : stale ? 'Stale · ' : ''}Last updated ${dur(Math.max(0, (now - lastData.at) / 1000))} ago${offline || stale ? ' · retained measurements, not live state' : ''}` : `${offline ? 'Offline · ' : ''}${lastData ? 'Snapshot time unavailable' : 'Waiting for first snapshot'}`);
+  $('search-freshness').hidden = !retained;
+  txt($('search-freshness'), retained ? `${retained === 'offline' ? 'Offline' : 'Stale'} · searching retained measurements, not live state` : '');
+  for (const [key, r] of rows) {
+    const it = last.get(key), state = offline ? 'offline' : stale ? 'stale' : it.stText;
+    cls(r.node, 'node s-' + (retained ? 'unknown' : it.status));
+    txt(r.st, state);
+    r.toggle.setAttribute('aria-label', `Details for ${it.name}: ${state}, RAM ${r.mem.textContent}${offline || stale ? ' (retained)' : ''}`);
+  }
+  for (const [key, r] of searchRows) { txt(r.meta, retained || last.get(key).stText); cls(r.node, 'node s-' + (retained ? 'unknown' : last.get(key).status)); }
+  if (offline || stale) { $('quiet').hidden = true; ambient(0); }
 }
 
 async function poll() {
@@ -573,8 +651,8 @@ async function poll() {
   try {
     const r = await fetch('/agents', { signal: AbortSignal.timeout(10000) });
     if (!r.ok) throw new Error(r.status);
-    render(await r.json());
     $('offline').hidden = true;
+    render(await r.json());
   } catch { $('offline').hidden = false; }
   freshness();
   busy = false;
@@ -583,6 +661,6 @@ async function poll() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { clearTimeout(timer); poll(); } });
 
 $('expand').onclick = () => foldAll(false); $('collapse').onclick = () => foldAll(true);
-$('legend').replaceChildren(...HEAT.map(s => { const d = el('span', 's-' + s), i = el('i'); d.append(i, s); return d; }));
+$('legend').replaceChildren(...HEAT.map(s => { const d = el('span', 's-' + s), i = el('i'); d.append(i, stateLabel(s)); return d; }));
 poll();
 </script>

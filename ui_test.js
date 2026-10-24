@@ -7,11 +7,38 @@
   });
   const show = agents => render({ agents, subagents: [] });
   const a = agent(100, '/a');
+  const scenario = new URLSearchParams(location.search);
+  assert(window.innerWidth === (scenario.get('size') === 'native' ? 680 : 375) && window.innerHeight === (scenario.get('size') === 'native' ? 820 : 812), 'checks run at the actual compact/native content viewport, not Chrome minimum window dimensions');
+  assert(matchMedia('(prefers-color-scheme: dark)').matches === (scenario.get('theme') === 'dark'), 'browser runs the requested color scheme');
+  assert(matchMedia('(prefers-reduced-motion: reduce)').matches === (scenario.get('reduced') === 'true'), 'browser runs the requested motion preference');
+  const brand = document.querySelector('.brand'), brandLogo = brand.querySelector('img');
+  assert(brandLogo.getBoundingClientRect().width === 24 && parseFloat(getComputedStyle(brand.querySelector('h1')).fontSize) === 16 && !brand.querySelector('p'), 'compact brand keeps the 24px logo, 16px name, and no tagline');
+  assert($('search-toggle').getBoundingClientRect().height >= 44 && $('search-toggle').getBoundingClientRect().width >= 44, 'Search retains a 44px target');
 
   show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
   const metrics = rows.get('a:100');
-  assert(metrics.cpu.textContent === 'CPU 136%' && metrics.mem.textContent === 'RAM ~1.6 GB', 'metrics identify CPU (including multi-core use) and approximate RAM');
-  assert(metrics.up.textContent === 'up 1m' && metrics.up.title.includes('process age'), 'uptime is labeled as process age');
+  const taskStyle = getComputedStyle(metrics.btn), metricStyle = getComputedStyle(metrics.toggle);
+  assert(parseFloat(taskStyle.paddingLeft) >= 8 && parseFloat(taskStyle.paddingRight) >= 8 && parseFloat(taskStyle.gap) >= 8 && metrics.identity.getBoundingClientRect().left - metrics.logo.getBoundingClientRect().right >= 8, 'task controls keep 8px horizontal padding and icon/text spacing');
+  assert(parseFloat(metricStyle.paddingLeft) >= 8 && parseFloat(metricStyle.paddingRight) >= 8 && metrics.toggle.getBoundingClientRect().right - metrics.mem.getBoundingClientRect().right >= 8, 'metric contents stay inset 8px inside the hover/focus control');
+  assert(metrics.st.getBoundingClientRect().width === 64 && metrics.mem.getBoundingClientRect().width === 64 && metrics.btn.getBoundingClientRect().height === 47, 'horizontal breathing room preserves 64px metric columns and 47px short rows');
+  const columnLabels = document.querySelector('.column-head').children;
+  assert(Math.abs(columnLabels[1].getBoundingClientRect().left - metrics.st.getBoundingClientRect().left) <= 1 && Math.abs(columnLabels[2].getBoundingClientRect().right - metrics.mem.getBoundingClientRect().right) <= 1, 'State and RAM headers align with inset metric content');
+  assert(metrics.cpu.textContent === 'CPU 136%' && metrics.mem.textContent === '~1.6 GB' && metrics.toggle.getAttribute('aria-label').includes('RAM'), 'metrics identify CPU (including multi-core use) and approximate RAM');
+  assert(metrics.up.textContent === 'Process age: 1m' && metrics.up.title.includes('process age'), 'uptime is labeled as process age');
+  assert(metrics.detail.hidden && !metrics.btn.contains(metrics.toggle) && !metrics.btn.contains(metrics.cpu) && !document.querySelector('button button'), 'CPU and age start in separate details, never nested terminal buttons');
+  const detailFetch = window.fetch;
+  let detailRequests = 0;
+  try {
+    window.fetch = async () => { detailRequests++; throw new Error('Details must not request terminal focus'); };
+    metrics.toggle.focus(); metrics.toggle.click();
+    assert(!metrics.detail.hidden && metrics.toggle.getAttribute('aria-expanded') === 'true' && document.getElementById(metrics.toggle.getAttribute('aria-controls')) === metrics.detail, 'monitoring-only details open accessibly');
+    assert(metrics.cpu.getBoundingClientRect().height > 0 && metrics.up.getBoundingClientRect().height > 0, 'opened details expose CPU and process age');
+    show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
+    assert(!metrics.detail.hidden && document.activeElement === metrics.toggle, 'snapshot updates preserve details and keyboard focus');
+    metrics.toggle.click();
+    assert(metrics.detail.hidden && metrics.toggle.getAttribute('aria-expanded') === 'false', 'details close independently of terminal navigation');
+    assert(detailRequests === 0, 'details never requests terminal focus');
+  } finally { window.fetch = detailFetch; }
   assert(groups.get('r:/a').counts.textContent.includes('1 working'), 'repository counts include status text, not just color');
   assert(!$('reading').open && $('reading').textContent.includes('not percent complete'), 'metric help is available without leaving the dashboard');
   $('reading').open = true;
@@ -19,27 +46,29 @@
   $('reading').open = false;
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'labeled metrics and repository counts fit the narrow viewport');
 
-  let notifications = 0;
+  let notifications = 0, notificationBody = '';
   window.Notification = class {
     static permission = 'granted';
-    constructor() { notifications++; }
+    constructor(title, options) { notifications++; notificationBody = options.body; }
   };
   notifyOn = true;
   show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
   show([{ ...a, idleSec: 14 }]);
-  assert($('needs').hidden && notifications === 0, 'waiting grace period');
+  assert($('quiet').hidden && notifications === 0, 'quiet observation grace period');
   show([{ ...a, idleSec: 15 }]);
-  assert(!$('needs').hidden && $('needs-list').children.length === 1, 'needs-you section');
-  assert(document.title === '(1) waiting · Swarmview' && notifications === 1, 'waiting badge and notification');
+  assert(!$('quiet').hidden && $('quiet-list').children.length === 1, 'recently quiet observation section');
+  assert(document.title === '(1) recently quiet · Swarmview' && notifications === 1, 'quiet observation badge and notification');
+  assert(notificationBody.includes('Recently quiet') && notificationBody.includes('not a request'), 'notification describes evidence without inventing a human request');
   show([{ ...a, idleSec: 20 }]);
   assert(notifications === 1, 'notify once per waiting episode');
   show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
-  assert($('needs').hidden && document.title === 'Swarmview', 'working clears waiting badge');
+  assert($('quiet').hidden && document.title === 'Swarmview', 'working clears quiet badge');
   show([{ ...a, idleSec: 15 }]);
   assert(notifications === 2, 'new working episode rearms notification');
   show([]);
   show([{ ...a, idleSec: 15 }]);
   assert(notifications === 2, 'unseen work does not notify');
+  assert($('quiet').hidden, 'unseen quiet processes are not presented as newly observed transitions');
 
   const b = agent(200, '/b');
   show([a, b]);
@@ -74,6 +103,12 @@
   assert(!rows.get('a:100').btn.disabled, 'tmux agents allow pane selection');
   assert(rows.get('a:100').target.textContent === 'dev:%42', 'session and pane visible');
   assert(rows.get('a:100').target.title.includes('session/pane'), 'target help identifies the session, not the window');
+  const terminalRow = rows.get('a:100'), focusFetch = window.fetch;
+  try {
+    window.fetch = async () => { throw new Error('offline'); };
+    await terminalRow.btn.onclick();
+    assert(terminalRow.note.textContent === 'server unreachable' && terminalRow.note.isConnected && terminalRow.btn.getAttribute('aria-busy') === 'false', 'terminal focus failures stay visible and release the busy state');
+  } finally { window.fetch = focusFetch; }
   show([{ ...focusable, canFocus: false, tmuxAttached: false }]);
   assert(rows.get('a:100').btn.disabled && rows.get('a:100').target.textContent.includes('attach client'), 'detached pane shows recovery and disables selection');
   assert(rows.get('a:100').btn.title.includes('Attach a tmux client'), 'detached pane explains recovery');
@@ -87,16 +122,17 @@
   assert(!rows.get('a:100').btn.disabled && rows.get('a:100').target.textContent.includes('open Ghostty'), 'detached pane can open Ghostty when supported');
   render({ agents: [focusable, agent(200, '/b')], subagents: [{ id: 'child', parentPid: 100, cwd: '/b', working: true }] });
   assert(!rows.get('sub:child').btn.disabled && rows.get('sub:child').pid === 100, 'subagent uses its actual parent focus target');
+  show([{ ...focusable, recentCpu: 0.1, idleSec: 0 }]);
   show([{ ...focusable, idleSec: 15 }]);
-  assert(!needRows.get('a:100').btn.disabled, 'needs-you card allows tmux selection');
+  assert(!quietRows.get('a:100').btn.disabled, 'quiet observation card allows tmux selection');
   show([agent(100, '/b', { idleSec: 15 })]);
-  assert(needRows.get('a:100').btn.disabled, 'monitoring-only card is not clickable');
+  assert(quietRows.get('a:100').btn.disabled, 'monitoring-only card is not clickable');
 
   render({ agents: [a], at: 100000 });
   freshness(140000);
-  assert($('freshness').textContent === 'Last updated 40s ago', 'freshness uses snapshot time');
+  assert($('freshness').textContent.includes('Last updated 40s ago') && $('freshness').textContent.includes('retained') && rows.get('a:100').st.textContent === 'stale', 'freshness uses snapshot time and marks old state stale');
   freshness(220000);
-  assert($('freshness').textContent === 'Last updated 2m ago', 'retained snapshot keeps aging');
+  assert($('freshness').textContent.includes('Last updated 2m ago'), 'retained snapshot keeps aging');
   render({ agents: [a], at: 220000 });
   freshness(220000);
   assert($('freshness').textContent === 'Last updated 0s ago', 'recovery refreshes snapshot age');
@@ -108,7 +144,7 @@
       throw new Error('offline');
     };
     await poll(); clearTimeout(timer);
-    assert(!$('offline').hidden && $('freshness').textContent === 'Last updated 40s ago', 'failed poll retains and ages last snapshot');
+    assert(!$('offline').hidden && $('freshness').textContent.includes('Last updated 40s ago') && rows.get('a:100').st.textContent === 'offline', 'failed poll retains and ages last snapshot without labeling it quiet');
     assert(rows.has('a:100'), 'failed poll retains agent rows');
     window.fetch = async () => ({ ok: true, json: async () => ({ agents: [a], at: 260000 }) });
     await poll(); clearTimeout(timer);
@@ -152,6 +188,10 @@
   assert(document.activeElement === $('search'), 'up arrow from the first result returns to the query');
   search('path:/feature/src status:working');
   assert($('search-count').textContent === '1 match', 'working directory and live status are searchable');
+  search('pid:504 status:quiet');
+  assert(searchRows.has('a:504') && searchRows.size === 1, 'visible quiet status is searchable');
+  search('pid:504 status:waiting');
+  assert(searchRows.has('a:504') && searchRows.size === 1, 'legacy waiting status remains a compatible search alias');
   search('dev:%42');
   assert($('search-count').textContent === '1 match', 'a colon in a tmux target remains literal text');
   search('pid:50');
@@ -181,9 +221,9 @@
   const beforeHiddenNotification = notifications;
   show([{ ...coordinator, recentCpu: 0.1, idleSec: 0 }]);
   show([{ ...coordinator, idleSec: 20 }]);
-  assert(!$('needs').hidden && document.title === '(1) waiting · Swarmview' && notifications === beforeHiddenNotification + 1, 'the palette does not filter or suppress global waiting sections, badges, or notifications');
+  assert(!$('quiet').hidden && document.title === '(1) recently quiet · Swarmview' && notifications === beforeHiddenNotification + 1, 'the palette does not filter or suppress global quiet observations, badges, or notifications');
   $('clear-search').click();
-  assert(!$('needs').hidden && $('search').value === '' && !$('search-panel').hidden, 'clear restores waiting cards and keeps search open');
+  assert(!$('quiet').hidden && $('search').value === '' && !$('search-panel').hidden, 'clear preserves quiet cards and keeps search open');
   search('task:Coordinator');
   $('close-search').click();
   assert($('search-panel').hidden && $('search').value === '' && $('search-toggle').getAttribute('aria-expanded') === 'false', 'Done closes and clears search without needing Escape');
@@ -237,10 +277,155 @@
   $('close-search').click();
   assert($('search-panel').hidden && !$('search-panel').open && $('search').value === '' && searchRows.size === 0 && searchReturnFocus === null, 'closing removes temporary results, releases old focus references, and leaves no hidden query');
 
-  document.body.dataset.uiTests = 'passed';
+  const fallbackHost = agent(100, '/fallback', { kind: 'claude', canFocus: true, tmuxAttached: true, tmuxTarget: 'synthetic:%1' });
+  const survivingWorker = { id: 'survivor', parentPid: 100, parentAgentId: 'finished-parent', cwd: '/fallback', description: 'Surviving worker', working: true };
+  const finishedParent = { id: 'finished-parent', parentPid: 100, cwd: '/fallback', description: 'Temporary parent', working: true };
+  const fallbackSnapshot = { agents: [fallbackHost], subagents: [survivingWorker] };
+  render(fallbackSnapshot); render(fallbackSnapshot); $('expand').click();
+  const fallbackRoot = rows.get('a:100'), survivor = rows.get('sub:survivor');
+  assert(survivor.node.parentElement === fallbackRoot.kids && survivor.name.getBoundingClientRect().left > fallbackRoot.name.getBoundingClientRect().left, 'worker with an absent declared parent is placed and indented under its effective top-level parent');
+  assert(!fallbackRoot.branch.hidden && /\b1 worker\b/.test(fallbackRoot.workers.textContent), 'fallback worker contributes to its effective parent branch count and control');
+  assert(Math.abs(survivor.st.getBoundingClientRect().left - fallbackRoot.st.getBoundingClientRect().left) <= 1, 'fallback indentation does not move the state column');
+  const fallbackFetch = window.fetch;
+  let fallbackFocusRequests = 0, fallbackFocusURL = null, fallbackFocusMethod = null, fallbackFocusBody = null;
+  try {
+    window.fetch = async (url, options) => {
+      fallbackFocusRequests++; fallbackFocusURL = url; fallbackFocusMethod = options?.method; fallbackFocusBody = options?.body;
+      return { ok: true };
+    };
+    fallbackRoot.toggle.click(); fallbackRoot.branch.click();
+    assert(fallbackRoot.kids.hidden && fallbackRoot.branch.textContent === 'Show 1 worker' && fallbackRoot.workers.textContent.includes('1 hidden worker') && fallbackRoot.branch.getAttribute('aria-expanded') === 'false', 'fallback worker can be hidden with an accurate count');
+    assert(document.getElementById(fallbackRoot.branch.getAttribute('aria-controls')) === fallbackRoot.kids, 'fallback branch control addresses its effective children accessibly');
+    fallbackRoot.branch.click();
+    assert(!fallbackRoot.kids.hidden && fallbackRoot.branch.textContent === 'Hide 1 worker', 'fallback worker can be shown again');
+    assert(fallbackFocusRequests === 0, 'fallback branch controls never request terminal focus');
+    assert(await survivor.btn.onclick() === true, 'fallback worker terminal activation succeeds');
+    assert(fallbackFocusURL === '/focus' && fallbackFocusMethod === 'POST', 'worker focus uses the terminal endpoint');
+    assert(fallbackFocusRequests === 1 && JSON.parse(fallbackFocusBody).pid === 100, 'fallback worker terminal action targets its actual top-level agent exactly once');
+    const fallbackElements = $('tree').querySelectorAll('*').length;
+    for (let i = 0; i < 10; i++) render(fallbackSnapshot);
+    assert(rows.get('sub:survivor') === survivor && $('tree').querySelectorAll('*').length === fallbackElements && fallbackFocusRequests === 1, 'fallback snapshots reuse bounded DOM without adding focus requests');
+    render({ agents: [fallbackHost], subagents: [finishedParent, survivingWorker] });
+    const temporaryParent = rows.get('sub:finished-parent');
+    assert(survivor.node.parentElement === temporaryParent.kids && survivor.name.getBoundingClientRect().left > temporaryParent.name.getBoundingClientRect().left, 'a present declared parent owns the worker and its nested indentation');
+    render(fallbackSnapshot);
+    assert(temporaryParent.node.classList.contains('s-exiting') && temporaryParent.btn.disabled && survivor.node.parentElement === temporaryParent.kids, 'disappeared parent is retained as exiting for one snapshot without losing its worker');
+    render(fallbackSnapshot);
+    assert(rows.size === 2 && !rows.has('sub:finished-parent') && !temporaryParent.node.isConnected && survivor.node.parentElement === fallbackRoot.kids, 'worker moves to its effective parent when the exiting declared parent is removed without leaking rows');
+    assert(survivor.name.getBoundingClientRect().left > fallbackRoot.name.getBoundingClientRect().left && !fallbackRoot.branch.hidden && /\b1 worker\b/.test(fallbackRoot.workers.textContent), 'removed-parent fallback restores indentation and the single-worker branch count');
+    fallbackRoot.branch.click();
+    assert(fallbackRoot.kids.hidden && fallbackRoot.branch.textContent === 'Show 1 worker', 'reparented worker remains foldable after its declared parent is removed');
+    fallbackRoot.branch.click(); fallbackRoot.toggle.click();
+    assert(!fallbackRoot.kids.hidden && fallbackFocusRequests === 1, 'reparented worker shows again without accidental terminal actions');
+  } finally { window.fetch = fallbackFetch; }
+
+  const providers = ['claude', 'codex', 'opencode', 'gemini', 'aider', 'cursor-agent'];
+  const fleet = providers.map((kind, i) => agent(20000 + i, '/synthetic', { kind, title: 'Task ' + kind, recentCpu: 0.2, memBytes: 2 * GB }));
+  const nested = Array.from({ length: 5 }, (_, i) => ({
+    id: 'level-' + i, parentPid: 20000, parentAgentId: i ? 'level-' + (i - 1) : null,
+    cwd: '/synthetic', description: i === 4 ? 'Investigate long nested task titles and preserve every word while keeping state and memory aligned across the whole tree' : 'Level ' + (i + 1), working: true,
+  }));
+  const workers = Array.from({ length: 20 }, (_, i) => ({ id: 'worker-' + i, parentPid: 20000, parentAgentId: 'level-4', cwd: '/synthetic', description: 'Worker ' + i, working: i % 2 === 0 }));
+  const treeSnapshot = { agents: fleet, subagents: [...nested, ...workers] };
+  render(treeSnapshot); render(treeSnapshot); $('expand').click();
+  for (let i = 0; i < providers.length; i++) {
+    const r = rows.get('a:' + (20000 + i));
+    assert(r.logo.textContent || r.logo.querySelector('svg path'), providers[i] + ' keeps its provider icon or monogram');
+    assert(r.agentKind.textContent, providers[i] + ' keeps a readable provider label');
+    assert(!r.mem.classList.contains('warn') && !r.mem.classList.contains('crit'), 'large per-agent RAM stays neutral');
+  }
+  const reference = rows.get('a:20000'), referenceState = reference.st.getBoundingClientRect(), referenceRAM = reference.mem.getBoundingClientRect();
+  for (const r of rows.values()) {
+    const state = r.st.getBoundingClientRect(), ram = r.mem.getBoundingClientRect();
+    assert(Math.abs(state.left - referenceState.left) <= 1 && Math.abs(ram.right - referenceRAM.right) <= 1, 'state and RAM columns align across providers, five levels, and 20 workers');
+    assert(r.btn.getBoundingClientRect().right <= window.innerWidth && r.name.getBoundingClientRect().left >= 0 && r.name.getBoundingClientRect().right <= state.left, 'nested identity stays inside the viewport without overlapping metrics');
+  }
+  const deepest = rows.get('sub:level-4'), firstNested = rows.get('sub:level-0');
+  assert(deepest.name.getBoundingClientRect().left > firstNested.name.getBoundingClientRect().left, 'nesting still indents task identity');
+  assert(deepest.name.getBoundingClientRect().height > parseFloat(getComputedStyle(deepest.name).lineHeight), 'long nested task title wraps rather than truncates');
+  assert(deepest.mem.textContent.includes('—') && !deepest.mem.textContent.includes('0 MB'), 'unavailable worker RAM is a dash, not zero');
+  assert(deepest.cpu.textContent.includes('unavailable') && deepest.up.textContent.includes('unavailable'), 'worker details never invent CPU or process age');
+  assert(document.documentElement.scrollWidth <= window.innerWidth, 'expanded five-level tree with 20 workers never causes horizontal overflow');
+  assert($('tree').getAnimations({ subtree: true }).length === 0, 'CPU activity and nesting do not create communication pulses or a continuously animated tree');
+  if (window.innerWidth >= 560) {
+    assert(Math.abs($('tree').getBoundingClientRect().width - 528) <= 1, 'native layout keeps 528px inner content inside the 560px body');
+    assert(reference.btn.getBoundingClientRect().height <= 55, 'short native rows remain compact');
+  }
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    assert([...rows.values()].every(r => getComputedStyle(r.logo).animationName === 'none'), 'reduced motion disables working-icon animation');
+  }
+  const stableNode = deepest.node, stableElements = $('tree').querySelectorAll('*').length;
+  for (let i = 0; i < 20; i++) render(treeSnapshot);
+  assert(rows.size === 31 && rows.get('sub:level-4').node === stableNode && $('tree').querySelectorAll('*').length === stableElements, 'repeated snapshots reuse rows without DOM growth');
+  deepest.toggle.click(); deepest.branch.click();
+  assert(deepest.kids.hidden && deepest.branch.getAttribute('aria-expanded') === 'false' && deepest.workers.textContent.includes('20 hidden workers'), 'worker branch folds independently and keeps the hidden count');
+  assert(!firstNested.kids.hidden && !groups.get('r:/synthetic').kids.hidden, 'folding one worker branch leaves ancestors expanded');
+  deepest.branch.click(); deepest.toggle.click();
+  assert(!deepest.kids.hidden, 'worker branch can be reopened from its details');
+  const outerBranch = rows.get('sub:level-3');
+  const branchFetch = window.fetch;
+  let branchFocusRequests = 0;
+  try {
+    window.fetch = async () => { branchFocusRequests++; throw new Error('Branch controls must not focus a terminal'); };
+    outerBranch.toggle.click(); outerBranch.branch.click();
+    assert(outerBranch.kids.hidden && outerBranch.workers.textContent.includes('21 hidden workers') && outerBranch.branch.textContent === 'Show 21 workers', 'collapsing one child with 20 grandchildren reports all 21 hidden workers, not just the direct child');
+    assert(/\b20 workers\b/.test(deepest.workers.textContent) && /\b24 workers\b/.test(firstNested.workers.textContent) && /\b25 workers\b/.test(reference.workers.textContent), 'nested branch totals count each worker descendant once without including the branch itself');
+    assert(groups.get('r:/synthetic').counts.textContent.includes('25 workers'), 'nested descendant totals do not double-count repository workers');
+    outerBranch.branch.click(); outerBranch.toggle.click();
+    assert(!outerBranch.kids.hidden && !deepest.kids.hidden && outerBranch.branch.textContent === 'Hide 21 workers', 'reopening the outer branch preserves its expanded child and full descendant count');
+    const processChild = agent(20006, '/synthetic', { ppid: 20000, kind: 'codex', title: 'Nested process', recentCpu: 0.2 });
+    render({ ...treeSnapshot, agents: [...fleet, processChild] });
+    reference.toggle.click(); reference.branch.click();
+    assert(reference.kids.hidden && reference.workers.textContent.includes('26 hidden nested agents') && reference.branch.textContent === 'Show 26 nested agents', 'mixed process and worker descendants are not mislabeled as 26 workers');
+    assert(groups.get('r:/synthetic').counts.textContent.includes('7 working') && groups.get('r:/synthetic').counts.textContent.includes('25 workers'), 'mixed descendants preserve distinct process and worker repository counts');
+    reference.branch.click(); reference.toggle.click();
+    render(treeSnapshot); render(treeSnapshot);
+    assert(!rows.has('a:20006') && /\b25 workers\b/.test(reference.workers.textContent) && branchFocusRequests === 0, 'removing a nested process restores worker-only totals without focus requests or retained rows');
+  } finally { window.fetch = branchFetch; }
+  $('collapse').click();
+  assert(groups.get('r:/synthetic').kids.hidden && groups.get('r:/synthetic').counts.textContent.includes('6 working') && groups.get('r:/synthetic').counts.textContent.includes('25 workers'), 'collapsed repository preserves rolled-up agent and worker counts');
+  $('expand').click();
+  assert(!groups.get('r:/synthetic').kids.hidden && rows.get('sub:worker-19').node.isConnected, 'expanding restores all workers');
+  show([fleet[0]]); show([fleet[0]]);
+  assert(rows.size === 1 && groups.size === 1 && !$('tree').contains(stableNode), 'departed workers and nested DOM are released');
+
+  for (const pressure of [null, 1, 2, 4]) {
+    render({ agents: [fleet[0]], system: { pressure, swapUsedBytes: 8 * GB, freePct: 1 } });
+    assert($('mem').classList.contains('warn') === (pressure === 2) && $('mem').classList.contains('crit') === (pressure === 4), 'system severity follows OS pressure, not low free RAM or existing swap');
+    if (pressure === 1) assert(!$('mem').textContent.includes('Pressure normal') && $('mem').title.includes('Pressure normal') && $('system-details').textContent.includes('Pressure normal'), 'normal pressure keeps the summary compact and remains available in help and title');
+  }
+  for (const [pressure, label] of [[1, 'normal'], [2, 'warning'], [4, 'critical']]) {
+    render({ agents: [fleet[0]], system: { pressure } });
+    assert(!$('mem').hidden && $('mem').textContent.includes('Pressure ' + label), 'OS pressure is visible even when free RAM and swap are unavailable');
+  }
+  show([agent(20000, '/synthetic')]);
+  assert(rows.get('a:20000').mem.textContent.includes('—') && $('mem').textContent.includes('unavailable'), 'missing agent RAM and unavailable system telemetry stay distinct from zero');
+  show([agent(20000, '/synthetic', { recentCpu: null, idleSec: 30 })]);
+  assert(rows.get('a:20000').st.textContent === 'unknown' && rows.get('a:20000').cpu.textContent.includes('unavailable') && $('quiet').hidden, 'missing activity telemetry is unknown, never quiet or zero CPU');
+
+  const observations = Array.from({ length: 12 }, (_, i) => agent(30000 + i, '/observations', { recentCpu: 0.2, idleSec: 0 }));
+  show(observations); show(observations);
+  const quietObservations = observations.map((it, i) => ({ ...it, recentCpu: 0, idleSec: 15 + i }));
+  const beforeQuiet = notifications;
+  show(quietObservations);
+  assert($('quiet-list').children.length === 3 && quietRows.size === 3 && notifications === beforeQuiet + observations.length, 'recent observation cards stay bounded while transitions notify once');
+  const observationElements = $('quiet-list').querySelectorAll('*').length;
+  for (let i = 0; i < 20; i++) show(quietObservations);
+  assert($('quiet-list').querySelectorAll('*').length === observationElements && notifications === beforeQuiet + observations.length, 'quiet observations neither grow DOM nor repeat notifications');
+  show(observations.map(it => ({ ...it, recentCpu: 0, idleSec: 301 })));
+  assert($('quiet').hidden && quietRows.size === 0 && document.title === 'Swarmview', 'quiet observations expire after five minutes instead of becoming an alert queue');
+  const beforeStale = notifications, snapshotNow = Date.now();
+  render({ agents: observations, at: snapshotNow });
+  render({ agents: quietObservations, at: snapshotNow - 20000 });
+  assert($('quiet').hidden && notifications === beforeStale && [...rows.values()].filter(r => !r.node.classList.contains('s-exiting')).every(r => r.st.textContent === 'stale'), 'stale snapshots cannot produce quiet observations, notifications, or live state labels');
+  show([]); show([]);
+  assert(rows.size === 0 && groups.size === 0 && quietRows.size === 0 && eps.size === 0, 'exited fleets release rows, observations, and notification episode metadata');
+
+  parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
+  parent.document.body.dataset.uiTests = 'passed';
 } catch (error) {
-  document.body.dataset.uiTests = 'failed';
+  parent.document.body.dataset.uiTests = 'failed';
   const failure = document.createElement('pre');
   failure.textContent = error.stack;
-  document.body.append(failure);
+  parent.document.body.append(failure);
 } })();
