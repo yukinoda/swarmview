@@ -15,6 +15,19 @@
   assert(brandLogo.getBoundingClientRect().width === 24 && parseFloat(getComputedStyle(brand.querySelector('h1')).fontSize) === 16 && !brand.querySelector('p'), 'compact brand keeps the 24px logo, 16px name, and no tagline');
   assert($('search-toggle').getBoundingClientRect().height >= 44 && $('search-toggle').getBoundingClientRect().width >= 44, 'Search retains a 44px target');
 
+  for (const kind of ['aider', 'cursor-agent']) {
+    show([{ ...a, kind, recentCpu: 0.1, idleSec: 0 }]);
+    show([{ ...a, kind, idleSec: 15 }]);
+    const path = rows.get('a:100').logo.querySelector('svg path');
+    assert(path && path.getAttribute('d') === LOGOS[kind], kind + ' uses its embedded SVG logo in agent rows');
+    assert(quietRows.get('a:100').logo.querySelector('svg path').getAttribute('d') === LOGOS[kind], kind + ' uses its logo in recently quiet cards after observed work');
+    openSearch();
+    $('search').value = 'pid:100'; applySearch();
+    assert(searchRows.get('a:100').logo.querySelector('svg path').getAttribute('d') === LOGOS[kind], kind + ' uses its logo in search results');
+    closeSearch();
+  }
+  assert(logo('unknown', 20).textContent === 'U', 'unknown agent kinds retain the monogram fallback');
+
   show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
   const metrics = rows.get('a:100');
   const taskStyle = getComputedStyle(metrics.btn), metricStyle = getComputedStyle(metrics.toggle);

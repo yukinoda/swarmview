@@ -17,6 +17,7 @@ version="${version%%-*}"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $version" "$app/Contents/Info.plist"
 cp "$root/LICENSE" "$app/Contents/Resources/LICENSE"
+cp "$root/assets/aider-LICENSE.txt" "$app/Contents/Resources/aider-LICENSE.txt"
 cp "$root/desktop/macos/Installation.txt" "$app/Contents/Resources/Installation.txt"
 temporary="$(mktemp -d)"
 trap 'rm -rf "$temporary"' EXIT
