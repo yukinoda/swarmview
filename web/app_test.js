@@ -12,7 +12,7 @@ const { rows, groups, quietRows } = dashboard;
 const { searchRows, searchIndex } = searchState;
 const { eps } = notificationsState;
 const { render, poll, freshness } = app;
-const { activePulses, communicationPulse, communicationFeedback, communicationStatus } = communication;
+const { activeFeedback, showFeedback, communicationFeedback, communicationStatus } = communication;
 
 // Test-only exports are appended by TestUI, never embedded or served in production.
 (async () => { try {
@@ -468,7 +468,7 @@ const { activePulses, communicationPulse, communicationFeedback, communicationSt
   assert(rows.size === 0 && groups.size === 0 && quietRows.size === 0 && eps.size === 0, 'exited fleets release rows, observations, and notification episode metadata');
 
   // Synthetic protocol frames only: no user provider, plugin, or agent is started.
-  const liveHost = agent(45000, '/live-test', { kind: 'opencode' });
+  const liveHost = agent(45000, '/live-test', { kind: 'opencode', title: 'Review the complete parent task label without losing terminal navigation or moving the aligned state and RAM columns', canFocus: true, tmuxAttached: true, tmuxTarget: 'synthetic:%45' });
   const liveWorkers = Array.from({ length: 25 }, (_, i) => ({ key: 'live:test:' + i, parent: i > 0 && i < 5 ? 'live:test:' + (i - 1) : 'a:45000', pid: 45000 }));
   const liveSnapshot = { agents: [liveHost], liveWorkers, communication: true, at: Date.now() };
   render(liveSnapshot); render(liveSnapshot); $('expand').click(); window.scrollTo(0, 0);
@@ -478,53 +478,102 @@ const { activePulses, communicationPulse, communicationFeedback, communicationSt
     assert(r.st.textContent === 'unknown' && r.mem.textContent === '—' && r.cpu.textContent.includes('unavailable'), 'native session workers never invent CPU, RSS or lifecycle status');
     assert(Math.abs(r.mem.getBoundingClientRect().right - rows.get('a:45000').mem.getBoundingClientRect().right) <= 1, 'live five-level/20-worker metrics remain aligned');
   }
-  assert(document.querySelectorAll('.communication-dot').length === 0, 'worker appearance does not communicate');
-  communicationPulse('live:test:0', 'attempted');
-  assert(activePulses.size === 1 && !document.querySelector('.communication-dot') && communicationFeedback.textContent.includes('acceptance not confirmed'), 'pre-admission attempt is static, never a sent dot');
-  communicationPulse('live:test:0', 'sent');
-  assert(activePulses.size === 1 && communicationFeedback.textContent.includes('Sent to worker'), 'explicit live send displays meaningful text');
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  assert(document.querySelectorAll('.communication-dot').length === (reduced ? 0 : 1), 'reduced motion uses static feedback without dots');
-  if (!reduced) {
-    const animations = document.querySelector('.communication-dot').getAnimations();
-    assert(animations.length === 1 && animations[0].effect.getTiming().iterations === 1 && animations[0].effect.getTiming().duration === 800, 'communication is a one-shot 800ms animation');
+  assert(document.querySelectorAll('.communication-note').length === 0 && activeFeedback.size === 0, 'worker appearance does not communicate or allocate idle badges');
+  const liveRow = rows.get('live:test:0'), liveParent = rows.get('a:45000');
+  liveRow.name.textContent = 'Keep this long worker title completely readable while static feedback occupies only the existing secondary context line';
+  const beforeFeedback = [...rows.values()].map(r => [r, r.btn.getBoundingClientRect().height, r.st.getBoundingClientRect().left, r.mem.getBoundingClientRect().right]);
+  const originalIdentity = [liveRow.agentKind.textContent, liveRow.target.textContent, liveRow.name.textContent];
+  liveParent.btn.focus(); const beforeFocus = document.activeElement;
+  showFeedback('live:test:0', 'attempted');
+  const activeSend = activeFeedback.get('live:test:0'), badge = activeSend.label;
+  assert(activeFeedback.size === 1 && badge.textContent === 'Attempted' && communicationFeedback.textContent.includes('acceptance not confirmed'), 'pre-admission attempt is explicitly uncertain static text');
+  showFeedback('live:test:0', 'sent');
+  assert(activeFeedback.get('live:test:0') === activeSend && badge.textContent === 'Sent' && communicationFeedback.textContent.includes('Sent to worker'), 'confirmed send updates the same row badge and timer');
+  assert(communicationFeedback.textContent.includes(liveParent.name.textContent) && communicationFeedback.textContent.includes(liveRow.name.textContent) && communicationFeedback.getAttribute('aria-live') === 'polite', 'polite announcement includes the full bounded parent and worker labels');
+  assert(document.activeElement === beforeFocus && liveRow.btn.disabled === false && liveRow.st.textContent === 'unknown', 'feedback never steals focus, changes terminal capability, or invents activity state');
+  assert(originalIdentity.every((value, i) => value === [liveRow.agentKind.textContent, liveRow.target.textContent, liveRow.name.textContent][i]), 'provider identity, target, and long primary title remain intact');
+  assert(liveRow.btn.parentElement.classList.contains('communication-active') && !rows.get('live:test:1').btn.parentElement.classList.contains('communication-active'), 'only the observed row line highlights, never its subtree');
+  for (const [r, height, stateX, ramX] of beforeFeedback) assert(r.btn.getBoundingClientRect().height === height && r.st.getBoundingClientRect().left === stateX && r.mem.getBoundingClientRect().right === ramX, 'static feedback has no row-height or aligned-metric layout shift across five levels and 20 workers');
+  const badgeBox = badge.getBoundingClientRect(), contextBox = liveRow.context.getBoundingClientRect();
+  assert(badgeBox.left >= contextBox.left && badgeBox.right <= contextBox.right && badgeBox.bottom <= contextBox.bottom + .5 && liveRow.name.getBoundingClientRect().bottom <= contextBox.top, 'badge stays in its secondary slot without covering title or metrics');
+  const contrast = (a, b) => {
+    const light = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+    const x = light(a), y = light(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
+  };
+  const badgeStyle = getComputedStyle(badge), lineStyle = getComputedStyle(liveRow.btn.parentElement);
+  assert(contrast(badgeStyle.color, badgeStyle.backgroundColor) >= 4.5 && contrast(lineStyle.outlineColor, lineStyle.backgroundColor) >= 3 && parseFloat(badgeStyle.fontSize) >= 12, 'both themes keep readable text and a contrast-qualified accent without microscopic type');
+  assert(!document.getAnimations().length && getComputedStyle(communicationFeedback).width === '1px', 'normal and reduced motion share static row feedback and a nonvisual announcement, not a viewport layer');
+  showFeedback('live:test:0', 'returned'); assert(badge.textContent === 'Reply', 'a genuinely different confirmation is never dropped during an active highlight');
+  showFeedback('live:test:0', 'attempted'); assert(badge.textContent === 'Attempted', 'a new attempt is not misreported as the previous confirmation');
+  for (let i = 1; i < 5; i++) showFeedback('live:test:' + i, 'sent');
+  assert(activeFeedback.size === 4 && document.querySelectorAll('.communication-note').length === 4, 'active badges and timers are bounded at four without an idle-row journal');
+  showFeedback('live:test:3', 'attempted');
+  for (const entry of activeFeedback.values()) {
+    const box = entry.label.getBoundingClientRect(), slot = entry.label.parentElement.getBoundingClientRect();
+    assert(box.left >= slot.left && box.right <= slot.right && box.bottom <= slot.bottom + .5, 'even the longest badge fits nested compact secondary slots without overlap');
   }
-  communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 1, 'same-edge burst coalesces');
-  const activeSend = activePulses.get('live:test:0'); render(liveSnapshot);
-  assert(activePulses.get('live:test:0') === activeSend, 'unchanged snapshot preserves one-shot motion without restarting it');
-  dispatchEvent(new Event('resize')); assert(activePulses.size === 0 && !document.querySelector('.communication-dot'), 'resize cleans animations and feedback');
-  communicationPulse('live:test:0', 'returned'); openSearch();
-  assert(activePulses.size === 0, 'search dialog cancels covered-edge feedback without changing focus behavior');
-  communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'covered edges do not animate or queue behind search');
+  const parentLabel = liveParent.name.textContent, workerLabel = liveRow.name.textContent;
+  liveParent.name.textContent = 'Parent '.repeat(24); liveRow.name.textContent = 'Worker '.repeat(24);
+  showFeedback('live:test:0', 'returned');
+  assert(communicationFeedback.textContent.length <= 400 && communicationFeedback.textContent.includes('…'), 'untrusted long display labels cannot grow a feedback announcement without bound');
+  liveParent.name.textContent = parentLabel; liveRow.name.textContent = workerLabel;
+  clearPulses(); showFeedback('live:test:24', 'sent'); assert(activeFeedback.size === 0, 'offscreen feedback is discarded, not queued');
+  showFeedback('live:test:0', 'sent'); const repeated = activeFeedback.get('live:test:0');
+  showFeedback('live:test:0', 'sent'); assert(activeFeedback.get('live:test:0') === repeated, 'same-row burst reuses its entry and badge');
+  render(liveSnapshot); assert(activeFeedback.get('live:test:0') === repeated, 'unchanged snapshot preserves readable feedback without allocating it again');
+  dispatchEvent(new Event('resize')); assert(activeFeedback.size === 0 && !document.querySelector('.communication-note'), 'resize cleans static feedback');
+  showFeedback('live:test:0', 'returned'); openSearch();
+  assert(activeFeedback.size === 0, 'search dialog cancels covered-row feedback without changing focus behavior');
+  showFeedback('live:test:0', 'sent'); assert(activeFeedback.size === 0, 'covered rows do not queue feedback behind search');
   closeSearch();
-  communicationPulse('live:test:0', 'returned'); assert(communicationFeedback.textContent.includes('Reply received'), 'returned result has distinct accessible text');
+  showFeedback('live:test:0', 'returned'); assert(communicationFeedback.textContent.includes('Reply received'), 'returned result has distinct accessible text');
   rows.get('a:45000').branch.click();
-  assert(activePulses.size === 0, 'fold cancels in-flight pulse');
-  communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'collapsed edges never animate or queue');
+  assert(activeFeedback.size === 0, 'fold clears active feedback');
+  showFeedback('live:test:0', 'sent'); assert(activeFeedback.size === 0, 'collapsed rows never queue feedback');
   rows.get('a:45000').branch.click();
+  showFeedback('live:test:0', 'returned');
+  await new Promise(resolve => setTimeout(resolve, 1900));
+  assert(activeFeedback.size === 0 && !document.querySelector('.communication-note') && !document.querySelector('.communication-active') && communicationFeedback.textContent === '', 'feedback expiry removes badges, highlight, timers, and announcement without retaining an event');
   const previousEventSource = window.EventSource;
   let stream = null, opens = 0;
   window.EventSource = class { constructor() { stream = this; opens++; } close() { this.closed = true; } };
   try {
     communicationStream(); assert(opens === 1, 'opt-in uses one stream');
     stream.onmessage({ data: JSON.stringify({ workers: liveWorkers }) });
-    assert(activePulses.size === 0, 'initial/reconnected state never replays pulses');
+    assert(activeFeedback.size === 0, 'initial/reconnected state never replays feedback');
     const stableWorkers = liveWorkers.slice(0, 20), routeHost = agent(45100, '/live-route', { kind: 'opencode' });
     render({ ...liveSnapshot, agents: [liveHost, routeHost], liveWorkers: stableWorkers });
     const work = { get renders() { return app.work.renders; }, get rowUpdates() { return rowsState.work.calls; }, get hosts() { return agentsState.work.calls; } }, attributes = new MutationObserver(() => {});
+    const originalAnimate = Element.prototype.animate, originalRAF = window.requestAnimationFrame, originalStyle = window.getComputedStyle, originalBounds = Element.prototype.getBoundingClientRect, originalRects = Element.prototype.getClientRects;
+    const originalSetTimeout = window.setTimeout, originalClearTimeout = window.clearTimeout, feedbackTimers = new Set();
+    let forbiddenWork = 0, visibilityReads = 0;
+    const forbidden = () => { forbiddenWork++; throw Error('Static feedback must not animate, schedule frames, or inspect travel geometry/styles'); };
+    Element.prototype.animate = window.requestAnimationFrame = window.getComputedStyle = Element.prototype.getBoundingClientRect = forbidden;
+    Element.prototype.getClientRects = function() { visibilityReads++; return originalRects.call(this); };
+    window.setTimeout = (fn, delay, ...args) => { const id = originalSetTimeout(() => { feedbackTimers.delete(id); fn(...args); }, delay); feedbackTimers.add(id); return id; };
+    window.clearTimeout = id => { feedbackTimers.delete(id); originalClearTimeout(id); };
     app.work.renders = rowsState.work.calls = agentsState.work.calls = 0;
-    attributes.observe($('tree'), { subtree: true, attributes: true });
+    attributes.observe($('tree'), { subtree: true, attributes: true, childList: true });
     try {
+      let reused, steadyNodes;
       for (let i = 0; i < 36; i++) {
-        clearPulses();
         const direction = i % 2 ? 'returned' : 'sent';
         stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, key: stableWorkers[0].key, direction }) });
-        assert(activePulses.size === 1 && communicationFeedback.textContent.includes(i % 2 ? 'Reply received' : 'Sent to worker'), 'unchanged worker frames still present every confirmed observation');
-        assert(document.querySelectorAll('.communication-dot').length === (reduced ? 0 : 1), 'unchanged frames preserve normal motion and reduced-motion feedback');
+        const entry = activeFeedback.get(stableWorkers[0].key);
+        if (!i) { reused = entry; steadyNodes = $('tree').querySelectorAll('*').length; }
+        assert(activeFeedback.size === 1 && entry === reused && entry.label.textContent === (i % 2 ? 'Reply' : 'Sent') && communicationFeedback.textContent.includes(i % 2 ? 'Reply received' : 'Sent to worker'), '36 unchanged worker frames present every confirmation using one reused badge/timer entry');
+        assert($('tree').querySelectorAll('*').length === steadyNodes && !document.getAnimations().length, 'normal and reduced motion share stable static DOM without frame scheduling or Web Animations');
+        assert(feedbackTimers.size === 1, 'updating an active row replaces its one expiry timer rather than accumulating timers');
       }
+      const allowedTargets = [reused.line, rows.get(stableWorkers[0].key).context, reused.label];
+      const unrelated = attributes.takeRecords().filter(record => !allowedTargets.includes(record.target));
+      assert(work.renders === 0 && work.rowUpdates === 0 && work.hosts === 0 && unrelated.length === 0, '36 unchanged SSE frames perform no full render, updateAgentRow calls, host formatting or unrelated tree writes');
+      assert(forbiddenWork === 0 && visibilityReads === 36, 'each observation uses only one row visibility read, with zero travel bounds, computed styles, WAAPI or RAF');
+      Element.prototype.animate = originalAnimate; window.requestAnimationFrame = originalRAF; window.getComputedStyle = originalStyle; Element.prototype.getBoundingClientRect = originalBounds; Element.prototype.getClientRects = originalRects;
       clearPulses();
-      assert(work.renders === 0 && work.rowUpdates === 0 && work.hosts === 0 && attributes.takeRecords().length === 0, '36 unchanged SSE frames perform no full render, updateAgentRow calls, host formatting or tree attribute writes');
-      assert(activePulses.size === 0 && !document.querySelector('.communication-dot') && !document.getAnimations().length, 'unchanged-frame burst cleanup stays bounded');
+      assert(feedbackTimers.size === 0, 'explicit cleanup clears the final rescheduled timer');
+      window.setTimeout = originalSetTimeout; window.clearTimeout = originalClearTimeout;
+      assert(activeFeedback.size === 0 && !document.querySelector('.communication-note') && !document.getAnimations().length, 'unchanged-frame burst cleanup stays bounded without retained badges');
       const frame = workers => stream.onmessage({ data: JSON.stringify({ workers }) });
       let count = work.renders;
       frame([...stableWorkers].reverse());
@@ -554,19 +603,23 @@ const { activePulses, communicationPulse, communicationFeedback, communicationSt
       assert(work.hosts - beforeHosts === 2, 'a poll formats each host once, not again for its 20 workers');
       const realNow = Date.now;
       try {
-        communicationPulse(stableWorkers[0].key, 'sent');
+        showFeedback(stableWorkers[0].key, 'sent');
         Date.now = () => app.lastData.at + 20000;
         frame(stableWorkers);
-        assert(work.renders === count && activePulses.size === 0 && rows.get('a:45000').st.textContent === 'stale', 'unchanged frames still age snapshots and cancel stale motion');
+        assert(work.renders === count && activeFeedback.size === 0 && rows.get('a:45000').st.textContent === 'stale', 'unchanged frames still age snapshots and clear stale feedback');
       } finally { Date.now = realNow; freshness(); }
       $('offline').hidden = false; frame(stableWorkers);
       assert(work.renders === count && rows.get('a:45000').st.textContent === 'offline', 'unchanged topology cannot mask offline state');
       $('offline').hidden = true; freshness();
+      showFeedback(stableWorkers[0].key, 'returned');
       stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, lost: true, key: stableWorkers[0].key, direction: 'sent' }) });
-      assert(work.renders === count && activePulses.size === 0 && communicationStatus.textContent.includes('dropped'), 'unchanged topology still acknowledges loss without replaying a pulse');
+      assert(work.renders === count && activeFeedback.size === 0 && communicationStatus.textContent.includes('dropped'), 'unchanged topology still acknowledges loss without replaying feedback');
+      showFeedback(stableWorkers[0].key, 'returned');
       stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, ambiguous: true }) });
-      assert(work.renders === count && communicationStatus.textContent.includes('ambiguous'), 'unchanged topology still updates ambiguity availability');
+      assert(work.renders === count && activeFeedback.size === 0 && communicationStatus.textContent.includes('ambiguous'), 'unchanged topology still clears uncertain feedback and updates ambiguity availability');
     } finally {
+      Element.prototype.animate = originalAnimate; window.requestAnimationFrame = originalRAF; window.getComputedStyle = originalStyle; Element.prototype.getBoundingClientRect = originalBounds; Element.prototype.getClientRects = originalRects;
+      window.setTimeout = originalSetTimeout; window.clearTimeout = originalClearTimeout;
       attributes.disconnect(); clearPulses();
       $('offline').hidden = true;
     }
@@ -574,15 +627,19 @@ const { activePulses, communicationPulse, communicationFeedback, communicationSt
     stream.onmessage({ data: JSON.stringify({ workers: [], ambiguous: true }) });
     assert($('communication-status').textContent.includes('ambiguous') && rows.size === 1, 'ambiguous native viewers suppress worker attribution with an explicit availability reason');
     stream.onmessage({ data: JSON.stringify({ workers: liveWorkers, lost: true }) });
-    assert($('communication-status').textContent.includes('dropped') && activePulses.size === 0, 'dropped burst is acknowledged rather than replayed');
-    stream.onerror(); assert($('communication-status').textContent.includes('missing'), 'stream gap is acknowledged');
+    assert($('communication-status').textContent.includes('dropped') && activeFeedback.size === 0, 'dropped burst is acknowledged rather than replayed');
+    showFeedback('live:test:0', 'sent');
+    stream.onerror(); assert(activeFeedback.size === 0 && $('communication-status').textContent.includes('missing'), 'stream gap clears feedback and is acknowledged');
     Object.defineProperty(document, 'hidden', { configurable: true, value: true }); communicationStream();
     assert(stream.closed && !communication.source, 'hidden tab disconnects and discards observations');
-    communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'hidden tab never animates');
+    showFeedback('live:test:0', 'sent'); assert(activeFeedback.size === 0, 'hidden tab never queues feedback');
     delete document.hidden;
     const oldStream = stream; communicationStream();
     oldStream.onmessage({ data: JSON.stringify({ workers: liveWorkers, key: 'live:test:0', direction: 'sent' }) });
-    assert(opens === 2 && activePulses.size === 0, 'callbacks from a closed stream generation cannot replay after visibility resumes');
+    assert(opens === 2 && activeFeedback.size === 0, 'callbacks from a closed stream generation cannot replay after visibility resumes');
+    showFeedback('live:test:0', 'sent');
+    render({ ...liveSnapshot, communication: false }); communicationStream();
+    assert(activeFeedback.size === 0 && !communication.source, 'disabled capability clears feedback even if a retained graph is still supplied');
     render({ agents: [liveHost], at: Date.now() }); communicationStream();
     assert(opens === 2 && !communication.source && rows.size === 1, 'disabled bridge has no connection and releases live worker rows immediately');
   } finally { delete document.hidden; communication.closeSource(); window.EventSource = previousEventSource; clearPulses(); }

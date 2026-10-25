@@ -85,15 +85,15 @@ cleanup closes the socket/listeners/timer. Neither path installs the plugin.
 ## What the UI means
 
 - **Delegation attempted** is static feedback for the built-in tool's explicit
-  target/parent metadata. It never produces a send dot: progress precedes
+  target/parent metadata. It is never shown as a confirmed send: progress precedes
   admission, and inbox events have no parent-call ID, so a nearby inbox message
   cannot safely prove which call sent it. Inbox bodies/events are not read.
 - **Sent to worker** requires a successful background launch (or a foreground
   call moved to the background), with the observed call/child ID and
   `status: "running"`. The version-matched implementation awaits prompt
   admission before that success. There is no immediate confirmed foreground
-  send pulse: its confirmation arrives only with the eventual result, when
-  the reverse reply pulse is shown instead.
+  send confirmation: its evidence arrives only with the eventual result, when
+  reply feedback is shown instead.
 - **Reply received** requires that same observed call's native tool-success
   metadata, child ID, `executed: false` (native **provider-executed** flag), and
   **`status: "completed"`**. This built-in tool executes locally; `executed`
@@ -106,7 +106,7 @@ cleanup closes the socket/listeners/timer. Neither path installs the plugin.
   mapped **parent terminal**, not a nonexistent worker process.
 - Changing the TUI session, plugin/service/socket reconnection, or disconnect
   clears correlation. Two live TUIs selecting the same service/session are
-  ambiguous: their workers/pulses are suppressed until unambiguous. This also
+  ambiguous: their workers/feedback are suppressed until unambiguous. This also
   applies when one selects a worker in the other's observed session tree.
   A replacement native service feed pauses the plugin until it is reloaded:
   the host context captures its API client at setup, so reusing an old
@@ -114,9 +114,16 @@ cleanup closes the socket/listeners/timer. Neither path installs the plugin.
   reconnects resume future observations automatically, never history.
   After a native service reconnect, use `/plugins` to disable and re-enable
   `swarmview.live-communication`; do not restart the service for this.
-- The blue 8px dot travels once along the existing connector for 800ms.
-  Reduced motion uses static text. Hidden/collapsed/offscreen edges do not
-  animate or queue for later; fold/resize/scroll/disconnect cancels animation.
+- The observed worker's row briefly highlights and shows **Sent**, **Reply**, or
+  **Attempted** in its existing secondary context line for 1.8 seconds. Parent
+  and worker labels are announced politely (bounded to 160 characters each)
+  and available in the badge tooltip. Status/RAM remain unknown/unavailable;
+  the badge is not CPU state. Normal and reduced motion use the same static
+  implementation: no travel, Web Animations, frame loop, or viewport layer.
+  At most four badge/timer entries exist; repeated events update the same
+  badge instead of allocating a history. Hidden/collapsed/offscreen rows do
+  not queue feedback. Fold/details/search/resize/scroll, topology changes,
+  loss/ambiguity, disconnect, stale/offline state, or removal clear it.
 
 ## Bounds, privacy, and failure behavior
 

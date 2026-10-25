@@ -449,19 +449,38 @@ header .bar button {
 .kids:empty {
   display: none;
 }
-.communication-dot {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #58a6ff;
-  pointer-events: none;
-  z-index: 50;
+.row-line.communication-active {
+  background: var(--hov);
+  outline: 1px solid var(--new);
+  outline-offset: -1px;
+  border-radius: 6px;
+}
+.context.has-communication {
+  position: relative;
+  padding-inline-end: 44px;
+}
+.context.has-communication[data-communication='attempted'] {
+  padding-inline-end: 72px;
 }
 .communication-note {
+  position: absolute;
+  inset-inline-end: 0;
+  top: 0;
+  padding-inline: 4px;
+  border-inline-start: 2px solid var(--new);
+  background: var(--hov);
   color: var(--fg);
+  font-weight: 600;
+}
+.communication-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 .agent {
   all: unset;

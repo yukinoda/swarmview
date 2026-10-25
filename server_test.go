@@ -86,7 +86,7 @@ func TestHandlers(t *testing.T) {
 		{"index", "GET", "/", h, nil, "", 200, "<!doctype html>"},
 		{"logo", "GET", "/logo.svg", h, nil, "", 200, "<svg"},
 		{"script", "GET", "/assets/app.js", h, nil, "", 200, "import"},
-		{"communication module", "GET", "/assets/communication.js", h, nil, "", 200, "getCommunicationEdge"},
+		{"communication module", "GET", "/assets/communication.js", h, nil, "", 200, "getCommunicationRow"},
 		{"styles", "GET", "/assets/app.css", h, nil, "", 200, ":root"},
 		{"asset bad host", "GET", "/assets/app.js", "evil.com", nil, "", 403, ""},
 		{"asset wrong method", "POST", "/assets/app.js", h, nil, "", 404, ""},
@@ -143,6 +143,31 @@ func TestFeatureModulesDoNotImportCoordinator(t *testing.T) {
 			if bytes.Contains(code, []byte(dependency)) {
 				t.Fatalf("%s must not import the app coordinator", entry.Name())
 			}
+		}
+	}
+}
+
+func TestStaticCommunicationFeedback(t *testing.T) {
+	code, err := webFiles.ReadFile("web/communication.js")
+	must(t, err)
+	for _, forbidden := range []string{".animate(", "requestAnimationFrame", "getComputedStyle", "getBoundingClientRect", "prefers-reduced-motion", "position: fixed", "translate("} {
+		if bytes.Contains(code, []byte(forbidden)) {
+			t.Fatalf("static feedback contains removed moving/geometry path: %s", forbidden)
+		}
+	}
+	css, err := webFiles.ReadFile("web/app.css")
+	must(t, err)
+	start := strings.Index(string(css), ".row-line.communication-active")
+	if start < 0 {
+		t.Fatal("static feedback styles missing")
+	}
+	end := strings.Index(string(css)[start:], "\n.agent {")
+	if end < 0 {
+		t.Fatal("static feedback style boundary missing")
+	}
+	for _, forbidden := range []string{"animation:", "transition:", "transform:", "position: fixed", "box-shadow:", "filter:", "will-change:"} {
+		if strings.Contains(string(css)[start:start+end], forbidden) {
+			t.Fatalf("static feedback adds a moving/compositing effect: %s", forbidden)
 		}
 	}
 }

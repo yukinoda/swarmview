@@ -44,8 +44,8 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
   - `rows.js`: shared task/detail rows, result cards, and terminal activation.
   - `search.js`: local search index, dialog, and keyboard navigation.
   - `notifications.js`: quiet observations, notification episodes, and tab badges.
-  - `communication.js`: opt-in live stream, bounded one-shot/static feedback, and
-    geometry cleanup; reads dashboard edges without owning its tree or snapshot.
+  - `communication.js`: opt-in live stream, up to four reused static row badges,
+    polite announcements, and visibility cleanup; reads dashboard rows without owning its tree or snapshot.
   - `icons.js`, `dom.js`, `storage.js`: provider glyphs, DOM helpers, and saved preferences.
 - `web/app_test.js`, `ui_test.go`: browser assertions and their Go test harness.
 - `*_test.go`: tests beside their subjects; `test_helpers_test.go` contains shared fixtures.

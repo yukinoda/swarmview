@@ -66,7 +66,7 @@ async function poll() {
 }
 
 setupCommunication({ snapshot: () => lastData, snapshotState, render, freshness });
-setupDashboard(() => lastData && render(lastData, true), clearPulses);
+setupDashboard(() => { clearPulses(); return lastData && render(lastData, true); }, clearPulses);
 setupSearch(snapshotState, clearPulses);
 setupNotifications(focusAgent);
 document.addEventListener('visibilitychange', () => {

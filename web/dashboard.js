@@ -262,8 +262,8 @@ export function focusAgent(pid) {
   if (row) return focusTerminal(row);
 }
 
-// Read-only edge geometry for communication; tree ownership stays in this module.
-export function getCommunicationEdge(key) {
+// Read-only row lookup for communication; tree ownership stays in this module.
+export function getCommunicationRow(key) {
   const item = last.get(key);
   return { item, child: rows.get(key), parent: rows.get(item?.parent) };
 }
