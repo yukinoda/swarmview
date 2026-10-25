@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -92,14 +92,8 @@ func (s *server) focus(pid int, now int64) (bool, string, error) {
 	return ok, e, nil
 }
 
-//go:embed web/index.html
-var indexHTML []byte
-
-//go:embed web/app.js
-var appJS []byte
-
-//go:embed web/app.css
-var appCSS []byte
+//go:embed web/index.html web/app.css web/app.js web/agents.js web/dashboard.js web/rows.js web/search.js web/notifications.js web/icons.js web/dom.js web/storage.js
+var webFiles embed.FS
 
 //go:embed assets/logo.svg
 var logoSVG []byte
@@ -147,13 +141,19 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method + " " + r.RequestURI {
 	case "GET /":
 		w.Header().Set("content-type", "text/html")
-		w.Write(uiAsset("web/index.html", indexHTML))
-	case "GET /assets/app.js":
-		w.Header().Set("content-type", "text/javascript")
-		w.Write(uiAsset("web/app.js", appJS))
-	case "GET /assets/app.css":
-		w.Header().Set("content-type", "text/css")
-		w.Write(uiAsset("web/app.css", appCSS))
+		page, _ := webFiles.ReadFile("web/index.html")
+		w.Write(uiAsset("web/index.html", page))
+	case "GET /assets/app.js", "GET /assets/agents.js", "GET /assets/dashboard.js",
+		"GET /assets/rows.js", "GET /assets/search.js", "GET /assets/notifications.js",
+		"GET /assets/icons.js", "GET /assets/dom.js", "GET /assets/storage.js", "GET /assets/app.css":
+		name := "web/" + path.Base(r.URL.Path)
+		mime := "text/javascript"
+		if strings.HasSuffix(name, ".css") {
+			mime = "text/css"
+		}
+		w.Header().Set("content-type", mime)
+		asset, _ := webFiles.ReadFile(name)
+		w.Write(uiAsset(name, asset))
 	case "GET /logo.svg":
 		w.Header().Set("content-type", "image/svg+xml")
 		w.Write(logoSVG)

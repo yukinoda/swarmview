@@ -28,7 +28,7 @@ or full conversation transcripts. Ghostty identification
 briefly changes a candidate client's terminal title; it does not type commands
 or send input to the agent.
 
-Only use trusted `web/index.html`, `web/app.js`, and `web/app.css` files beside
+Only use trusted `web/index.html`, JavaScript modules, and `web/app.css` files beside
 the executable: they intentionally override the embedded UI and run as the local
 dashboard. Command-line tools resolved through `PATH` must also be trusted.
 

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -57,22 +58,48 @@ func TestUI(t *testing.T) {
 	chrome := chromeBinary(t)
 	checks, err := os.ReadFile("web/app_test.js")
 	must(t, err)
-	script := string(appJS)
+	page, err := webFiles.ReadFile("web/index.html")
+	must(t, err)
+	entry, err := webFiles.ReadFile("web/app.js")
+	must(t, err)
+	script := string(entry)
 	// Run the real UI in fresh profiles, replacing its initial poll with checks.
 	i := strings.LastIndex(script, "poll();")
 	if i < 0 {
 		t.Fatal("initial poll not found")
 	}
-	script = script[:i] + string(checks) + script[i+len("poll();"):]
+	script = script[:i] + `import('./app_test.js');` + script[i+len("poll();"):]
+	script += "\nexport const testState = { render, poll, freshness, get timer() { return timer; } };\n"
+	modules := map[string]string{
+		"app.js":      script,
+		"app_test.js": string(checks),
+	}
+	for name, extra := range map[string]string{
+		"dashboard.js":     "export const testState = { rows, groups, quietRows };",
+		"search.js":        "export const testState = { searchRows, searchIndex, get searchReturnFocus() { return searchReturnFocus; } };",
+		"notifications.js": "export const testState = { eps };",
+	} {
+		code, err := webFiles.ReadFile("web/" + name)
+		must(t, err)
+		modules[name] = string(code) + "\n" + extra
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/assets/app.js":
+		if name, ok := strings.CutPrefix(r.URL.Path, "/assets/"); ok {
+			if code, ok := modules[name]; ok {
+				w.Header().Set("Content-Type", "text/javascript")
+				w.Write([]byte(code))
+				return
+			}
+			code, err := webFiles.ReadFile("web/" + name)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
 			w.Header().Set("Content-Type", "text/javascript")
-			w.Write([]byte(script))
-			return
-		case "/assets/app.css":
-			w.Header().Set("Content-Type", "text/css")
-			w.Write(appCSS)
+			if name == "app.css" {
+				w.Header().Set("Content-Type", "text/css")
+			}
+			w.Write(code)
 			return
 		}
 		if r.URL.Path == "/logo.svg" {
@@ -96,7 +123,7 @@ func TestUI(t *testing.T) {
 			platform = "MacIntel"
 		}
 		init := "Object.defineProperty(navigator, 'platform', { value: " + string(marshal(platform)) + " });\n"
-		w.Write([]byte(strings.Replace(string(indexHTML), `<script src="/assets/app.js">`, "<script>"+init+`</script><script src="/assets/app.js">`, 1)))
+		w.Write([]byte(strings.Replace(string(page), `<script type="module" src="/assets/app.js">`, "<script>"+init+`</script><script type="module" src="/assets/app.js">`, 1)))
 	}))
 	defer srv.Close()
 	// Four runs cover both shortcut platforms, compact/native widths, themes,
@@ -160,5 +187,22 @@ func TestUI(t *testing.T) {
 				t.Logf("1,000-agent search: %s ms mean synchronous DOM update over 40 queries", ms)
 			}
 		})
+	}
+}
+
+func TestUIAssetOverride(t *testing.T) {
+	exe, err := os.Executable()
+	must(t, err)
+	file := filepath.Join(t.TempDir(), "app.js")
+	must(t, os.WriteFile(file, []byte("local edit"), 0600))
+	name, err := filepath.Rel(filepath.Dir(exe), file)
+	must(t, err)
+	embedded := []byte("embedded copy")
+	if got := string(uiAsset(name, embedded)); got != "local edit" {
+		t.Fatalf("local override = %q", got)
+	}
+	must(t, os.Remove(file))
+	if got := string(uiAsset(name, embedded)); got != string(embedded) {
+		t.Fatalf("missing file fallback = %q", got)
 	}
 }

@@ -38,7 +38,7 @@ distortion. The app icon uses the same logo with transparent macOS canvas paddin
 (an 824-point tile centered in a 1024-point canvas). Finder, Dock, and the app
 switcher all use the generated bundle icon.
 
-Agent glyphs in [`web/app.js`](../web/app.js) come from [Simple Icons](https://simpleicons.org/)
+Agent glyphs in [`web/icons.js`](../web/icons.js) come from [Simple Icons](https://simpleicons.org/)
 (CC0), including the OpenCode and Cursor marks, except for Aider's lowercase
 "a", taken from its upstream [Safari pinned-tab icon](https://github.com/Aider-AI/aider/blob/main/aider/website/assets/icons/safari-pinned-tab.svg)
 ([Apache-2.0](aider-LICENSE.txt)). The Aider glyph is extracted from the background
