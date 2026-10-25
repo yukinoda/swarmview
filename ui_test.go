@@ -144,7 +144,8 @@ func TestUI(t *testing.T) {
 			for attempt := 0; attempt < 2; attempt++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				args := []string{"--headless", "--no-sandbox", "--disable-gpu",
-					"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size, "--dump-dom", "--timeout=10000"}
+					"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size,
+					"--virtual-time-budget=10000", "--dump-dom", "--timeout=10000"}
 				if scenario.theme == "dark" {
 					args = append(args, "--force-dark-mode")
 				} else {
