@@ -92,20 +92,26 @@ func (s *server) focus(pid int, now int64) (bool, string, error) {
 	return ok, e, nil
 }
 
-//go:embed index.html
+//go:embed web/index.html
 var indexHTML []byte
+
+//go:embed web/app.js
+var appJS []byte
+
+//go:embed web/app.css
+var appCSS []byte
 
 //go:embed assets/logo.svg
 var logoSVG []byte
 
-// page serves ./index.html next to the binary when present (UI edits need no rebuild), else the embedded copy.
-func page() []byte {
+// uiAsset prefers files next to the binary so UI edits need no rebuild.
+func uiAsset(name string, embedded []byte) []byte {
 	if exe, err := os.Executable(); err == nil {
-		if b, err := os.ReadFile(filepath.Join(filepath.Dir(exe), "index.html")); err == nil {
+		if b, err := os.ReadFile(filepath.Join(filepath.Dir(exe), name)); err == nil {
 			return b
 		}
 	}
-	return indexHTML
+	return embedded
 }
 
 // marshal is json.Marshal without HTML escaping, like JS JSON.stringify.
@@ -141,7 +147,13 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.Method + " " + r.RequestURI {
 	case "GET /":
 		w.Header().Set("content-type", "text/html")
-		w.Write(page())
+		w.Write(uiAsset("web/index.html", indexHTML))
+	case "GET /assets/app.js":
+		w.Header().Set("content-type", "text/javascript")
+		w.Write(uiAsset("web/app.js", appJS))
+	case "GET /assets/app.css":
+		w.Header().Set("content-type", "text/css")
+		w.Write(uiAsset("web/app.css", appCSS))
 	case "GET /logo.svg":
 		w.Header().Set("content-type", "image/svg+xml")
 		w.Write(logoSVG)

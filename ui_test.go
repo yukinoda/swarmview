@@ -27,16 +27,26 @@ func TestUI(t *testing.T) {
 	if chrome == "" {
 		t.Skip("Chrome/Chromium not found; set CHROME_BIN to run UI checks")
 	}
-	checks, err := os.ReadFile("ui_test.js")
+	checks, err := os.ReadFile("web/app_test.js")
 	must(t, err)
-	page := string(indexHTML)
+	script := string(appJS)
 	// Run the real UI in fresh profiles, replacing its initial poll with checks.
-	i := strings.LastIndex(page, "poll();")
+	i := strings.LastIndex(script, "poll();")
 	if i < 0 {
 		t.Fatal("initial poll not found")
 	}
-	page = page[:i] + string(checks) + page[i+len("poll();"):]
+	script = script[:i] + string(checks) + script[i+len("poll();"):]
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/assets/app.js":
+			w.Header().Set("Content-Type", "text/javascript")
+			w.Write([]byte(script))
+			return
+		case "/assets/app.css":
+			w.Header().Set("Content-Type", "text/css")
+			w.Write(appCSS)
+			return
+		}
 		if r.URL.Path == "/logo.svg" {
 			w.Header().Set("Content-Type", "image/svg+xml")
 			w.Write(logoSVG)
@@ -58,7 +68,7 @@ func TestUI(t *testing.T) {
 			platform = "MacIntel"
 		}
 		init := "Object.defineProperty(navigator, 'platform', { value: " + string(marshal(platform)) + " });\n"
-		w.Write([]byte(strings.Replace(page, "<script>", "<script>"+init, 1)))
+		w.Write([]byte(strings.Replace(string(indexHTML), `<script src="/assets/app.js">`, "<script>"+init+`</script><script src="/assets/app.js">`, 1)))
 	}))
 	defer srv.Close()
 	// Four runs cover both shortcut platforms, compact/native widths, themes,

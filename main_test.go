@@ -1042,6 +1042,13 @@ func TestHandlers(t *testing.T) {
 		{"bad host", "GET", "/", "evil.com", nil, "", 403, ""},
 		{"index", "GET", "/", h, nil, "", 200, "<!doctype html>"},
 		{"logo", "GET", "/logo.svg", h, nil, "", 200, "<svg"},
+		{"script", "GET", "/assets/app.js", h, nil, "", 200, "const WORKING_RATE"},
+		{"styles", "GET", "/assets/app.css", h, nil, "", 200, ":root"},
+		{"asset bad host", "GET", "/assets/app.js", "evil.com", nil, "", 403, ""},
+		{"asset wrong method", "POST", "/assets/app.js", h, nil, "", 404, ""},
+		{"unlisted asset", "GET", "/assets/README.md", h, nil, "", 404, ""},
+		{"browser tests not served", "GET", "/assets/app_test.js", h, nil, "", 404, ""},
+		{"source directory not served", "GET", "/web/app_test.js", h, nil, "", 404, ""},
 		{"localhost host", "GET", "/", "localhost:4777", nil, "", 200, ""},
 		{"agents", "GET", "/agents", h, nil, "", 200, `"agents":[`},
 		{"agents with query", "GET", "/agents?x=1", h, nil, "", 404, ""},
@@ -1070,6 +1077,29 @@ func TestHandlers(t *testing.T) {
 	w := do(s, "GET", "/agents", h, nil, "")
 	if w.Header().Get("content-type") != "application/json" || w.Header().Get("cache-control") != "no-store" {
 		t.Error("agents headers")
+	}
+	for route, mime := range map[string]string{"/assets/app.js": "text/javascript", "/assets/app.css": "text/css"} {
+		w := do(s, "GET", route, h, nil, "")
+		if w.Header().Get("content-type") != mime || w.Header().Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: incorrect asset headers: %v", route, w.Header())
+		}
+	}
+}
+
+func TestUIAssetOverride(t *testing.T) {
+	exe, err := os.Executable()
+	must(t, err)
+	file := filepath.Join(t.TempDir(), "app.js")
+	must(t, os.WriteFile(file, []byte("local edit"), 0600))
+	name, err := filepath.Rel(filepath.Dir(exe), file)
+	must(t, err)
+	embedded := []byte("embedded copy")
+	if got := string(uiAsset(name, embedded)); got != "local edit" {
+		t.Fatalf("local override = %q", got)
+	}
+	must(t, os.Remove(file))
+	if got := string(uiAsset(name, embedded)); got != string(embedded) {
+		t.Fatalf("missing file fallback = %q", got)
 	}
 }
 

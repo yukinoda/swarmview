@@ -1,0 +1,147 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta
+  name="description"
+  content="A local dashboard for your coding agents. See observed activity, terminal context, and approximate memory use in one view."
+/>
+<link rel="icon" href="/logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/assets/app.css" />
+<title>Swarmview</title>
+<div class="brand">
+  <img src="/logo.svg" width="24" height="24" alt="" />
+  <h1>Swarmview</h1>
+  <span class="bar search-launch">
+    <button
+      id="search-toggle"
+      aria-controls="search-panel"
+      aria-expanded="false"
+      title="Search agents (Ctrl/⌘ K)"
+    >
+      Search <kbd id="search-key">Ctrl K</kbd>
+    </button>
+  </span>
+</div>
+<header>
+  <span class="hl">
+    <span id="count"></span>
+    <span
+      id="mem"
+      title="Actual OS memory pressure, system-wide swap and macOS-reported available RAM; not just these agents"
+      hidden
+    ></span>
+  </span>
+  <span class="bar">
+    <span id="offline" hidden>offline</span>
+    <button id="notify" hidden></button>
+    <button id="expand">Expand all</button>
+    <button id="collapse">Collapse all</button>
+  </span>
+</header>
+<div id="freshness" role="status">Waiting for first snapshot</div>
+<dialog id="search-panel" aria-labelledby="search-title" hidden>
+  <div class="search-head">
+    <h2 id="search-title">Find an agent</h2>
+    <button id="close-search" aria-label="Done searching" title="Close search">Done</button>
+  </div>
+  <div class="search">
+    <input
+      id="search"
+      type="search"
+      aria-label="Search agents"
+      aria-describedby="search-help"
+      aria-controls="search-results"
+      aria-keyshortcuts="Control+k Meta+k"
+      placeholder="Search tasks, agents, repos…"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    <button id="clear-search" aria-label="Clear search" hidden>Clear</button>
+  </div>
+  <span id="search-count" role="status" hidden></span>
+  <p id="search-freshness" role="status" hidden></p>
+  <div id="search-results-wrap" hidden>
+    <div id="search-results" role="group" aria-label="Search results"></div>
+  </div>
+  <p id="search-message">Type to search current tasks, agents, and repositories.</p>
+  <p id="search-help">
+    ↑/↓ choose · Enter open terminal · Done, Esc, or click outside to close<br />Try agent:opencode
+    status:quiet (waiting is also accepted)
+  </p>
+</dialog>
+<section id="quiet" class="sec" hidden>
+  <h2>Recently quiet</h2>
+  <div id="quiet-list"></div>
+</section>
+<div id="empty" hidden>No agents running</div>
+<div class="column-head" aria-hidden="true"><span></span><span>State</span><span>RAM</span></div>
+<main id="tree"></main>
+<div id="legend"></div>
+<details id="reading">
+  <summary>Details: CPU, process age &amp; metric definitions</summary>
+  <dl>
+    <dt>Agents and repository counts</dt>
+    <dd>
+      The header counts detected agents, excluding subagents. Repository and worktree counts show
+      working and quiet agents, plus detected workers.
+    </dd>
+    <dt>State and Recently quiet</dt>
+    <dd>
+      Working means recent CPU activity (or subagent log writes), not task progress or
+      communication. Quiet means previously active, now quiet; network, tools, workers, and human
+      input cannot be distinguished. Idle means no recent observed activity; new means just started;
+      exiting means just disappeared. Quiet never means finished or a request for help. Unknown
+      means activity telemetry is unavailable.
+    </dd>
+    <dt>RAM ~1.6 GB</dt>
+    <dd>
+      Approximate resident memory of an agent and its child processes, excluding separately listed
+      agents. Shared pages may be counted more than once, so values are not exact additive physical
+      RAM or reclaimable memory. Large values alone are not warnings. A dash means unavailable,
+      including per-worker RAM.
+    </dd>
+    <dt>Per-agent details</dt>
+    <dd>
+      Click State or RAM to show CPU, process age, model and terminal context where available, or to
+      fold a worker branch. Details work for monitoring-only agents too. Click an enabled task to
+      open its terminal; this is a separate action.
+    </dd>
+    <dt>Process age / CPU 36%</dt>
+    <dd>
+      Process age is not time spent on the current task. CPU includes child processes; 100% is one
+      CPU core and multi-core work can exceed 100%. This is not percent complete. Worker CPU and
+      process age are unavailable.
+    </dd>
+    <dt>OpenCode · dev:%42</dt>
+    <dd>
+      Agent name and tmux session/pane target, not a metric. Outside tmux, agents are
+      monitoring-only.
+    </dd>
+    <dt>System pressure / swap / RAM free</dt>
+    <dd id="system-details">Waiting for system snapshot.</dd>
+    <dd>
+      Machine-wide indicators, available on macOS. Only actual OS pressure (normal, warning or
+      critical) sets warning severity. Normal pressure is in the header tooltip and these details
+      when swap/free context is shown. Swap is disk space used for virtual memory, not current
+      pressure; RAM free is the macOS-reported available-memory percentage. Missing pressure
+      telemetry is explicitly unavailable.
+    </dd>
+    <dt>Last updated</dt>
+    <dd>
+      Age of the last snapshot. If offline appears, the visible data is retained and keeps aging
+      while Swarmview retries.
+    </dd>
+    <dt>Recently quiet notifications</dt>
+    <dd>
+      At most three observations are shown, from 15 seconds to 5 minutes quiet, after activity was
+      observed in this page session. Optional notifications and tab counts use that same observation
+      (the tab counts all matches), not a human request. No agents are closed automatically.
+    </dd>
+    <dt>Hierarchy and communication</dt>
+    <dd>
+      Lines show detected parentage only. Communication events are unavailable, so there are no
+      send/reply pulses. No conversation contents or extra event polling are collected.
+    </dd>
+  </dl>
+</details>
+<script src="/assets/app.js"></script>

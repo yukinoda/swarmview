@@ -1,4 +1,4 @@
-// Injected into index.html by TestUI; no browser automation dependency needed.
+// Replaces app.js's initial poll in TestUI; no browser automation dependency needed.
 (async () => { try {
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const agent = (pid, repo, extra = {}) => ({
