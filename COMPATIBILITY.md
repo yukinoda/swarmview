@@ -144,7 +144,11 @@ session status or conversation metadata.
   Network/I/O-bound work can still appear quiet; processes that start and
   exit between samples cannot be measured.
 - Native human requests, permissions, completion, and send/reply events are not
-  available. Recently quiet observations and notifications do not confirm that
+  available by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
+  observes confirmed sends and foreground result returns for CLI/service 2.1.3–2.1.4
+  with manual TUI opt-in on macOS/Linux; other providers remain unsupported for
+  communication. Live relationships do not establish worker process status.
+  Recently quiet observations and notifications do not confirm that
   someone needs to act. Nesting indicates discovered parentage, not communication.
 - Per-agent RAM is approximate process-tree RSS and remains neutral regardless of
   size. Missing measurements (including Claude workers) display a dash, not zero.

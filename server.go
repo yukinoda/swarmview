@@ -35,6 +35,7 @@ type server struct {
 	procAt    int64
 	ghostty   bool
 	noCwd     map[int]int64 // pid -> next lsof retry
+	pulse     *pulseBridge
 }
 
 func newServer(run Runner) *server {
@@ -50,14 +51,16 @@ type snap struct {
 }
 
 type payload struct {
-	Agents    []Agent    `json:"agents"`
-	Subagents []Subagent `json:"subagents"`
-	At        int64      `json:"at"`
-	System    system     `json:"system"`
+	Agents        []Agent      `json:"agents"`
+	Subagents     []Subagent   `json:"subagents"`
+	At            int64        `json:"at"`
+	System        system       `json:"system"`
+	Communication bool         `json:"communication,omitempty"`
+	LiveWorkers   []liveWorker `json:"liveWorkers,omitempty"`
 }
 
 func toPayload(s snap) payload {
-	p := payload{s.agents, s.subagents, s.at, s.system}
+	p := payload{Agents: s.agents, Subagents: s.subagents, At: s.at, System: s.system}
 	if p.Agents == nil {
 		p.Agents = []Agent{}
 	}
@@ -151,7 +154,22 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
-		s.writeJSON(w, 200, toPayload(sn), "cache-control", "no-store")
+		p := toPayload(sn)
+		if s.pulse != nil {
+			p.Communication = true
+			p.LiveWorkers = s.pulse.workers()
+		}
+		s.writeJSON(w, 200, p, "cache-control", "no-store")
+	case "GET /communication":
+		if s.pulse == nil {
+			w.WriteHeader(404)
+			return
+		}
+		if o := r.Header.Get("Origin"); (o != "" && !slices.Contains(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+			w.WriteHeader(403)
+			return
+		}
+		s.pulse.stream(w, r)
 	case "POST /focus":
 		if o := r.Header.Get("Origin"); (o != "" && !slices.Contains(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
 			w.WriteHeader(403)

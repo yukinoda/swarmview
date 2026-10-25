@@ -90,6 +90,8 @@
   .node > .kids::before { left: calc(22px + var(--depth, 0) * 14px); border-color: color-mix(in srgb, var(--c) 55%, transparent); }
   .group { isolation: isolate; }
   .kids:empty { display: none; }
+  .communication-dot { position: fixed; top: 0; left: 0; width: 8px; height: 8px; border-radius: 50%; background: #58a6ff; pointer-events: none; z-index: 50; }
+  .communication-note { color: var(--fg); }
   .agent { all: unset; box-sizing: border-box; position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 47px;
     padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--fg); }
   .row-line { display: grid; grid-template-columns: minmax(0, 1fr) 152px; gap: 8px; min-height: 47px; }
@@ -203,6 +205,7 @@ const foldAll = on => { folded = new Set(on ? [...groups.keys(), ...rows.keys()]
 const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
 const txt = (e, v) => { if (e.textContent !== v) e.textContent = v; };
 const cls = (e, v) => { if (e.className !== v) e.className = v; };
+const attr = (e, k, v) => { v = String(v); if (e.getAttribute(k) !== v) e.setAttribute(k, v); };
 
 function logo(kind, size) { // inline svg (monogram if no icon); colour comes from CSS currentColor
   const s = el('span', 'logo');
@@ -213,18 +216,20 @@ function logo(kind, size) { // inline svg (monogram if no icon); colour comes fr
   p.setAttribute('d', LOGOS[kind]); v.append(p); s.append(v); return s;
 }
 
-function mkRow() {
+function mkRow(key) {
   const node = el('div'), line = el('div', 'row-line'), btn = el('button', 'agent'), kids = el('div', 'kids');
   const r = { node, btn, kids, kind: null, size: 0, logo: null, identity: el('span', 'identity'), name: el('span', 'kind'), context: el('span', 'context'), agentKind: el('span', 'agent-kind'), target: el('span', 'target'), st: el('span', 'st'), mem: el('span', 'mem'), up: el('span', 'up'), cpu: el('span', 'cpu'), model: el('span'), terminal: el('p'), detail: el('div', 'agent-details'), toggle: el('button', 'metrics'), branch: el('button'), workers: el('span'), note: null, noteUntil: 0 };
   r.context.append(r.agentKind, r.target); r.identity.append(r.name, r.context);
   r.context.append(r.workers);
   r.mem.title = 'Approximate agent + child-process RAM (RSS); shared pages may be counted more than once';
   r.cpu.title = 'Recent agent + child-process CPU; 100% = one core, not task progress';
+  r.up.title = 'Agent process age, not current task duration';
+  r.branch.onclick = () => toggleFold(key);
   r.target.title = 'tmux session/pane target; click an enabled task to select this pane';
   r.detail.id = 'd' + nextGroupID++; r.detail.hidden = true;
   r.toggle.setAttribute('aria-controls', r.detail.id); r.toggle.setAttribute('aria-expanded', 'false');
   r.toggle.title = 'Details: CPU, process age and worker branch';
-  r.toggle.onclick = () => { r.detail.hidden = !r.detail.hidden; r.toggle.setAttribute('aria-expanded', !r.detail.hidden); };
+  r.toggle.onclick = () => { clearPulses(); r.detail.hidden = !r.detail.hidden; r.toggle.setAttribute('aria-expanded', !r.detail.hidden); };
   r.toggle.append(r.st, r.mem);
   for (const metric of [r.cpu, r.up, r.model]) { const p = el('p'); p.append(metric); r.detail.append(p); }
   const help = el('p'); help.textContent = 'Activity is not progress or a request for input. Task opens terminal when available.';
@@ -249,10 +254,9 @@ function fill(r, it) {
   txt(r.target, it.target || '');
   txt(r.agentKind, it.agentLabel || '');
   txt(r.terminal, [it.agentName, it.target, it.cwd].filter(Boolean).join(' · '));
-  r.up.title = 'Agent process age, not current task duration';
   r.search = null; // Build lazily only when a query needs current metadata.
   txt(r.mem, it.mem != null ? '~' + fmtBytes(it.mem) : '—');
-  r.toggle.setAttribute('aria-label', `Details for ${it.name}: ${it.stText}, RAM ${r.mem.textContent}`);
+  attr(r.toggle, 'aria-label', `Details for ${it.name}: ${it.stText}, RAM ${r.mem.textContent}`);
   if (r.btn.title !== it.tip) r.btn.title = it.tip;
   if (r.note && Date.now() > r.noteUntil) { r.note.remove(); r.note = null; }
 }
@@ -308,6 +312,83 @@ function subItem(s, i, host) {
     kind: 'claude', size: 16, name: s.description ?? 'subagent', agentLabel: 'Claude Code', target: host ? terminalTarget(host) : 'Worker · parent terminal unavailable', tip: s.description ?? 'subagent', mem: null, status: s.working === true ? 'working' : s.working === false ? 'idle' : 'unknown', stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
     up: 'Process age: unavailable', cpu: 'CPU: unavailable', model: 'Model: ' + (s.model || 'unavailable'), ord: 1e9 + i, sub: true };
 }
+
+function liveItem(w, i, host) {
+  return { ...host, key: w.key, parent: w.parent, size: 16, kind: 'opencode', sub: true, live: true,
+    name: 'OpenCode worker ' + w.key.split(':').at(-1).slice(-6), agentLabel: 'Observed live', mem: null, status: 'unknown', stText: 'unknown', idleSec: null,
+    up: 'Process age: unavailable', cpu: 'CPU: unavailable', model: 'Model: unavailable', ord: 2e9 + i,
+    tip: 'Live session relationship, not process activity or task completion. Parent terminal only.' };
+}
+
+let communicationSource = null;
+let communicationGap = false;
+const activePulses = new Map();
+function clearPulses() {
+  for (const finish of [...activePulses.values()]) finish();
+}
+function communicationPulse(key, direction) {
+  if (document.hidden || snapshotState() || $('search-panel').open) return;
+  const previous = activePulses.get(key);
+  if (previous) { if (previous.direction === direction || direction === 'attempted') return; previous(); }
+  if (activePulses.size >= 4) return;
+  const item = last.get(key), child = rows.get(key), parent = rows.get(item?.parent);
+  if (!item?.live || item.dying || !child || !parent || child.node.parentElement !== parent.kids) return;
+  const a = parent.kids.getBoundingClientRect(), b = child.btn.getBoundingClientRect();
+  if (!child.btn.getClientRects().length || !parent.btn.getClientRects().length || a.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth) return;
+  const vertical = getComputedStyle(parent.kids, '::before'), horizontal = getComputedStyle(child.btn, '::before');
+  const x = a.left + parseFloat(vertical.left), y = b.top + b.height / 2, end = b.left + parseFloat(horizontal.left) + parseFloat(horizontal.width);
+  if (![x, y, end].every(Number.isFinite)) return;
+  const label = el('span', 'communication-note');
+  label.textContent = (direction === 'attempted' ? 'Delegation attempted · acceptance not confirmed' : direction === 'sent' ? 'Sent to worker' : 'Reply received') + ' · ' + child.name.textContent + ' · observed live ';
+  communicationFeedback.hidden = false; communicationFeedback.append(label);
+  let dot = null, animation = null, timer;
+  const finish = () => { clearTimeout(timer); animation?.cancel(); dot?.remove(); label.remove(); activePulses.delete(key); communicationFeedback.hidden = !lastData?.communication; };
+  finish.valid = () => {
+    if (document.hidden || snapshotState() || last.get(key)?.parent !== item.parent || !child.node.isConnected || !parent.node.isConnected) return false;
+    const next = child.btn.getBoundingClientRect(), anchor = parent.kids.getBoundingClientRect();
+    return child.btn.getClientRects().length && next.top === b.top && next.left === b.left && next.width === b.width && next.height === b.height && anchor.top === a.top && anchor.left === a.left;
+  };
+  finish.direction = direction;
+  activePulses.set(key, finish);
+  if (direction === 'attempted' || matchMedia('(prefers-reduced-motion: reduce)').matches) { timer = setTimeout(finish, 1800); return; }
+  dot = el('span', 'communication-dot'); dot.setAttribute('aria-hidden', 'true'); document.body.append(dot);
+  const point = (x, y, offset, opacity = 1) => ({ transform: `translate(${x - 4}px, ${y - 4}px)`, offset, opacity });
+  const frames = direction === 'sent' ? [point(x, a.top, 0), point(x, y, .7), point(end, y, .9), point(end, y, 1, 0)]
+    : [point(end, y, 0), point(x, y, .2), point(x, a.top, .9), point(x, a.top, 1, 0)];
+  animation = dot.animate(frames, { duration: 800, easing: 'linear', iterations: 1 }); animation.onfinish = finish;
+  timer = setTimeout(finish, 1200);
+}
+function communicationStream() {
+  const enabled = lastData?.communication && !document.hidden;
+  if (!enabled) { communicationSource?.close(); communicationSource = null; clearPulses(); return; }
+  if (communicationSource) return;
+  const source = communicationSource = new EventSource('/communication');
+  source.onmessage = event => {
+    if (communicationSource !== source) return;
+    const frame = JSON.parse(event.data);
+    if (!lastData || document.hidden) return;
+    const previous = lastData.liveWorkers || [];
+    // These are all worker presentation fields; array order also determines row order.
+    const unchanged = frame.workers.length === previous.length && frame.workers.every((w, i) => w.key === previous[i].key && w.parent === previous[i].parent && w.pid === previous[i].pid);
+    if (!unchanged) render({ ...lastData, liveWorkers: frame.workers });
+    else {
+      freshness();
+      for (const finish of [...activePulses.values()]) if (!finish.valid()) finish();
+    }
+    if (frame.lost) { communicationGap = true; txt($('communication-status'), 'Communication observations dropped · live only, no replay'); return; }
+    txt($('communication-status'), (frame.ambiguous ? 'Communication: ambiguous TUI views · affected pulses unavailable; select the session in one terminal' : frame.workers.length ? 'Communication: observing live metadata only' : 'Communication: waiting for live worker metadata · requires opt-in OpenCode TUI bridge') + ' · other providers unavailable' + (communicationGap ? ' · some observations missing; no replay' : ''));
+    if (frame.key && ['attempted', 'sent', 'returned'].includes(frame.direction)) communicationPulse(frame.key, frame.direction);
+  };
+  source.onerror = () => { if (communicationSource !== source) return; communicationGap = true; clearPulses(); txt($('communication-status'), 'Communication disconnected · observations may be missing; no replay'); };
+}
+const communicationStatus = el('p'); communicationStatus.id = 'communication-status'; communicationStatus.hidden = true;
+document.body.append(communicationStatus);
+const communicationFeedback = el('p'); communicationFeedback.id = 'communication-feedback'; communicationFeedback.hidden = true;
+communicationFeedback.setAttribute('role', 'status'); communicationFeedback.setAttribute('aria-live', 'polite');
+document.body.append(communicationFeedback);
+addEventListener('resize', clearPulses); addEventListener('scroll', clearPulses, true);
+matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', clearPulses);
+document.addEventListener('visibilitychange', communicationStream);
 
 function group(key, wt) { // repo or worktree header: fold toggle, label, status counts, pin (repos only)
   let g = groups.get(key);
@@ -407,6 +488,7 @@ function applySearch() {
 
 let searchReturnFocus = null;
 function openSearch() {
+  clearPulses();
   if ($('search-panel').hidden) searchReturnFocus = document.activeElement;
   $('search-panel').hidden = false;
   if (!$('search-panel').open) $('search-panel').showModal();
@@ -521,8 +603,9 @@ function render(data, again = false) {
   const cur = new Map(), byCwd = new Map(agents.map(a => [a.cwd, a])), byPid = new Map(agents.map(a => [a.pid, a]));
   for (const a of agents) { const it = agentItem(a); cur.set(it.key, it); }
   subagents.forEach((s, i) => { const it = subItem(s, i, byPid.get(s.parentPid) ?? byCwd.get(s.cwd)); cur.set(it.key, it); });
+  (data.liveWorkers || []).forEach((w, i) => { const host = cur.get('a:' + w.pid); if (host?.kind === 'opencode') { const it = liveItem(w, i, host); cur.set(it.key, it); } });
   for (const [k, it] of last) // gone since last poll: one poll in red, then removed
-    if (!cur.has(k) && !it.dying) cur.set(k, { ...it, dying: true, status: 'exiting', stText: 'exiting' });
+    if (!cur.has(k) && !it.dying && !it.live) cur.set(k, { ...it, dying: true, status: 'exiting', stText: 'exiting' });
   // Resolve orphaned workers once so counts, indentation and placement share the same parent.
   for (const it of cur.values()) {
     if (!it.parent || it.parent === it.key || !cur.has(it.parent)) it.parent = it.sub && it.pid != null && cur.has('a:' + it.pid) ? 'a:' + it.pid : null;
@@ -594,7 +677,7 @@ function render(data, again = false) {
   }
   for (const it of items) { // all rows exist before placement, so a parent sorted later still hosts its children
     let r = rows.get(it.key);
-    if (!r) rows.set(it.key, r = mkRow());
+    if (!r) rows.set(it.key, r = mkRow(it.key));
     fill(r, it);
     let ancestor = it, depth = 0;
     // shortcut: indentation caps at five levels to preserve title space; deeper telemetry still nests in the DOM.
@@ -605,9 +688,9 @@ function render(data, again = false) {
     txt(r.workers, count ? ` · ${count} ${closed ? 'hidden ' : ''}${noun}${count === 1 ? '' : 's'}` : '');
     r.kids.hidden = closed; r.branch.hidden = !count;
     txt(r.branch, `${closed ? 'Show' : 'Hide'} ${count} ${noun}${count === 1 ? '' : 's'}`);
-    r.branch.setAttribute('aria-expanded', !closed); r.branch.onclick = () => toggleFold(it.key);
+    attr(r.branch, 'aria-expanded', !closed);
     if (!r.kids.id) r.kids.id = 'k' + nextGroupID++;
-    r.branch.setAttribute('aria-controls', r.kids.id);
+    attr(r.branch, 'aria-controls', r.kids.id);
   }
   for (const it of items) {
     const r = rows.get(it.key), p = it.parent ? rows.get(it.parent) : null;
@@ -630,6 +713,9 @@ function render(data, again = false) {
   $('empty').hidden = items.length > 0;
   applySearch();
   freshness();
+  communicationStatus.hidden = !data.communication;
+  communicationFeedback.hidden = !data.communication;
+  for (const finish of [...activePulses.values()]) if (!finish.valid()) finish();
 }
 
 function freshness(now = Date.now()) {
@@ -641,7 +727,7 @@ function freshness(now = Date.now()) {
     const it = last.get(key), state = offline ? 'offline' : stale ? 'stale' : it.stText;
     cls(r.node, 'node s-' + (retained ? 'unknown' : it.status));
     txt(r.st, state);
-    r.toggle.setAttribute('aria-label', `Details for ${it.name}: ${state}, RAM ${r.mem.textContent}${offline || stale ? ' (retained)' : ''}`);
+    attr(r.toggle, 'aria-label', `Details for ${it.name}: ${state}, RAM ${r.mem.textContent}${offline || stale ? ' (retained)' : ''}`);
   }
   for (const [key, r] of searchRows) { txt(r.meta, retained || last.get(key).stText); cls(r.node, 'node s-' + (retained ? 'unknown' : last.get(key).status)); }
   if (offline || stale) { $('quiet').hidden = true; ambient(0); }
@@ -656,6 +742,7 @@ async function poll() {
     if (!r.ok) throw new Error(r.status);
     $('offline').hidden = true;
     render(await r.json());
+    communicationStream();
   } catch { $('offline').hidden = false; }
   freshness();
   busy = false;

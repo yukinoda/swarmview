@@ -434,6 +434,129 @@
   show([]); show([]);
   assert(rows.size === 0 && groups.size === 0 && quietRows.size === 0 && eps.size === 0, 'exited fleets release rows, observations, and notification episode metadata');
 
+  // Synthetic protocol frames only: no user provider, plugin, or agent is started.
+  const liveHost = agent(45000, '/live-test', { kind: 'opencode' });
+  const liveWorkers = Array.from({ length: 25 }, (_, i) => ({ key: 'live:test:' + i, parent: i > 0 && i < 5 ? 'live:test:' + (i - 1) : 'a:45000', pid: 45000 }));
+  const liveSnapshot = { agents: [liveHost], liveWorkers, communication: true, at: Date.now() };
+  render(liveSnapshot); render(liveSnapshot); $('expand').click(); window.scrollTo(0, 0);
+  assert(rows.size === 26 && $('count').textContent.startsWith('1 agents'), 'live workers do not fabricate process counts');
+  for (const w of liveWorkers) {
+    const r = rows.get(w.key);
+    assert(r.st.textContent === 'unknown' && r.mem.textContent === '—' && r.cpu.textContent.includes('unavailable'), 'native session workers never invent CPU, RSS or lifecycle status');
+    assert(Math.abs(r.mem.getBoundingClientRect().right - rows.get('a:45000').mem.getBoundingClientRect().right) <= 1, 'live five-level/20-worker metrics remain aligned');
+  }
+  assert(document.querySelectorAll('.communication-dot').length === 0, 'worker appearance does not communicate');
+  communicationPulse('live:test:0', 'attempted');
+  assert(activePulses.size === 1 && !document.querySelector('.communication-dot') && communicationFeedback.textContent.includes('acceptance not confirmed'), 'pre-admission attempt is static, never a sent dot');
+  communicationPulse('live:test:0', 'sent');
+  assert(activePulses.size === 1 && communicationFeedback.textContent.includes('Sent to worker'), 'explicit live send displays meaningful text');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  assert(document.querySelectorAll('.communication-dot').length === (reduced ? 0 : 1), 'reduced motion uses static feedback without dots');
+  if (!reduced) {
+    const animations = document.querySelector('.communication-dot').getAnimations();
+    assert(animations.length === 1 && animations[0].effect.getTiming().iterations === 1 && animations[0].effect.getTiming().duration === 800, 'communication is a one-shot 800ms animation');
+  }
+  communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 1, 'same-edge burst coalesces');
+  const activeSend = activePulses.get('live:test:0'); render(liveSnapshot);
+  assert(activePulses.get('live:test:0') === activeSend, 'unchanged snapshot preserves one-shot motion without restarting it');
+  dispatchEvent(new Event('resize')); assert(activePulses.size === 0 && !document.querySelector('.communication-dot'), 'resize cleans animations and feedback');
+  communicationPulse('live:test:0', 'returned'); openSearch();
+  assert(activePulses.size === 0, 'search dialog cancels covered-edge feedback without changing focus behavior');
+  communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'covered edges do not animate or queue behind search');
+  closeSearch();
+  communicationPulse('live:test:0', 'returned'); assert(communicationFeedback.textContent.includes('Reply received'), 'returned result has distinct accessible text');
+  rows.get('a:45000').branch.click();
+  assert(activePulses.size === 0, 'fold cancels in-flight pulse');
+  communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'collapsed edges never animate or queue');
+  rows.get('a:45000').branch.click();
+  const previousEventSource = window.EventSource;
+  let stream = null, opens = 0;
+  window.EventSource = class { constructor() { stream = this; opens++; } close() { this.closed = true; } };
+  try {
+    communicationStream(); assert(opens === 1, 'opt-in uses one stream');
+    stream.onmessage({ data: JSON.stringify({ workers: liveWorkers }) });
+    assert(activePulses.size === 0, 'initial/reconnected state never replays pulses');
+    const originalRender = render, originalFill = fill, originalAgentItem = agentItem;
+    const stableWorkers = liveWorkers.slice(0, 20), routeHost = agent(45100, '/live-route', { kind: 'opencode' });
+    render({ ...liveSnapshot, agents: [liveHost, routeHost], liveWorkers: stableWorkers });
+    const work = { renders: 0, fills: 0, hosts: 0 }, attributes = new MutationObserver(() => {});
+    render = (...args) => { work.renders++; return originalRender(...args); };
+    fill = (...args) => { work.fills++; return originalFill(...args); };
+    agentItem = (...args) => { work.hosts++; return originalAgentItem(...args); };
+    attributes.observe($('tree'), { subtree: true, attributes: true });
+    try {
+      for (let i = 0; i < 36; i++) {
+        clearPulses();
+        const direction = i % 2 ? 'returned' : 'sent';
+        stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, key: stableWorkers[0].key, direction }) });
+        assert(activePulses.size === 1 && communicationFeedback.textContent.includes(i % 2 ? 'Reply received' : 'Sent to worker'), 'unchanged worker frames still present every confirmed observation');
+        assert(document.querySelectorAll('.communication-dot').length === (reduced ? 0 : 1), 'unchanged frames preserve normal motion and reduced-motion feedback');
+      }
+      clearPulses();
+      assert(work.renders === 0 && work.fills === 0 && work.hosts === 0 && attributes.takeRecords().length === 0, '36 unchanged SSE frames perform no full render, row fill, host formatting or tree attribute writes');
+      assert(activePulses.size === 0 && !document.querySelector('.communication-dot') && !document.getAnimations().length, 'unchanged-frame burst cleanup stays bounded');
+      const frame = workers => stream.onmessage({ data: JSON.stringify({ workers }) });
+      let count = work.renders;
+      frame([...stableWorkers].reverse());
+      assert(work.renders === ++count && lastData.liveWorkers[0].key === stableWorkers.at(-1).key, 'changed worker order renders even when the same keys remain');
+      frame(stableWorkers); count++;
+      const reparented = stableWorkers.map((w, i) => i ? w : { ...w, parent: stableWorkers[5].key });
+      frame(reparented);
+      assert(work.renders === ++count && rows.get(stableWorkers[0].key).node.parentElement === rows.get(stableWorkers[5].key).kids, 'same-length parent changes reparent live rows');
+      frame(stableWorkers); count++;
+      const rerouted = stableWorkers.map((w, i) => i ? w : { ...w, pid: routeHost.pid });
+      frame(rerouted);
+      assert(work.renders === ++count && rows.get(stableWorkers[0].key).pid === routeHost.pid && rows.get(stableWorkers[0].key).terminal.textContent.includes('/live-route'), 'same-key owner changes refresh focus and presentation fields');
+      frame(stableWorkers); count++;
+      const replaced = stableWorkers.map((w, i) => i ? w : { ...w, key: 'live:replacement:0' });
+      frame(replaced);
+      assert(work.renders === ++count && rows.has('live:replacement:0') && !rows.has(stableWorkers[0].key), 'same-length worker identity changes replace the correct row');
+      frame(stableWorkers); count++;
+      const savedFetch = window.fetch, beforeHosts = work.hosts;
+      try {
+        window.fetch = async url => {
+          assert(url === '/agents', 'normal poll still uses the process snapshot endpoint');
+          return { ok: true, json: async () => ({ ...lastData, agents: [{ ...liveHost, memBytes: 750 * MB, title: 'Updated host task' }, routeHost], at: Date.now() }) };
+        };
+        await poll(); clearTimeout(timer);
+      } finally { window.fetch = savedFetch; }
+      assert(work.renders === ++count && rows.get('a:45000').mem.textContent === '~750 MB' && rows.get('a:45000').name.textContent === 'Updated host task', 'ordinary polls continue updating host RAM and task identity');
+      assert(work.hosts - beforeHosts === 2, 'a poll formats each host once, not again for its 20 workers');
+      const realNow = Date.now;
+      try {
+        communicationPulse(stableWorkers[0].key, 'sent');
+        Date.now = () => lastData.at + 20000;
+        frame(stableWorkers);
+        assert(work.renders === count && activePulses.size === 0 && rows.get('a:45000').st.textContent === 'stale', 'unchanged frames still age snapshots and cancel stale motion');
+      } finally { Date.now = realNow; freshness(); }
+      $('offline').hidden = false; frame(stableWorkers);
+      assert(work.renders === count && rows.get('a:45000').st.textContent === 'offline', 'unchanged topology cannot mask offline state');
+      $('offline').hidden = true; freshness();
+      stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, lost: true, key: stableWorkers[0].key, direction: 'sent' }) });
+      assert(work.renders === count && activePulses.size === 0 && communicationStatus.textContent.includes('dropped'), 'unchanged topology still acknowledges loss without replaying a pulse');
+      stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, ambiguous: true }) });
+      assert(work.renders === count && communicationStatus.textContent.includes('ambiguous'), 'unchanged topology still updates ambiguity availability');
+    } finally {
+      attributes.disconnect(); render = originalRender; fill = originalFill; agentItem = originalAgentItem; clearPulses();
+      $('offline').hidden = true;
+    }
+    render(liveSnapshot);
+    stream.onmessage({ data: JSON.stringify({ workers: [], ambiguous: true }) });
+    assert($('communication-status').textContent.includes('ambiguous') && rows.size === 1, 'ambiguous native viewers suppress worker attribution with an explicit availability reason');
+    stream.onmessage({ data: JSON.stringify({ workers: liveWorkers, lost: true }) });
+    assert($('communication-status').textContent.includes('dropped') && activePulses.size === 0, 'dropped burst is acknowledged rather than replayed');
+    stream.onerror(); assert($('communication-status').textContent.includes('missing'), 'stream gap is acknowledged');
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true }); communicationStream();
+    assert(stream.closed && !communicationSource, 'hidden tab disconnects and discards observations');
+    communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'hidden tab never animates');
+    delete document.hidden;
+    const oldStream = stream; communicationStream();
+    oldStream.onmessage({ data: JSON.stringify({ workers: liveWorkers, key: 'live:test:0', direction: 'sent' }) });
+    assert(opens === 2 && activePulses.size === 0, 'callbacks from a closed stream generation cannot replay after visibility resumes');
+    render({ agents: [liveHost], at: Date.now() }); communicationStream();
+    assert(opens === 2 && !communicationSource && rows.size === 1, 'disabled bridge has no connection and releases live worker rows immediately');
+  } finally { delete document.hidden; communicationSource?.close(); communicationSource = null; window.EventSource = previousEventSource; clearPulses(); }
+
   parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
   parent.document.body.dataset.uiTests = 'passed';
 } catch (error) {

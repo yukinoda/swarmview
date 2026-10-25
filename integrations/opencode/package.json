@@ -1,0 +1,6 @@
+{
+  "name": "swarmview-live-communication",
+  "private": true,
+  "type": "module",
+  "exports": { "./tui": "./tui.ts" }
+}

@@ -89,7 +89,15 @@ State / RAM → Details: CPU 13% · Process age: 24m
 
 RAM stays neutral regardless of agent size. Warning colors reflect actual OS
 memory pressure, not swap usage or low free RAM alone. Native human requests and
-communication events are unavailable: no CPU- or nesting-derived message pulses.
+communication events are unavailable by default: no CPU- or nesting-derived
+message pulses. An optional [OpenCode V2 live bridge](integrations/opencode/README.md)
+adds explicit send/foreground-return observations with user-reviewed TUI setup
+and an explicit communication launch flag (native app or CLI); it never
+records event history or enables itself.
+CLI archives include `integrations/opencode` beside the binary; native apps
+include the same review-first files in
+`Contents/Resources/integrations/opencode`. Packaging them does not enable the
+plugin or change user settings; follow the manual setup linked above.
 Click a task's **State / RAM** cells for **Details**, or read the
 [dashboard guide](GUIDE.md#reading-the-dashboard) for status and metric definitions.
 
