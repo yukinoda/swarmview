@@ -1,4 +1,20 @@
-// Injected into index.html by TestUI; no browser automation dependency needed.
+import { testState as app } from './app.js';
+import { testState as dashboard } from './dashboard.js';
+import { testState as searchState, SEARCH_LIMIT, openSearch, closeSearch, applySearch } from './search.js';
+import { testState as notificationsState } from './notifications.js';
+import { LOGOS, logo } from './icons.js';
+import { MB, GB, snapshotItems, testState as agentsState } from './agents.js';
+import { testState as rowsState } from './rows.js';
+import { testState as communication, communicationStream, clearPulses } from './communication.js';
+import { $ } from './dom.js';
+
+const { rows, groups, quietRows } = dashboard;
+const { searchRows, searchIndex } = searchState;
+const { eps } = notificationsState;
+const { render, poll, freshness } = app;
+const { activePulses, communicationPulse, communicationFeedback, communicationStatus } = communication;
+
+// Test-only exports are appended by TestUI, never embedded or served in production.
 (async () => { try {
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const agent = (pid, repo, extra = {}) => ({
@@ -7,6 +23,15 @@
   });
   const show = agents => render({ agents, subagents: [] });
   const a = agent(100, '/a');
+  assert(!Object.hasOwn(window, 'render') && !Object.hasOwn(window, 'rows'), 'module internals do not become browser globals');
+  const cycle = snapshotItems({ agents: [agent(1, '/cycle', { ppid: 2 }), agent(2, '/cycle', { ppid: 1 })] }, new Map());
+  for (const item of cycle.values()) {
+    const visited = new Set();
+    for (let current = item; current; current = cycle.get(current.parent)) {
+      assert(!visited.has(current.key), 'snapshot normalization breaks parent cycles');
+      visited.add(current.key);
+    }
+  }
   const scenario = new URLSearchParams(location.search);
   assert(window.innerWidth === (scenario.get('size') === 'native' ? 680 : 375) && window.innerHeight === (scenario.get('size') === 'native' ? 820 : 812), 'checks run at the actual compact/native content viewport, not Chrome minimum window dimensions');
   assert(matchMedia('(prefers-color-scheme: dark)').matches === (scenario.get('theme') === 'dark'), 'browser runs the requested color scheme');
@@ -64,7 +89,7 @@
     static permission = 'granted';
     constructor(title, options) { notifications++; notificationBody = options.body; }
   };
-  notifyOn = true;
+  await $('notify').onclick();
   show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
   show([{ ...a, idleSec: 14 }]);
   assert($('quiet').hidden && notifications === 0, 'quiet observation grace period');
@@ -156,13 +181,13 @@
       assert(url === '/agents' && options.signal instanceof AbortSignal, 'poll has a timeout signal');
       throw new Error('offline');
     };
-    await poll(); clearTimeout(timer);
+    await poll(); clearTimeout(app.timer);
     assert(!$('offline').hidden && $('freshness').textContent.includes('Last updated 40s ago') && rows.get('a:100').st.textContent === 'offline', 'failed poll retains and ages last snapshot without labeling it quiet');
     assert(rows.has('a:100'), 'failed poll retains agent rows');
     window.fetch = async () => ({ ok: true, json: async () => ({ agents: [a], at: 260000 }) });
-    await poll(); clearTimeout(timer);
+    await poll(); clearTimeout(app.timer);
     assert($('offline').hidden && $('freshness').textContent === 'Last updated 0s ago', 'successful retry clears offline and refreshes age');
-  } finally { window.fetch = realFetch; Date.now = realNow; clearTimeout(timer); }
+  } finally { window.fetch = realFetch; Date.now = realNow; clearTimeout(app.timer); }
 
   show([agent(100, '/b'), agent(400, '/c')]);
   const ids = [...groups.values()].map(g => g.kids.id);
@@ -180,9 +205,9 @@
   const documentation = agent(503, '/docs', { title: 'Review glossary' });
   const sibling = agent(504, '/api', { title: 'Review authentication', idleSec: 30 });
   show([coordinator, cacheTask, documentation, sibling]); show([coordinator, cacheTask, documentation, sibling]);
-  assert([...rows.values()].every(r => r.search === null), 'unused search creates no per-agent index');
+  assert(searchIndex.size === 0, 'unused search creates no per-agent index');
   const cachedNode = rows.get('a:502').node;
-  toggleFold('r:/api');
+  groups.get('r:/api').fold.click();
   const savedFolds = localStorage.getItem('swarmview.folded');
   const treeTop = $('tree').getBoundingClientRect().top, dashboardHeight = document.documentElement.scrollHeight;
   search('agent:OPENCODE "cache invalidation"');
@@ -240,7 +265,7 @@
   search('task:Coordinator');
   $('close-search').click();
   assert($('search-panel').hidden && $('search').value === '' && $('search-toggle').getAttribute('aria-expanded') === 'false', 'Done closes and clears search without needing Escape');
-  assert(groups.get('r:/api').kids.hidden && [...rows.values()].every(r => r.search === null), 'Done restores folds and releases the search index');
+  assert(groups.get('r:/api').kids.hidden && searchIndex.size === 0, 'Done restores folds and releases the search index');
 
   const shortQueryTasks = [
     agent(601, '/Users/dev/alpha', { repoName: 'alpha', title: 'Build login' }),
@@ -284,11 +309,11 @@
     assert(searchRequests === 0, 'typing never requests the server');
   } finally { window.fetch = previousFetch; }
   $('clear-search').click();
-  assert([...rows.values()].every(r => r.search === null), 'clearing search releases the metadata index');
+  assert(searchIndex.size === 0, 'clearing search releases the metadata index');
   show(many.slice(0, 1)); show(many.slice(0, 1));
   assert(rows.size === 1 && groups.size === 1, 'exited agents and their search metadata are discarded');
   $('close-search').click();
-  assert($('search-panel').hidden && !$('search-panel').open && $('search').value === '' && searchRows.size === 0 && searchReturnFocus === null, 'closing removes temporary results, releases old focus references, and leaves no hidden query');
+  assert($('search-panel').hidden && !$('search-panel').open && $('search').value === '' && searchRows.size === 0 && searchState.searchReturnFocus === null, 'closing removes temporary results, releases old focus references, and leaves no hidden query');
 
   const fallbackHost = agent(100, '/fallback', { kind: 'claude', canFocus: true, tmuxAttached: true, tmuxTarget: 'synthetic:%1' });
   const survivingWorker = { id: 'survivor', parentPid: 100, parentAgentId: 'finished-parent', cwd: '/fallback', description: 'Surviving worker', working: true };
@@ -431,6 +456,14 @@
   render({ agents: observations, at: snapshotNow });
   render({ agents: quietObservations, at: snapshotNow - 20000 });
   assert($('quiet').hidden && notifications === beforeStale && [...rows.values()].filter(r => !r.node.classList.contains('s-exiting')).every(r => r.st.textContent === 'stale'), 'stale snapshots cannot produce quiet observations, notifications, or live state labels');
+  const queryNow = Date.now;
+  try {
+    render({ agents: [a], at: snapshotNow });
+    Date.now = () => snapshotNow + 16000;
+    search('pid:100');
+    assert(searchRows.get('a:100').meta.textContent === 'stale' && searchRows.get('a:100').node.classList.contains('s-unknown'), 'a query reads current freshness even before another poll or freshness update');
+    closeSearch();
+  } finally { Date.now = queryNow; }
   show([]); show([]);
   assert(rows.size === 0 && groups.size === 0 && quietRows.size === 0 && eps.size === 0, 'exited fleets release rows, observations, and notification episode metadata');
 
@@ -476,13 +509,10 @@
     communicationStream(); assert(opens === 1, 'opt-in uses one stream');
     stream.onmessage({ data: JSON.stringify({ workers: liveWorkers }) });
     assert(activePulses.size === 0, 'initial/reconnected state never replays pulses');
-    const originalRender = render, originalFill = fill, originalAgentItem = agentItem;
     const stableWorkers = liveWorkers.slice(0, 20), routeHost = agent(45100, '/live-route', { kind: 'opencode' });
     render({ ...liveSnapshot, agents: [liveHost, routeHost], liveWorkers: stableWorkers });
-    const work = { renders: 0, fills: 0, hosts: 0 }, attributes = new MutationObserver(() => {});
-    render = (...args) => { work.renders++; return originalRender(...args); };
-    fill = (...args) => { work.fills++; return originalFill(...args); };
-    agentItem = (...args) => { work.hosts++; return originalAgentItem(...args); };
+    const work = { get renders() { return app.work.renders; }, get rowUpdates() { return rowsState.work.calls; }, get hosts() { return agentsState.work.calls; } }, attributes = new MutationObserver(() => {});
+    app.work.renders = rowsState.work.calls = agentsState.work.calls = 0;
     attributes.observe($('tree'), { subtree: true, attributes: true });
     try {
       for (let i = 0; i < 36; i++) {
@@ -493,12 +523,12 @@
         assert(document.querySelectorAll('.communication-dot').length === (reduced ? 0 : 1), 'unchanged frames preserve normal motion and reduced-motion feedback');
       }
       clearPulses();
-      assert(work.renders === 0 && work.fills === 0 && work.hosts === 0 && attributes.takeRecords().length === 0, '36 unchanged SSE frames perform no full render, row fill, host formatting or tree attribute writes');
+      assert(work.renders === 0 && work.rowUpdates === 0 && work.hosts === 0 && attributes.takeRecords().length === 0, '36 unchanged SSE frames perform no full render, updateAgentRow calls, host formatting or tree attribute writes');
       assert(activePulses.size === 0 && !document.querySelector('.communication-dot') && !document.getAnimations().length, 'unchanged-frame burst cleanup stays bounded');
       const frame = workers => stream.onmessage({ data: JSON.stringify({ workers }) });
       let count = work.renders;
       frame([...stableWorkers].reverse());
-      assert(work.renders === ++count && lastData.liveWorkers[0].key === stableWorkers.at(-1).key, 'changed worker order renders even when the same keys remain');
+      assert(work.renders === ++count && app.lastData.liveWorkers[0].key === stableWorkers.at(-1).key, 'changed worker order renders even when the same keys remain');
       frame(stableWorkers); count++;
       const reparented = stableWorkers.map((w, i) => i ? w : { ...w, parent: stableWorkers[5].key });
       frame(reparented);
@@ -516,16 +546,16 @@
       try {
         window.fetch = async url => {
           assert(url === '/agents', 'normal poll still uses the process snapshot endpoint');
-          return { ok: true, json: async () => ({ ...lastData, agents: [{ ...liveHost, memBytes: 750 * MB, title: 'Updated host task' }, routeHost], at: Date.now() }) };
+          return { ok: true, json: async () => ({ ...app.lastData, agents: [{ ...liveHost, memBytes: 750 * MB, title: 'Updated host task' }, routeHost], at: Date.now() }) };
         };
-        await poll(); clearTimeout(timer);
+        await poll(); clearTimeout(app.timer);
       } finally { window.fetch = savedFetch; }
       assert(work.renders === ++count && rows.get('a:45000').mem.textContent === '~750 MB' && rows.get('a:45000').name.textContent === 'Updated host task', 'ordinary polls continue updating host RAM and task identity');
       assert(work.hosts - beforeHosts === 2, 'a poll formats each host once, not again for its 20 workers');
       const realNow = Date.now;
       try {
         communicationPulse(stableWorkers[0].key, 'sent');
-        Date.now = () => lastData.at + 20000;
+        Date.now = () => app.lastData.at + 20000;
         frame(stableWorkers);
         assert(work.renders === count && activePulses.size === 0 && rows.get('a:45000').st.textContent === 'stale', 'unchanged frames still age snapshots and cancel stale motion');
       } finally { Date.now = realNow; freshness(); }
@@ -537,7 +567,7 @@
       stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, ambiguous: true }) });
       assert(work.renders === count && communicationStatus.textContent.includes('ambiguous'), 'unchanged topology still updates ambiguity availability');
     } finally {
-      attributes.disconnect(); render = originalRender; fill = originalFill; agentItem = originalAgentItem; clearPulses();
+      attributes.disconnect(); clearPulses();
       $('offline').hidden = true;
     }
     render(liveSnapshot);
@@ -547,15 +577,15 @@
     assert($('communication-status').textContent.includes('dropped') && activePulses.size === 0, 'dropped burst is acknowledged rather than replayed');
     stream.onerror(); assert($('communication-status').textContent.includes('missing'), 'stream gap is acknowledged');
     Object.defineProperty(document, 'hidden', { configurable: true, value: true }); communicationStream();
-    assert(stream.closed && !communicationSource, 'hidden tab disconnects and discards observations');
+    assert(stream.closed && !communication.source, 'hidden tab disconnects and discards observations');
     communicationPulse('live:test:0', 'sent'); assert(activePulses.size === 0, 'hidden tab never animates');
     delete document.hidden;
     const oldStream = stream; communicationStream();
     oldStream.onmessage({ data: JSON.stringify({ workers: liveWorkers, key: 'live:test:0', direction: 'sent' }) });
     assert(opens === 2 && activePulses.size === 0, 'callbacks from a closed stream generation cannot replay after visibility resumes');
     render({ agents: [liveHost], at: Date.now() }); communicationStream();
-    assert(opens === 2 && !communicationSource && rows.size === 1, 'disabled bridge has no connection and releases live worker rows immediately');
-  } finally { delete document.hidden; communicationSource?.close(); communicationSource = null; window.EventSource = previousEventSource; clearPulses(); }
+    assert(opens === 2 && !communication.source && rows.size === 1, 'disabled bridge has no connection and releases live worker rows immediately');
+  } finally { delete document.hidden; communication.closeSource(); window.EventSource = previousEventSource; clearPulses(); }
 
   parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
   parent.document.body.dataset.uiTests = 'passed';

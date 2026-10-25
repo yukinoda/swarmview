@@ -4,17 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestUI(t *testing.T) {
+func chromeBinary(t *testing.T) string {
+	t.Helper()
 	chrome := os.Getenv("CHROME_BIN")
 	if chrome == "" {
 		for _, name := range []string{"google-chrome", "chromium", "chromium-browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"} {
@@ -27,16 +30,95 @@ func TestUI(t *testing.T) {
 	if chrome == "" {
 		t.Skip("Chrome/Chromium not found; set CHROME_BIN to run UI checks")
 	}
-	checks, err := os.ReadFile("ui_test.js")
+	return chrome
+}
+
+func TestUIProduction(t *testing.T) {
+	chrome := chromeBinary(t)
+	s := srvWith(func(string, ...string) (string, error) { return "", nil })
+	srv := httptest.NewUnstartedServer(s)
+	s.port = srv.Listener.Addr().(*net.TCPAddr).Port
+	srv.Start()
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
+		"--user-data-dir="+t.TempDir(), "--virtual-time-budget=3000", "--timeout=10000", "--dump-dom", srv.URL)
+	cmd.WaitDelay = 5 * time.Second
+	out, err := cmd.CombinedOutput()
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
+		t.Fatalf("production page failed (%v):\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `<span id="count">0 agents · 0 working</span>`) {
+		t.Fatalf("production page did not load its script and render the real /agents response:\n%s", out)
+	}
+}
+
+func TestUI(t *testing.T) {
+	chrome := chromeBinary(t)
+	checks, err := os.ReadFile("web/app_test.js")
 	must(t, err)
-	page := string(indexHTML)
+	page, err := webFiles.ReadFile("web/index.html")
+	must(t, err)
+	entry, err := webFiles.ReadFile("web/app.js")
+	must(t, err)
+	script := string(entry)
 	// Run the real UI in fresh profiles, replacing its initial poll with checks.
-	i := strings.LastIndex(page, "poll();")
+	i := strings.LastIndex(script, "poll();")
 	if i < 0 {
 		t.Fatal("initial poll not found")
 	}
-	page = page[:i] + string(checks) + page[i+len("poll();"):]
+	script = script[:i] + `import('./app_test.js');` + script[i+len("poll();"):]
+	if !strings.Contains(script, "function render(data, again = false) {") {
+		t.Fatal("render instrumentation target missing")
+	}
+	script = "const testWork = { renders: 0 };\n" + strings.Replace(script,
+		"function render(data, again = false) {", "function render(data, again = false) { testWork.renders++;", 1)
+	script += "\nexport const testState = { render, poll, freshness, work: testWork, get timer() { return timer; }, get lastData() { return lastData; } };\n"
+	modules := map[string]string{
+		"app.js":      script,
+		"app_test.js": string(checks),
+	}
+	for name, extra := range map[string]string{
+		"dashboard.js":     "export const testState = { rows, groups, quietRows };",
+		"search.js":        "export const testState = { searchRows, searchIndex, get searchReturnFocus() { return searchReturnFocus; } };",
+		"notifications.js": "export const testState = { eps };",
+		"communication.js": "export const testState = { activePulses, communicationPulse, communicationFeedback, communicationStatus, get source() { return communicationSource; }, closeSource() { communicationSource?.close(); communicationSource = null; } };",
+	} {
+		code, err := webFiles.ReadFile("web/" + name)
+		must(t, err)
+		modules[name] = string(code) + "\n" + extra
+	}
+	for name, signature := range map[string]string{
+		"rows.js":   "export function updateAgentRow(r, it) {",
+		"agents.js": "function agentItem(a) {",
+	} {
+		code, err := webFiles.ReadFile("web/" + name)
+		must(t, err)
+		if !strings.Contains(string(code), signature) {
+			t.Fatalf("missing test instrumentation target: %s", signature)
+		}
+		modules[name] = "const testWork = { calls: 0 };\n" + strings.Replace(string(code), signature, signature+" testWork.calls++;", 1) + "\nexport const testState = { work: testWork };\n"
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if name, ok := strings.CutPrefix(r.URL.Path, "/assets/"); ok {
+			if code, ok := modules[name]; ok {
+				w.Header().Set("Content-Type", "text/javascript")
+				w.Write([]byte(code))
+				return
+			}
+			code, err := webFiles.ReadFile("web/" + name)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "text/javascript")
+			if name == "app.css" {
+				w.Header().Set("Content-Type", "text/css")
+			}
+			w.Write(code)
+			return
+		}
 		if r.URL.Path == "/logo.svg" {
 			w.Header().Set("Content-Type", "image/svg+xml")
 			w.Write(logoSVG)
@@ -58,7 +140,7 @@ func TestUI(t *testing.T) {
 			platform = "MacIntel"
 		}
 		init := "Object.defineProperty(navigator, 'platform', { value: " + string(marshal(platform)) + " });\n"
-		w.Write([]byte(strings.Replace(page, "<script>", "<script>"+init, 1)))
+		w.Write([]byte(strings.Replace(string(page), `<script type="module" src="/assets/app.js">`, "<script>"+init+`</script><script type="module" src="/assets/app.js">`, 1)))
 	}))
 	defer srv.Close()
 	// Four runs cover both shortcut platforms, compact/native widths, themes,
@@ -79,7 +161,8 @@ func TestUI(t *testing.T) {
 			for attempt := 0; attempt < 2; attempt++ {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				args := []string{"--headless", "--no-sandbox", "--disable-gpu",
-					"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size, "--dump-dom", "--timeout=10000"}
+					"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size,
+					"--virtual-time-budget=10000", "--dump-dom", "--timeout=10000"}
 				if scenario.theme == "dark" {
 					args = append(args, "--force-dark-mode")
 				} else {
@@ -122,5 +205,22 @@ func TestUI(t *testing.T) {
 				t.Logf("1,000-agent search: %s ms mean synchronous DOM update over 40 queries", ms)
 			}
 		})
+	}
+}
+
+func TestUIAssetOverride(t *testing.T) {
+	exe, err := os.Executable()
+	must(t, err)
+	file := filepath.Join(t.TempDir(), "app.js")
+	must(t, os.WriteFile(file, []byte("local edit"), 0600))
+	name, err := filepath.Rel(filepath.Dir(exe), file)
+	must(t, err)
+	embedded := []byte("embedded copy")
+	if got := string(uiAsset(name, embedded)); got != "local edit" {
+		t.Fatalf("local override = %q", got)
+	}
+	must(t, os.Remove(file))
+	if got := string(uiAsset(name, embedded)); got != string(embedded) {
+		t.Fatalf("missing file fallback = %q", got)
 	}
 }

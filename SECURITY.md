@@ -28,9 +28,9 @@ or full conversation transcripts. Ghostty identification
 briefly changes a candidate client's terminal title; it does not type commands
 or send input to the agent.
 
-Only use a trusted `index.html` beside the executable: it intentionally overrides
-the embedded UI and runs as the local dashboard. Command-line tools resolved
-through `PATH` must also be trusted.
+Only use trusted `web/index.html`, JavaScript modules, and `web/app.css` files beside
+the executable: they intentionally override the embedded UI and run as the local
+dashboard. Command-line tools resolved through `PATH` must also be trusted.
 
 The optional macOS app starts its own bundled server on loopback port 4778 and
 loads that exact HTTP origin in WKWebView. It blocks other page navigation and
