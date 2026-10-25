@@ -56,6 +56,9 @@ def main():
     args = parser.parse_args()
     executable = args.app.resolve() / "Contents/MacOS/Swarmview"
     assert executable.is_file(), "Build Swarmview.app first"
+    resources = executable.parent.parent / "Resources"
+    source = Path(__file__).resolve().parents[2] / "assets/aider-LICENSE.txt"
+    assert (resources / source.name).read_bytes() == source.read_bytes(), "App must include the Aider icon license"
     assert args.seconds >= 0
     subprocess.run([str(executable), "--installer-self-test"], check=True, timeout=10,
                    stdout=subprocess.DEVNULL)

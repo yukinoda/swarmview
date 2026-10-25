@@ -8,6 +8,18 @@
   const show = agents => render({ agents, subagents: [] });
   const a = agent(100, '/a');
 
+  for (const kind of ['aider', 'cursor-agent']) {
+    show([{ ...a, kind, idleSec: 15 }]);
+    const path = rows.get('a:100').logo.querySelector('svg path');
+    assert(path && path.getAttribute('d') === LOGOS[kind], kind + ' uses its embedded SVG logo in agent rows');
+    assert(needRows.get('a:100').logo.querySelector('svg path').getAttribute('d') === LOGOS[kind], kind + ' uses its logo in waiting cards');
+    openSearch();
+    $('search').value = 'pid:100'; applySearch();
+    assert(searchRows.get('a:100').logo.querySelector('svg path').getAttribute('d') === LOGOS[kind], kind + ' uses its logo in search results');
+    closeSearch();
+  }
+  assert(logo('unknown', 20).textContent === 'U', 'unknown agent kinds retain the monogram fallback');
+
   show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
   const metrics = rows.get('a:100');
   assert(metrics.cpu.textContent === 'CPU 136%' && metrics.mem.textContent === 'RAM ~1.6 GB', 'metrics identify CPU (including multi-core use) and approximate RAM');
