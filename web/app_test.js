@@ -505,8 +505,23 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   assert(!document.getAnimations().length && getComputedStyle(communicationFeedback).width === '1px', 'normal and reduced motion share static row feedback and a nonvisual announcement, not a viewport layer');
   showFeedback('live:test:0', 'returned'); assert(badge.textContent === 'Reply', 'a genuinely different confirmation is never dropped during an active highlight');
   showFeedback('live:test:0', 'attempted'); assert(badge.textContent === 'Attempted', 'a new attempt is not misreported as the previous confirmation');
+  // Capacity needs five visible candidates, independent of nested long-title wrapping/font metrics.
+  const capacitySnapshot = { ...liveSnapshot, agents: [{ ...liveHost, title: 'Parent' }], liveWorkers: liveWorkers.slice(0, 5).map(w => ({ ...w, parent: 'a:45000' })) };
+  const treeFont = $('tree').style.fontSize, longWorkerTitle = liveRow.name.textContent;
+  for (const font of [treeFont, '17px']) {
+    clearPulses(); $('tree').style.fontSize = font; render(capacitySnapshot); window.scrollTo(0, 0);
+    for (const w of capacitySnapshot.liveWorkers) {
+      const box = rows.get(w.key).btn.getClientRects()[0];
+      assert(box && box.top >= 0 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth, 'all five capacity candidates are fully visible at the actual content viewport, including larger font metrics');
+    }
+    for (const w of capacitySnapshot.liveWorkers) showFeedback(w.key, 'sent');
+    assert(activeFeedback.size === 4 && document.querySelectorAll('.communication-note').length === 4, 'active badges and timers are bounded at four without an idle-row journal');
+    assert(capacitySnapshot.liveWorkers.slice(0, 4).every(w => activeFeedback.has(w.key)) && !activeFeedback.has('live:test:4'), 'capacity admits the first four visible targets and rejects the fifth visible target');
+  }
+  clearPulses(); $('tree').style.fontSize = treeFont; render(liveSnapshot); window.scrollTo(0, 0);
+  liveRow.name.textContent = longWorkerTitle;
+  showFeedback('live:test:0', 'sent');
   for (let i = 1; i < 5; i++) showFeedback('live:test:' + i, 'sent');
-  assert(activeFeedback.size === 4 && document.querySelectorAll('.communication-note').length === 4, 'active badges and timers are bounded at four without an idle-row journal');
   showFeedback('live:test:3', 'attempted');
   for (const entry of activeFeedback.values()) {
     const box = entry.label.getBoundingClientRect(), slot = entry.label.parentElement.getBoundingClientRect();
