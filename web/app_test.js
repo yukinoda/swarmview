@@ -1,4 +1,17 @@
-// Injected into index.html by TestUI; no browser automation dependency needed.
+import { testState as app } from './app.js';
+import { testState as dashboard } from './dashboard.js';
+import { testState as searchState, SEARCH_LIMIT, openSearch, closeSearch, applySearch } from './search.js';
+import { testState as notificationsState } from './notifications.js';
+import { LOGOS, logo } from './icons.js';
+import { GB, snapshotItems } from './agents.js';
+import { $ } from './dom.js';
+
+const { rows, groups, quietRows } = dashboard;
+const { searchRows, searchIndex } = searchState;
+const { eps } = notificationsState;
+const { render, poll, freshness } = app;
+
+// Test-only exports are appended by TestUI, never embedded or served in production.
 (async () => { try {
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const agent = (pid, repo, extra = {}) => ({
@@ -7,6 +20,15 @@
   });
   const show = agents => render({ agents, subagents: [] });
   const a = agent(100, '/a');
+  assert(!Object.hasOwn(window, 'render') && !Object.hasOwn(window, 'rows'), 'module internals do not become browser globals');
+  const cycle = snapshotItems({ agents: [agent(1, '/cycle', { ppid: 2 }), agent(2, '/cycle', { ppid: 1 })] }, new Map());
+  for (const item of cycle.values()) {
+    const visited = new Set();
+    for (let current = item; current; current = cycle.get(current.parent)) {
+      assert(!visited.has(current.key), 'snapshot normalization breaks parent cycles');
+      visited.add(current.key);
+    }
+  }
   const scenario = new URLSearchParams(location.search);
   assert(window.innerWidth === (scenario.get('size') === 'native' ? 680 : 375) && window.innerHeight === (scenario.get('size') === 'native' ? 820 : 812), 'checks run at the actual compact/native content viewport, not Chrome minimum window dimensions');
   assert(matchMedia('(prefers-color-scheme: dark)').matches === (scenario.get('theme') === 'dark'), 'browser runs the requested color scheme');
@@ -64,7 +86,7 @@
     static permission = 'granted';
     constructor(title, options) { notifications++; notificationBody = options.body; }
   };
-  notifyOn = true;
+  await $('notify').onclick();
   show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
   show([{ ...a, idleSec: 14 }]);
   assert($('quiet').hidden && notifications === 0, 'quiet observation grace period');
@@ -156,13 +178,13 @@
       assert(url === '/agents' && options.signal instanceof AbortSignal, 'poll has a timeout signal');
       throw new Error('offline');
     };
-    await poll(); clearTimeout(timer);
+    await poll(); clearTimeout(app.timer);
     assert(!$('offline').hidden && $('freshness').textContent.includes('Last updated 40s ago') && rows.get('a:100').st.textContent === 'offline', 'failed poll retains and ages last snapshot without labeling it quiet');
     assert(rows.has('a:100'), 'failed poll retains agent rows');
     window.fetch = async () => ({ ok: true, json: async () => ({ agents: [a], at: 260000 }) });
-    await poll(); clearTimeout(timer);
+    await poll(); clearTimeout(app.timer);
     assert($('offline').hidden && $('freshness').textContent === 'Last updated 0s ago', 'successful retry clears offline and refreshes age');
-  } finally { window.fetch = realFetch; Date.now = realNow; clearTimeout(timer); }
+  } finally { window.fetch = realFetch; Date.now = realNow; clearTimeout(app.timer); }
 
   show([agent(100, '/b'), agent(400, '/c')]);
   const ids = [...groups.values()].map(g => g.kids.id);
@@ -180,9 +202,9 @@
   const documentation = agent(503, '/docs', { title: 'Review glossary' });
   const sibling = agent(504, '/api', { title: 'Review authentication', idleSec: 30 });
   show([coordinator, cacheTask, documentation, sibling]); show([coordinator, cacheTask, documentation, sibling]);
-  assert([...rows.values()].every(r => r.search === null), 'unused search creates no per-agent index');
+  assert(searchIndex.size === 0, 'unused search creates no per-agent index');
   const cachedNode = rows.get('a:502').node;
-  toggleFold('r:/api');
+  groups.get('r:/api').fold.click();
   const savedFolds = localStorage.getItem('swarmview.folded');
   const treeTop = $('tree').getBoundingClientRect().top, dashboardHeight = document.documentElement.scrollHeight;
   search('agent:OPENCODE "cache invalidation"');
@@ -240,7 +262,7 @@
   search('task:Coordinator');
   $('close-search').click();
   assert($('search-panel').hidden && $('search').value === '' && $('search-toggle').getAttribute('aria-expanded') === 'false', 'Done closes and clears search without needing Escape');
-  assert(groups.get('r:/api').kids.hidden && [...rows.values()].every(r => r.search === null), 'Done restores folds and releases the search index');
+  assert(groups.get('r:/api').kids.hidden && searchIndex.size === 0, 'Done restores folds and releases the search index');
 
   const shortQueryTasks = [
     agent(601, '/Users/dev/alpha', { repoName: 'alpha', title: 'Build login' }),
@@ -284,11 +306,11 @@
     assert(searchRequests === 0, 'typing never requests the server');
   } finally { window.fetch = previousFetch; }
   $('clear-search').click();
-  assert([...rows.values()].every(r => r.search === null), 'clearing search releases the metadata index');
+  assert(searchIndex.size === 0, 'clearing search releases the metadata index');
   show(many.slice(0, 1)); show(many.slice(0, 1));
   assert(rows.size === 1 && groups.size === 1, 'exited agents and their search metadata are discarded');
   $('close-search').click();
-  assert($('search-panel').hidden && !$('search-panel').open && $('search').value === '' && searchRows.size === 0 && searchReturnFocus === null, 'closing removes temporary results, releases old focus references, and leaves no hidden query');
+  assert($('search-panel').hidden && !$('search-panel').open && $('search').value === '' && searchRows.size === 0 && searchState.searchReturnFocus === null, 'closing removes temporary results, releases old focus references, and leaves no hidden query');
 
   const fallbackHost = agent(100, '/fallback', { kind: 'claude', canFocus: true, tmuxAttached: true, tmuxTarget: 'synthetic:%1' });
   const survivingWorker = { id: 'survivor', parentPid: 100, parentAgentId: 'finished-parent', cwd: '/fallback', description: 'Surviving worker', working: true };
@@ -431,6 +453,14 @@
   render({ agents: observations, at: snapshotNow });
   render({ agents: quietObservations, at: snapshotNow - 20000 });
   assert($('quiet').hidden && notifications === beforeStale && [...rows.values()].filter(r => !r.node.classList.contains('s-exiting')).every(r => r.st.textContent === 'stale'), 'stale snapshots cannot produce quiet observations, notifications, or live state labels');
+  const queryNow = Date.now;
+  try {
+    render({ agents: [a], at: snapshotNow });
+    Date.now = () => snapshotNow + 16000;
+    search('pid:100');
+    assert(searchRows.get('a:100').meta.textContent === 'stale' && searchRows.get('a:100').node.classList.contains('s-unknown'), 'a query reads current freshness even before another poll or freshness update');
+    closeSearch();
+  } finally { Date.now = queryNow; }
   show([]); show([]);
   assert(rows.size === 0 && groups.size === 0 && quietRows.size === 0 && eps.size === 0, 'exited fleets release rows, observations, and notification episode metadata');
 

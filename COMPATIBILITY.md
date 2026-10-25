@@ -166,7 +166,7 @@ session status or conversation metadata.
 
 ## Browser support
 
-Use a current Chrome/Chromium, Firefox, or Safari. The UI uses modern CSS
+Use a current Chrome/Chromium, Firefox, or Safari. The UI uses native JavaScript modules, modern CSS
 (`:has()` and `color-mix()`) and `AbortSignal.timeout()`; older browser versions
 are not tested. Automated UI checks use Chrome/Chromium with synthetic data at
 compact and native-window widths, both shortcut platforms, light/dark themes,

@@ -15,9 +15,9 @@ go build -trimpath -ldflags='-s -w' -o swarmview .
 ./swarmview
 ```
 
-Open http://127.0.0.1:4777. UI edits in `index.html` need only a browser refresh
-when it is next to the binary. Go and embedded-logo changes require a rebuild
-and server restart.
+Open http://127.0.0.1:4777. UI edits in `web/index.html`, its JavaScript modules, and
+`web/app.css` need only a browser refresh when the `web/` directory is next to
+the binary. Go and embedded-logo changes require a rebuild and server restart.
 
 For the optional macOS app, run `bash desktop/macos/build.sh` and
 `python3 desktop/macos/check.py dist/Swarmview.app`. This requires Apple's Swift
@@ -25,6 +25,37 @@ compiler/SDK. The backend stays standard-library-only; native packaging and
 WebKit checks live under [`desktop/macos`](desktop/macos/README.md).
 `bash desktop/macos/dmg.sh` builds and validates the branded DMG after the app
 build, using a temporary Python 3.10+ environment with pinned dmgbuild.
+
+## Code layout
+
+- `main.go`: command-line entry point and server startup.
+- `server.go`: HTTP routes, snapshot caching, and embedded web files.
+- `process.go`: process discovery, agent detection, and activity sampling.
+- `claude.go`: Claude session titles and worker metadata.
+- `tmux.go`, `sys_*.go`: terminal navigation and platform-specific integration.
+- `system.go`: machine-wide memory measurements.
+- `web/`: build-free browser interface; `index.html` loads `app.css` and the
+  native JavaScript entry module `app.js`:
+  - `app.js`: startup, polling, snapshot freshness, and wiring feature updates.
+  - `agents.js`: snapshot normalization, parentage, statuses, and metric formatting.
+  - `dashboard.js`: repository/worker tree, pinning, folding, and metric summaries.
+  - `rows.js`: shared task/detail rows, result cards, and terminal activation.
+  - `search.js`: local search index, dialog, and keyboard navigation.
+  - `notifications.js`: quiet observations, notification episodes, and tab badges.
+  - `icons.js`, `dom.js`, `storage.js`: provider glyphs, DOM helpers, and saved preferences.
+- `web/app_test.js`, `ui_test.go`: browser assertions and their Go test harness.
+- `*_test.go`: tests beside their subjects; `test_helpers_test.go` contains shared fixtures.
+- `desktop/macos/`: native WebView host, installer, and packaging checks.
+- `assets/`: shared branding and documentation images.
+
+The data flow is `web/app.js` → `GET /agents` → `server.snapshot` → process and
+worker discovery → JSON → the dashboard, search, and notification modules. Terminal activation is a separate
+`POST /focus` request. The macOS app hosts the same interface in WebKit. Feature
+modules do not import `app.js`; it coordinates them without a shared global store.
+
+Keep this map current in the same change when adding, moving, or changing the
+responsibility of a directory or entry point. Update affected embedding, test,
+and packaging paths too; individual files do not need an exhaustive listing.
 
 ## Checks
 
