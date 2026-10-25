@@ -115,6 +115,9 @@ func TestGhosttyLive(t *testing.T) {
 	if os.Getenv("SWARMVIEW_GHOSTTY_TEST") != "1" {
 		t.Skip("set SWARMVIEW_GHOSTTY_TEST=1 for existing-tab focus verification")
 	}
+	tmux, err := exec.LookPath("tmux")
+	must(t, err)
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
 	socket := filepath.Join(t.TempDir(), "tmux.sock")
 	run := func(cmd string, args ...string) (string, error) {
 		if cmd == "tmux" {
@@ -150,7 +153,7 @@ end run`, id)
 		focus term
 		return id of term
 	end tell
-end run`, "/usr/bin/env -u TMUX tmux -S '"+socket+"' attach-session -t "+strings.TrimSpace(pane))
+end run`, "/usr/bin/env -u TMUX "+quote(tmux)+" -S "+quote(socket)+" attach-session -t "+quote(strings.TrimSpace(pane)))
 		must(t, err)
 		ids = append(ids, strings.TrimSpace(out))
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,7 +15,8 @@ import (
 	"time"
 )
 
-func TestUI(t *testing.T) {
+func chromeBinary(t *testing.T) string {
+	t.Helper()
 	chrome := os.Getenv("CHROME_BIN")
 	if chrome == "" {
 		for _, name := range []string{"google-chrome", "chromium", "chromium-browser", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"} {
@@ -27,6 +29,32 @@ func TestUI(t *testing.T) {
 	if chrome == "" {
 		t.Skip("Chrome/Chromium not found; set CHROME_BIN to run UI checks")
 	}
+	return chrome
+}
+
+func TestUIProduction(t *testing.T) {
+	chrome := chromeBinary(t)
+	s := srvWith(func(string, ...string) (string, error) { return "", nil })
+	srv := httptest.NewUnstartedServer(s)
+	s.port = srv.Listener.Addr().(*net.TCPAddr).Port
+	srv.Start()
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
+		"--user-data-dir="+t.TempDir(), "--virtual-time-budget=3000", "--timeout=10000", "--dump-dom", srv.URL)
+	cmd.WaitDelay = 5 * time.Second
+	out, err := cmd.CombinedOutput()
+	if err != nil && !errors.Is(err, exec.ErrWaitDelay) {
+		t.Fatalf("production page failed (%v):\n%s", err, out)
+	}
+	if !strings.Contains(string(out), `<span id="count">0 agents · 0 working</span>`) {
+		t.Fatalf("production page did not load its script and render the real /agents response:\n%s", out)
+	}
+}
+
+func TestUI(t *testing.T) {
+	chrome := chromeBinary(t)
 	checks, err := os.ReadFile("web/app_test.js")
 	must(t, err)
 	script := string(appJS)
