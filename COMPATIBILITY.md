@@ -13,7 +13,7 @@ capabilities.
 | Select an attached tmux client's pane | Supported | Supported; live isolated-server check in CI | Unsupported |
 | Bring a terminal OS window forward | Ghostty 1.3+ only | Not implemented | Not implemented |
 | Open a terminal window for a detached tmux session | Ghostty 1.3+ only | Not implemented | Not implemented |
-| System free RAM, memory pressure, and swap | macOS sysctls; unavailable values are omitted from the UI | Not implemented; per-agent RSS still works | Unsupported |
+| System free RAM, memory pressure, and swap | macOS sysctls; missing pressure is explicitly unavailable and missing free/swap values are omitted | Not implemented; pressure displays unavailable, per-agent RSS still works | Unsupported |
 | Dedicated system-WebView desktop app | Prototype; macOS 13.3+, local Apple Silicon check | Not implemented; use browser UI | Unsupported |
 | `memory_check.py` terminal-overhead comparison | macOS only | Not supported as a comparison tool | Unsupported |
 
@@ -140,9 +140,16 @@ Executable detection currently includes `claude`, `codex`, `opencode`, `gemini`,
 `aider`, and `cursor-agent`. Detection does not imply access to a CLI's native
 session status or conversation metadata.
 
-- Working/waiting status is a CPU-based heuristic, including descendants.
-  Network/I/O-bound work can still appear as waiting; processes that start and
+- Working/quiet status is a CPU-based heuristic, including descendants.
+  Network/I/O-bound work can still appear quiet; processes that start and
   exit between samples cannot be measured.
+- Native human requests, permissions, completion, and send/reply events are not
+  available. Recently quiet observations and notifications do not confirm that
+  someone needs to act. Nesting indicates discovered parentage, not communication.
+- Per-agent RAM is approximate process-tree RSS and remains neutral regardless of
+  size. Missing measurements (including Claude workers) display a dash, not zero.
+  Machine-wide warning colors require the macOS pressure signal; free RAM and
+  existing swap alone do not establish pressure.
 - Claude Code has additional read-only subagent discovery under
   `~/.claude/projects`. Matching is by working directory; an exact parent is
   assigned only when one Claude agent runs in that directory.
@@ -161,11 +168,14 @@ session status or conversation metadata.
 
 Use a current Chrome/Chromium, Firefox, or Safari. The UI uses modern CSS
 (`:has()` and `color-mix()`) and `AbortSignal.timeout()`; older browser versions
-are not tested. Automated UI checks use Chrome/Chromium.
+are not tested. Automated UI checks use Chrome/Chromium with synthetic data at
+compact and native-window widths, both shortcut platforms, light/dark themes,
+and reduced motion. These are browser checks, not a claim of native WKWebView or
+Firefox/Safari visual verification.
 
 Desktop notifications are optional and require the browser's Notification API,
 site permission, and OS notification settings. If the API is unavailable, the
-bell is hidden; the needs-you section, tab title, and favicon still work.
+Notify control is hidden; recent quiet observations, the tab title, and favicon still work.
 Background-tab throttling can delay polling and notifications; Chrome may poll
 about once per minute after the tab has been hidden for over five minutes.
 
