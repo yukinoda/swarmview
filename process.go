@@ -137,10 +137,22 @@ func parsePs(text string, selfPid int) ([]psRow, []procRow) {
 				break
 			}
 		}
+		rest := tokens[i+1:]
+		// Cursor's bundled runtime can be named "agent"; require its script path, not the generic name alone.
+		if kind == "agent" || kind == "cursor-agent" {
+			for j, t := range rest {
+				if strings.HasPrefix(t, "-") {
+					continue
+				}
+				if strings.Contains(t, "/cursor-agent/versions/") && strings.HasSuffix(t, "/index.js") {
+					kind, rest = "cursor-agent", rest[j+1:]
+				}
+				break
+			}
+		}
 		if !slices.Contains(kinds, kind) {
 			continue
 		}
-		rest := tokens[i+1:]
 		// limitation: ps drops quoting, so a one-word prompt equal to a daemon subcommand (`claude -p mcp`) is dropped
 		sub := ""
 		for _, t := range rest {
@@ -150,6 +162,9 @@ func parsePs(text string, selfPid int) ([]psRow, []procRow) {
 			}
 		}
 		if slices.Contains(daemonSubcommand, sub) || pid == selfPid {
+			continue
+		}
+		if kind == "opencode" && sub == "serve" || kind == "cursor-agent" && (sub == "worker" || sub == "worker-server") {
 			continue
 		}
 		cands = append(cands, cand{psRow{pid, ppid, cpuSeconds(f[3]), f[4], kind}, strings.Join(rest, " ")})

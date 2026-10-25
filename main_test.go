@@ -99,6 +99,43 @@ func TestParsesFields(t *testing.T) {
 	}
 }
 
+func TestCursorCLIAndOpenCodeServices(t *testing.T) {
+	const script = "/home/dev/.local/share/cursor-agent/versions/2026.10.22-example/index.js"
+	for _, tc := range []struct {
+		command string
+		kind    string
+	}{
+		{"/home/dev/.local/bin/agent --use-system-ca " + script, "cursor-agent"},
+		{"/home/dev/.local/bin/cursor-agent --use-system-ca " + script, "cursor-agent"},
+		{"cursor-agent", "cursor-agent"},
+		{"cursor-agent --resume example", "cursor-agent"},
+		{"agent --use-system-ca /other/index.js", ""},
+		{"agent", ""},
+		{"agent --use-system-ca " + script + " worker start", ""},
+		{"cursor-agent worker start", ""},
+		{"cursor-agent --use-system-ca " + script + " worker-server", ""},
+		{"node " + script + " worker-server", ""},
+		{"opencode serve --service", ""},
+		{"opencode serve", ""},
+		{"opencode -s example", "opencode"},
+		{"claude -p serve", "claude"},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			agents, procs := parsePs("100 1 1000 0:01.00 00:10 "+tc.command, 0)
+			if len(procs) != 1 {
+				t.Fatal("filtered services must remain in process resource accounting")
+			}
+			if tc.kind == "" {
+				if len(agents) != 0 {
+					t.Fatalf("unexpected agent: %+v", agents)
+				}
+			} else if len(agents) != 1 || agents[0].Kind != tc.kind {
+				t.Fatalf("want %s, got %+v", tc.kind, agents)
+			}
+		})
+	}
+}
+
 func TestParsesMacTimeOver59Minutes(t *testing.T) {
 	r := psAgents("  7 1 1000 1036:27.10 00:01 aider", 0)
 	if math.Abs(r[0].CpuSec-62187.1) > 1e-6 {

@@ -130,6 +130,12 @@ be resumed manually using their CLI's own session-resume command.
 
 ## Agent coverage
 
+Cursor CLI's `agent` executable is recognized when its command line includes
+the bundled `cursor-agent/versions/.../index.js` runtime path. Unrelated programs
+named `agent` are not included. OpenCode `serve` backends and Cursor `worker` /
+`worker-server` helpers are excluded as separate agents, but their resources
+still count toward their parent process trees.
+
 Executable detection currently includes `claude`, `codex`, `opencode`, `gemini`,
 `aider`, and `cursor-agent`. Detection does not imply access to a CLI's native
 session status or conversation metadata.
