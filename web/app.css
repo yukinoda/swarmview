@@ -60,14 +60,16 @@ kbd { margin-left: 4px; border: 1px solid var(--line); border-radius: 4px; paddi
 .pin[aria-pressed='true'] { color: var(--accent); }
 .wt { margin: 0 0 6px; }
 .wt > .gh .fold { font-size: 12px; font-weight: 500; color: var(--mut); }
-.kids { position: relative; }
+.kids { position: relative; --connector-step: 8px; --connector-origin: calc((var(--connector-depth) + 1) * var(--connector-step)); }
 .kids:empty { display: none; }
-.group > .kids::before, .node > .kids::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; border-left: 1px solid var(--line); pointer-events: none; }
-.node > .kids::before { left: calc(18px + var(--depth, 0) * 8px); }
+/* Resolve each child junction on its parent container, before the child overrides --depth. */
+.group > .kids { --connector-depth: 0; }
+.node > .kids { --connector-depth: min(calc(var(--depth, 0) + 1), 4); }
+.group > .kids::before, .node > .kids::before { content: ''; position: absolute; left: calc(var(--connector-origin) - 1px); top: 0; bottom: 0; border-left: 1px solid var(--line); pointer-events: none; }
 .row-line { display: grid; grid-template-columns: minmax(0, 1fr) 78px 64px; gap: 8px; min-height: 47px; align-items: center; }
 .agent { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 47px; padding: 4px 8px; text-align: left; color: var(--fg); }
 .row-line > .agent { padding-left: calc(16px + var(--depth, 0) * 8px); }
-.row-line > .agent::before { content: ''; position: absolute; left: calc(8px + var(--depth, 0) * 8px); top: 23px; width: 6px; border-top: 1px solid var(--line); }
+.row-line > .agent::before { content: ''; position: absolute; left: var(--connector-origin); top: 23px; width: 6px; border-top: 1px solid var(--line); }
 .agent:hover:not(:disabled) { background: transparent; }
 .agent:hover:not(:disabled) .kind { color: var(--accent); }
 .agent.busy { cursor: progress; }
@@ -141,8 +143,8 @@ select { display: block; width: 100%; min-height: 44px; padding: 8px 12px; margi
   .metrics { width: 56px; padding-inline: 2px; }
   .live-worker > .row-line { grid-template-columns: minmax(0, 1fr) 56px; }
   .row-line > .agent { padding-left: calc(12px + var(--depth, 0) * 6px); }
-  .row-line > .agent::before { left: calc(6px + var(--depth, 0) * 6px); width: 5px; }
-  .node > .kids::before { left: calc(12px + var(--depth, 0) * 6px); }
+  .row-line > .agent::before { width: 5px; }
+  .kids { --connector-step: 6px; }
   .worker > .row-line > .agent { padding-left: calc(40px + var(--depth, 0) * 6px); }
   .live-worker > .row-line .context { min-height: 40px; }
   .counts { gap: 2px 4px; font-size: 11px; }

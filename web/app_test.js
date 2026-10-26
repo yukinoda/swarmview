@@ -793,6 +793,31 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     await $('detail-terminal').onclick();
     assert(!$('detail-dialog').open && !$('detail-body').children.length && document.activeElement === rowA.toggle, 'a terminal success still closes and returns focus for its own current Details selection');
   } finally { window.fetch = detailsFetch; closeDetails(); $('offline').hidden = true; }
+  const connectorHost = agent(47000, '/connector-root', { kind: 'claude', title: 'Connector parent' });
+  const connectorProcesses = Array.from({ length: 8 }, (_, i) => agent(47001 + i, '/connector-root', { ppid: 47000 + i, kind: i % 2 ? 'claude' : 'codex', title: 'Process child ' + i }));
+  const connectorMetadata = Array.from({ length: 8 }, (_, i) => ({ id: 'connector-claude-' + i, parentPid: 47000, parentAgentId: i ? 'connector-claude-' + (i - 1) : null, cwd: '/connector-root', description: 'Claude worker ' + i, working: true }));
+  const connectorLiveHost = agent(48000, '/connector-branches', { kind: 'opencode', title: 'Live connector parent', cwd: '/connector-branches/feature', worktree: '/connector-branches/feature' });
+  const connectorLivePrefix = 'live:48000:' + 'a'.repeat(64) + ':2.1.3:ses_connector-';
+  const connectorLive = Array.from({ length: 8 }, (_, i) => ({ key: connectorLivePrefix + i, parent: i ? connectorLivePrefix + (i - 1) : 'a:48000', pid: 48000 }));
+  const connectorSnapshot = { agents: [connectorHost, ...connectorProcesses, connectorLiveHost], subagents: connectorMetadata, liveWorkers: connectorLive, communication: true, at: Date.now() };
+  render(connectorSnapshot); render(connectorSnapshot); $('expand').click();
+  assert(rows.size === 26 && rows.get('a:47000').node.parentElement === groups.get('r:/connector-root').kids && rows.get('a:48000').node.parentElement === groups.get('w:/connector-branches/feature').kids, 'connector fixtures cover all 26 rows and both repository and worktree root junctions');
+  for (let i = 0; i < 8; i++) {
+    for (const [key, parent] of [['a:' + (47001 + i), 'a:' + (47000 + i)], ['sub:connector-claude-' + i, i ? 'sub:connector-claude-' + (i - 1) : 'a:47000'], [connectorLive[i].key, connectorLive[i].parent]]) {
+      assert(rows.get(key).node.parentElement === rows.get(parent).kids && +rows.get(key).node.style.getPropertyValue('--depth') === Math.min(i + 1, 4), 'all eight real process/metadata/live levels keep their immediate parent while visual indentation caps at four');
+    }
+  }
+  const connectorJunctions = [];
+  for (const [key, row] of rows) {
+    const kids = row.node.parentElement, trunk = getComputedStyle(kids, '::before'), stub = getComputedStyle(row.btn, '::before');
+    assert(row.btn.getClientRects().length && !row.node.closest('[hidden]') && trunk.content !== 'none' && parseFloat(trunk.borderLeftWidth) === 1 && parseFloat(stub.borderTopWidth) === 1, 'expanded connector junctions have real visible one-pixel structural strokes');
+    const trunkRight = kids.getBoundingClientRect().left + parseFloat(trunk.left) + parseFloat(trunk.borderLeftWidth);
+    const stubLeft = row.btn.getBoundingClientRect().left + parseFloat(stub.left), stubWidth = parseFloat(stub.width);
+    assert(stubWidth === (innerWidth <= 480 ? 5 : 6), 'connector repair retains the existing compact/native horizontal stub lengths');
+    connectorJunctions.push({ key, source: row.item.live ? 'live' : row.item.sub ? 'metadata' : 'process', depth: +row.node.style.getPropertyValue('--depth'), trunkRight, stubLeft, stubWidth, delta: stubLeft - trunkRight });
+  }
+  assert(connectorJunctions.every(junction => Math.abs(junction.delta) <= .25), 'horizontal stubs join the actual parent trunk right edge without crossing left at roots or capped depths: ' + JSON.stringify(connectorJunctions));
+
   parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
   parent.document.body.dataset.uiTests = 'passed';
 } catch (error) {
