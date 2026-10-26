@@ -429,10 +429,25 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   closeDetails();
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'expanded five-level tree with 20 workers never causes horizontal overflow');
   assert($('tree').getAnimations({ subtree: true }).length === 0, 'CPU activity and nesting do not create communication pulses or a continuously animated tree');
-  if (window.innerWidth >= 560) {
-    assert(Math.abs($('tree').getBoundingClientRect().width - 632) <= 1, 'native overview stays bounded inside a 680px body');
-    assert(reference.btn.getBoundingClientRect().height <= 55, 'short native rows remain compact');
-  }
+  const checkOverviewWidth = () => {
+    const root = document.documentElement, body = document.body.getBoundingClientRect(), tree = $('tree').getBoundingClientRect(), style = getComputedStyle(document.body);
+    const left = parseFloat(style.paddingLeft), right = parseFloat(style.paddingRight), width = Math.min(680, root.clientWidth);
+    const geometry = JSON.stringify({ viewport: [innerWidth, innerHeight], usable: root.clientWidth, body, tree, maxWidth: style.maxWidth, padding: [left, right], scrollWidth: root.scrollWidth });
+    assert(style.boxSizing === 'border-box' && parseFloat(style.maxWidth) === 680 && left === (innerWidth <= 480 ? 16 : 24) && right === left, 'overview retains its declared maximum and responsive padding: ' + geometry);
+    assert(Math.abs(body.width - width) <= 1 && Math.abs(body.left - (root.clientWidth - width) / 2) <= 1, 'overview body exactly fills the usable viewport up to 680px and stays centered: ' + geometry);
+    assert(Math.abs(tree.width - (width - left - right)) <= 1 && Math.abs(tree.left - (body.left + left)) <= 1 && Math.abs(tree.right - (body.right - right)) <= 1, 'overview tree exactly fills the bounded body content box: ' + geometry);
+    assert(root.scrollWidth <= root.clientWidth, 'overview has no horizontal overflow into the scrollbar gutter: ' + geometry);
+  };
+  checkOverviewWidth();
+  // Classic scrollbars consume layout width; overlay scrollbars do not. Test both without resizing.
+  const scrollbarFixture = document.createElement('style'), originalViewport = [innerWidth, innerHeight];
+  scrollbarFixture.textContent = 'html { overflow-y: scroll; scrollbar-gutter: stable; } html::-webkit-scrollbar { width: 17px; }';
+  document.head.append(scrollbarFixture);
+  try {
+    assert(innerWidth === originalViewport[0] && innerHeight === originalViewport[1] && document.documentElement.clientWidth < innerWidth, 'forced classic scrollbar reserves a nonzero gutter without changing the content viewport: ' + JSON.stringify({ viewport: [innerWidth, innerHeight], usable: document.documentElement.clientWidth }));
+    checkOverviewWidth();
+  } finally { scrollbarFixture.remove(); }
+  if (window.innerWidth >= 560) assert(reference.btn.getBoundingClientRect().height <= 55, 'short native rows remain compact');
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
     assert([...rows.values()].every(r => !r.logo || getComputedStyle(r.logo).animationName === 'none'), 'reduced motion disables working-icon animation');
   }
