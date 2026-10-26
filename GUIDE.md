@@ -35,6 +35,13 @@ details show their model when available rather than inventing process age or CPU
 | New | Process is less than 10 seconds old |
 | Exiting | Gone since the previous poll; shown briefly before removal |
 
+Working titles and their short incoming branches are green for at-a-glance activity;
+status text remains available without relying on color alone. Quiet and unknown
+titles stay readable, and shared vertical trunks remain neutral. Each accent uses
+that row's own observed activity, never its parent's state or a communication cue.
+Stale/offline rows lose the working accent; monitoring-only terminal controls can
+still show observed activity. Green does not mean task progress or success.
+
 **Quiet is an activity heuristic, not a request.** Network, tool, worker, and
 I/O waits can all look quiet. **Recently quiet** shows at most three observations,
 from 15 seconds to five minutes quiet, after work was observed in that page

@@ -818,6 +818,30 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   }
   assert(connectorJunctions.every(junction => Math.abs(junction.delta) <= .25), 'horizontal stubs join the actual parent trunk right edge without crossing left at roots or capped depths: ' + JSON.stringify(connectorJunctions));
 
+  const activitySnapshot = { agents: [agent(49000, '/scan-a', { kind: 'claude', recentCpu: .5 }), agent(49001, '/scan-a', { ppid: 49000, idleSec: 20 }), agent(49002, '/scan-b', { kind: 'opencode', recentCpu: null }), agent(49003, '/scan-b', { ppid: 49002, recentCpu: .5, canFocus: true })], subagents: [{ id: 'scan-working', parentPid: 49000, cwd: '/scan-a', working: true }, { id: 'scan-quiet', parentPid: 49000, cwd: '/scan-a', working: false }, { id: 'scan-unknown', parentPid: 49000, cwd: '/scan-a' }], liveWorkers: [{ key: 'live:scan', parent: 'a:49002', pid: 49002 }], communication: true, at: Date.now() };
+  render(activitySnapshot); render(activitySnapshot); $('expand').click();
+  const activityColor = getComputedStyle(rows.get('a:49000').st).color, foreground = getComputedStyle(document.body).color;
+  assert(contrast(activityColor, background) >= 4.5, 'working title and branch accent have readable contrast in both themes');
+  for (const key of ['a:49000', 'a:49003', 'sub:scan-working']) {
+    const row = rows.get(key);
+    assert(getComputedStyle(row.name).color === activityColor && getComputedStyle(row.btn, '::before').borderTopColor === activityColor && row.st.textContent === 'working', 'each observed working row accents its own title and short branch while retaining status text, even when monitoring-only');
+    assert(getComputedStyle(row.kids, '::before').borderLeftColor !== activityColor && getComputedStyle(row.node.parentElement, '::before').borderLeftColor !== activityColor, 'shared parent and child trunks never inherit a working row accent');
+  }
+  for (const key of ['a:49001', 'a:49002', 'sub:scan-quiet', 'sub:scan-unknown', 'live:scan']) {
+    const row = rows.get(key);
+    assert(getComputedStyle(row.name).color === foreground && getComputedStyle(row.btn, '::before').borderTopColor !== activityColor, 'quiet and unknown rows remain readable and never inherit activity from a parent or child');
+  }
+  openSearch(); $('search').value = 'pid:49000'; applySearch();
+  assert(searchRows.get('a:49000').btn.disabled && getComputedStyle(searchRows.get('a:49000').name).color === activityColor, 'monitoring-only working titles retain the same activity cue in search'); closeSearch();
+  for (const retained of ['stale', 'offline']) {
+    $('offline').hidden = retained !== 'offline'; freshness(activitySnapshot.at + 16000);
+    for (const row of rows.values()) assert(getComputedStyle(row.name).color === foreground && getComputedStyle(row.btn, '::before').borderTopColor !== activityColor, 'stale/offline measurements cannot retain live working title or branch accents');
+  }
+  $('offline').hidden = true; freshness(activitySnapshot.at);
+  assert(getComputedStyle(rows.get('a:49000').name).color === activityColor, 'fresh recovery restores observed activity accents');
+  activitySnapshot.agents[0].recentCpu = 0; activitySnapshot.subagents[0].working = false; render(activitySnapshot);
+  for (const key of ['a:49000', 'sub:scan-working']) assert(getComputedStyle(rows.get(key).name).color === foreground && getComputedStyle(rows.get(key).btn, '::before').borderTopColor !== activityColor, 'working-to-quiet updates remove title and branch accents without leaving inherited color');
+
   parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
   parent.document.body.dataset.uiTests = 'passed';
 } catch (error) {
