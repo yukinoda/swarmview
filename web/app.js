@@ -1,5 +1,7 @@
 import { $, txt } from './dom.js';
 import { formatDuration } from './agents.js';
+import { setupPreferences } from './storage.js';
+import { closeDetails } from './rows.js';
 import {
   renderDashboard,
   refreshDashboard,
@@ -66,8 +68,9 @@ async function poll() {
 }
 
 setupCommunication({ snapshot: () => lastData, snapshotState, render, freshness });
-setupDashboard(() => { clearPulses(); return lastData && render(lastData, true); }, clearPulses);
-setupSearch(snapshotState, clearPulses);
+setupDashboard(() => { clearPulses(); return lastData && render(lastData, true); }, clearPulses, snapshotState);
+setupSearch(snapshotState, () => { clearPulses(); closeDetails(); if ($('preferences-dialog').open) $('close-preferences').click(); });
+setupPreferences(() => { clearPulses(); closeDetails(); });
 setupNotifications(focusAgent);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {

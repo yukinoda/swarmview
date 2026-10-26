@@ -1,8 +1,98 @@
-import { el, txt, cls, attr, uniqueID } from './dom.js';
+import { $, el, txt, cls, attr } from './dom.js';
 import { fmtBytes, label } from './agents.js';
 import { logo } from './icons.js';
 
-export function createAgentRow(onDetailsChange = () => {}) {
+let selectedRow = null, selectedIdentity, detailCurrent, detailLookup, beforeDetails, readDetailsState;
+let detailsGeneration = 0;
+export function setupDetails(lookup, beforeOpen, snapshotState) {
+  detailLookup = lookup;
+  beforeDetails = beforeOpen;
+  readDetailsState = snapshotState;
+  $('close-details').onclick = closeDetails;
+  $('detail-dialog').oncancel = event => { event.preventDefault(); closeDetails(); };
+  $('detail-dialog').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); closeDetails(); }
+  });
+  $('detail-dialog').addEventListener('close', () => { if (!$('detail-dialog').open && selectedRow) releaseDetails(); });
+}
+function releaseDetails() {
+  detailsGeneration++;
+  const previous = selectedRow;
+  selectedRow = null;
+  selectedIdentity = null;
+  detailCurrent = null;
+  $('detail-body').replaceChildren();
+  txt($('detail-title'), 'Details');
+  if (previous) attr(previous.toggle, 'aria-expanded', 'false');
+  const target = previous?.toggle;
+  if (!document.querySelector('dialog[open]'))
+    (target?.isConnected && !previous.item.dying && !target.closest('[hidden]') ? target : $('search-toggle')).focus({ preventScroll: true });
+}
+export function closeDetails() {
+  if (!$('detail-dialog').open && !selectedRow) return;
+  $('detail-dialog').close();
+  releaseDetails();
+}
+export function showDetails(row) {
+  if (selectedRow === row && $('detail-dialog').open) { closeDetails(); return; }
+  beforeDetails();
+  if (selectedRow) attr(selectedRow.toggle, 'aria-expanded', 'false');
+  selectedRow = row;
+  detailsGeneration++;
+  selectedIdentity = [row.item.pid, row.item.parent, row.item.live, row.item.sub];
+  detailCurrent = null;
+  attr(row.toggle, 'aria-expanded', 'true');
+  refreshDetails();
+  if (selectedRow && !$('detail-dialog').open) $('detail-dialog').showModal();
+}
+export function refreshDetails(retained = readDetailsState()) {
+  if (!selectedRow) return;
+  const { item, row, parent, host } = detailLookup(selectedRow.item.key);
+  if (!item || row !== selectedRow || item.dying || ![item.pid, item.parent, item.live, item.sub].every((value, i) => value === selectedIdentity[i]) || !row.node.isConnected) { closeDetails(); return; }
+  const current = [item, parent, host, row.fold, retained];
+  if (detailCurrent && current.every((value, i) => value === detailCurrent[i])) return;
+  detailCurrent = current;
+  txt($('detail-title'), item.name);
+  const body = $('detail-body'), hadFocus = body.contains(document.activeElement), focusID = document.activeElement.id;
+  const list = el('dl', 'detail-list');
+  const pairs = [
+    ['Provider', item.agentName],
+    ['Source', item.live ? 'Live OpenCode session metadata' : item.sub ? 'Read-only Claude worker metadata · log-write activity, not CPU' : 'Detected process · PID ' + item.pid],
+    ['Identity', item.key],
+    ['Immediate parent', parent?.name || 'No detected parent'],
+    ['Main terminal', [host?.name, host?.target || item.target, item.cwd].filter(Boolean).join(' · ')],
+    ['Activity', retained ? retained + ' · retained, not live state' : item.stText],
+    ['Approx. RAM', item.mem == null ? 'Unavailable' : '~' + fmtBytes(item.mem) + ' · process-tree RSS'],
+    ['CPU', item.cpu], ['Process age', item.up], ['Model', item.model || 'Unavailable']
+  ];
+  for (const [key, value] of pairs) list.append(elText('dt', key), elText('dd', value));
+  const help = elText('p', 'Activity is not progress or a request for input. RSS is approximate, not additive physical memory or guaranteed reclaimable RAM. CPU 100% is one core, not task progress. Process age is not task duration.');
+  help.className = 'detail-help';
+  if (item.sub) help.append(document.createTextNode(' The tree shows the immediate parent; the name opens the main agent’s terminal when available, not a separate worker terminal. Sent is not completion; Reply is not success; Attempted means acceptance is unconfirmed.'));
+  const terminal = elText('button', item.sub ? 'Open main terminal' : 'Open terminal');
+  terminal.id = 'detail-terminal'; terminal.disabled = row.btn.disabled;
+  terminal.onclick = async () => {
+    const generation = detailsGeneration;
+    const focused = await focusTerminal(row);
+    if (generation !== detailsGeneration || selectedRow !== row || !$('detail-dialog').open) return;
+    if (focused) closeDetails();
+    else txt($('detail-error'), row.note?.textContent || 'Focus unavailable');
+  };
+  const error = el('p', 'note'); error.id = 'detail-error'; error.setAttribute('role', 'alert');
+  if (row.note) txt(error, row.note.textContent);
+  const actions = el('div', 'button-row'); actions.append(terminal);
+  if (row.fold?.count) {
+    const branch = elText('button', row.fold.label);
+    branch.id = 'detail-branch';
+    attr(branch, 'aria-expanded', !row.fold.closed); attr(branch, 'aria-controls', row.kids.id);
+    branch.onclick = row.fold.toggle; actions.append(branch);
+  }
+  body.replaceChildren(list, help, actions, error);
+  if (hadFocus) (document.getElementById(focusID) || $('close-details')).focus({ preventScroll: true });
+}
+const elText = (tag, value) => { const node = el(tag); txt(node, value || 'Unavailable'); return node; };
+
+export function createAgentRow(item) {
   const node = el('div'),
     line = el('div', 'row-line'),
     btn = el('button', 'agent'),
@@ -17,81 +107,64 @@ export function createAgentRow(onDetailsChange = () => {}) {
     identity: el('span', 'identity'),
     name: el('span', 'kind'),
     context: el('span', 'context'),
-    agentKind: el('span', 'agent-kind'),
-    target: el('span', 'target'),
-    st: el('span', 'st'),
-    mem: el('span', 'mem'),
-    up: el('span', 'up'),
-    cpu: el('span', 'cpu'),
-    model: el('span'),
-    terminal: el('p'),
-    detail: el('div', 'agent-details'),
+    agentKind: item.live ? null : el('span', 'agent-kind'),
+    target: item.live ? null : el('span', 'target'),
+    st: item.live ? null : el('span', 'st'),
+    mem: item.sub ? null : el('span', 'mem'),
     toggle: el('button', 'metrics'),
-    branch: el('button'),
-    workers: el('span'),
+    workers: el('span', 'workers'),
     note: null,
     noteUntil: 0
   };
-  r.context.append(r.agentKind, r.target);
+  if (!item.live) r.context.append(r.agentKind, r.target);
   r.identity.append(r.name, r.context);
-  r.context.append(r.workers);
-  r.mem.title =
+  r.name.after(r.workers);
+  if (r.mem) r.mem.title =
     'Approximate agent + child-process RAM (RSS); shared pages may be counted more than once';
-  r.cpu.title = 'Recent agent + child-process CPU; 100% = one core, not task progress';
-  r.target.title = 'tmux session/pane target; click an enabled task to select this pane';
-  r.detail.id = uniqueID('d');
-  r.detail.hidden = true;
-  r.toggle.setAttribute('aria-controls', r.detail.id);
+  if (r.target) r.target.title = 'tmux session/pane target; click an enabled task to select this pane';
+  r.toggle.setAttribute('aria-controls', 'detail-dialog');
+  r.toggle.setAttribute('aria-haspopup', 'dialog');
   r.toggle.setAttribute('aria-expanded', 'false');
   r.toggle.title = 'Details: CPU, process age and worker branch';
-  r.toggle.onclick = () => {
-    onDetailsChange();
-    r.detail.hidden = !r.detail.hidden;
-    r.toggle.setAttribute('aria-expanded', !r.detail.hidden);
-  };
-  r.toggle.append(r.st, r.mem);
-  for (const metric of [r.cpu, r.up, r.model]) {
-    const p = el('p');
-    p.append(metric);
-    r.detail.append(p);
+  r.toggle.onclick = () => showDetails(r);
+  r.toggle.textContent = 'Details';
+  line.append(btn);
+  if (!item.live) {
+    const metrics = el('span', 'row-metrics');
+    if (r.st) metrics.append(r.st);
+    if (r.mem) metrics.append(r.mem);
+    line.append(metrics);
   }
-  const help = el('p');
-  help.textContent =
-    'Activity is not progress or a request for input. Task opens terminal when available.';
-  r.detail.append(r.terminal, help, r.branch);
-  r.branch.hidden = true;
-  line.append(btn, r.toggle);
-  node.append(line, r.detail, kids);
+  line.append(r.toggle);
+  node.append(line, kids);
   btn.onclick = () => focusTerminal(r);
   return r;
 }
 
 export function updateAgentRow(r, it) {
+  r.item = it;
   if (r.kind !== it.kind || r.size !== it.size) {
     r.kind = it.kind;
     r.size = it.size;
-    const l = logo(it.kind, it.size);
-    r.logo ? r.logo.replaceWith(l) : r.btn.prepend(l);
-    r.logo = l;
+    if (!it.sub) {
+      const l = logo(it.kind, it.size);
+      r.logo ? r.logo.replaceWith(l) : r.btn.prepend(l);
+      r.logo = l;
+    }
     r.btn.append(r.identity);
   }
   r.pid = it.pid; // focus target: the agent itself, or a subagent's top-level agent (may be null)
   r.btn.disabled = !it.canFocus || !!it.dying;
-  cls(r.node, 'node s-' + it.status);
+  cls(r.node, 'node s-' + it.status + (it.sub ? ' worker' : '') + (it.live ? ' live-worker' : ''));
   txt(r.name, it.name);
-  txt(r.st, it.stText);
-  txt(r.up, it.up);
-  txt(r.cpu, it.cpu);
-  txt(r.model, it.model || '');
-  txt(r.target, it.target || '');
-  txt(r.agentKind, it.agentLabel || '');
-  txt(r.terminal, [it.agentName, it.target, it.cwd].filter(Boolean).join(' · '));
-  r.up.title = 'Agent process age, not current task duration';
-  txt(r.mem, it.mem != null ? '~' + fmtBytes(it.mem) : '—');
+  if (r.st) txt(r.st, it.stText);
+  if (r.target) txt(r.target, it.target || '');
+  if (r.agentKind) txt(r.agentKind, it.agentLabel || '');
+  if (r.mem) txt(r.mem, it.mem != null ? '~' + fmtBytes(it.mem) : '—');
   attr(
     r.toggle,
     'aria-label',
-    `Details for ${it.name}: ${it.stText}, RAM ${r.mem.textContent}`
+    `Details for ${it.name}: ${it.stText}, RAM ${r.mem?.textContent || 'unavailable'}`
   );
   if (r.btn.title !== it.tip) r.btn.title = it.tip;
   if (r.note && Date.now() > r.noteUntil) {
@@ -122,7 +195,7 @@ export async function focusTerminal(r) {
     if (!r.note) {
       r.note = el('div', 'note');
       r.note.setAttribute('role', 'alert');
-      (r.detail || r.btn).insertAdjacentElement(r.detail ? 'beforebegin' : 'afterend', r.note);
+      (r.item ? r.btn.parentElement : r.btn).insertAdjacentElement('afterend', r.note);
     }
     txt(r.note, err);
     r.noteUntil = Date.now() + 3000;

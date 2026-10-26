@@ -38,7 +38,7 @@ let notifyOn = load('swarmview.notify', false) === true;
 const bell = $('notify'),
   eps = new Map(); // pid -> { worked, fired }
 const paintBell = () => {
-  bell.textContent = notifyOn ? '\u{1F514}' : '\u{1F515}';
+  bell.textContent = notifyOn ? 'Notifications on' : 'Enable notifications';
   bell.setAttribute('aria-pressed', notifyOn);
   bell.title =
     'Recently quiet notifications ' + (notifyOn ? 'on' : 'off') + ' · not requests for input';

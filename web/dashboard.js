@@ -1,7 +1,7 @@
 import { $, el, txt, cls, attr, uniqueID } from './dom.js';
 import { load, save } from './storage.js';
 import { HEAT, stateLabel, fmtBytes, formatDuration, snapshotItems } from './agents.js';
-import { createAgentRow, updateAgentRow, focusTerminal, syncAgentCards } from './rows.js';
+import { createAgentRow, updateAgentRow, focusTerminal, syncAgentCards, setupDetails, refreshDetails } from './rows.js';
 
 const QUIET_LIMIT = 3;
 const rows = new Map(),
@@ -9,7 +9,6 @@ const rows = new Map(),
   quietRows = new Map();
 let last = new Map(),
   rerender;
-let onDetailsChange;
 let pins = load('swarmview.pins', []),
   folded = new Set(load('swarmview.folded', []));
 function togglePin(k) {
@@ -49,7 +48,7 @@ function group(key, wt) {
   g.head.append(g.fold, g.counts);
   if (!wt) {
     g.pin = el('button', 'pin');
-    g.pin.textContent = '\u{1F4CC}';
+    g.pin.append($('pin-icon').content.cloneNode(true));
     g.pin.setAttribute('aria-label', 'Pin ' + key.slice(2).split('/').pop());
     g.pin.onclick = () => togglePin(key.slice(2));
     g.head.append(g.pin);
@@ -158,6 +157,7 @@ export function renderDashboard(data, again = false) {
   }
   const hot = (it) => !pins.includes(it.repo) && it.status === 'working';
   const items = [...cur.values()].sort((a, b) => hot(b) - hot(a) || a.ord - b.ord);
+  const liveParents = new Set(items.filter(it => it.live).map(it => it.parent));
   const pending = new Map(),
     descendants = new Map();
   for (const it of items) if (it.parent) pending.set(it.parent, (pending.get(it.parent) || 0) + 1);
@@ -177,7 +177,7 @@ export function renderDashboard(data, again = false) {
   for (const it of items) {
     // all rows exist before placement, so a parent sorted later still hosts its children
     let r = rows.get(it.key);
-    if (!r) rows.set(it.key, (r = createAgentRow(onDetailsChange)));
+    if (!r) rows.set(it.key, (r = createAgentRow(it)));
     updateAgentRow(r, it);
     let ancestor = it,
       depth = 0;
@@ -196,12 +196,15 @@ export function renderDashboard(data, again = false) {
       count ? ` · ${count} ${closed ? 'hidden ' : ''}${noun}${count === 1 ? '' : 's'}` : ''
     );
     r.kids.hidden = closed;
-    r.branch.hidden = !count;
-    txt(r.branch, `${closed ? 'Show' : 'Hide'} ${count} ${noun}${count === 1 ? '' : 's'}`);
-    attr(r.branch, 'aria-expanded', !closed);
-    r.branch.onclick = () => toggleFold(it.key);
+    r.fold = { count, closed, label: `${closed ? 'Show' : 'Hide'} ${count} ${noun}${count === 1 ? '' : 's'}`, toggle: () => toggleFold(it.key) };
     if (!r.kids.id) r.kids.id = uniqueID('k');
-    attr(r.branch, 'aria-controls', r.kids.id);
+    const liveBranch = !it.live && liveParents.has(it.key);
+    if (liveBranch && !r.caption) {
+      r.caption = el('p', 'worker-caption');
+      txt(r.caption, 'Live workers · metrics unavailable · names open main terminal');
+      r.node.insertBefore(r.caption, r.kids);
+    }
+    if (r.caption) r.caption.hidden = !liveBranch || closed;
   }
   for (const it of items) {
     const r = rows.get(it.key),
@@ -225,9 +228,10 @@ export function renderDashboard(data, again = false) {
   updateSystemMemory(data.system);
   txt(
     $('count'),
-    `${mine.length} agents · ${mine.filter((it) => it.status === 'working').length} working`
+    `${mine.length} agent${mine.length === 1 ? '' : 's'} · ${mine.filter((it) => it.status === 'working').length} working`
   );
   $('empty').hidden = items.length > 0;
+  txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${items.filter(it => it.sub && !it.dying).length} workers`);
   return { items: new Map([...rows.keys()].map((key) => [key, last.get(key)])), agents: mine };
 }
 
@@ -237,15 +241,16 @@ export function refreshDashboard(retained) {
   for (const [key, r] of rows) {
     const it = last.get(key),
       state = offline ? 'offline' : stale ? 'stale' : it.stText;
-    cls(r.node, 'node s-' + (retained ? 'unknown' : it.status));
-    txt(r.st, state);
+    cls(r.node, 'node s-' + (retained ? 'unknown' : it.status) + (it.sub ? ' worker' : '') + (it.live ? ' live-worker' : ''));
+    if (r.st) txt(r.st, state);
     attr(
       r.toggle,
       'aria-label',
-      `Details for ${it.name}: ${state}, RAM ${r.mem.textContent}${offline || stale ? ' (retained)' : ''}`
+      `Details for ${it.name}: ${state}, RAM ${r.mem?.textContent || 'unavailable'}${offline || stale ? ' (retained)' : ''}`
     );
   }
   if (retained) $('quiet').hidden = true;
+  refreshDetails(retained);
 }
 
 export function showQuiet(quiet) {
@@ -268,9 +273,12 @@ export function getCommunicationRow(key) {
   return { item, child: rows.get(key), parent: rows.get(item?.parent) };
 }
 
-export function setupDashboard(onChange, beforeDetailsChange) {
+export function setupDashboard(onChange, beforeDetailsChange, snapshotState) {
   rerender = onChange;
-  onDetailsChange = beforeDetailsChange;
+  setupDetails(key => {
+    const item = last.get(key);
+    return { item, row: rows.get(key), parent: last.get(item?.parent), host: last.get('a:' + item?.pid) };
+  }, beforeDetailsChange, snapshotState);
   $('expand').onclick = () => foldAll(false);
   $('collapse').onclick = () => foldAll(true);
   $('legend').replaceChildren(

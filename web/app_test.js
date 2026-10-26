@@ -5,6 +5,7 @@ import { testState as notificationsState } from './notifications.js';
 import { LOGOS, logo } from './icons.js';
 import { MB, GB, snapshotItems, testState as agentsState } from './agents.js';
 import { testState as rowsState } from './rows.js';
+import { closeDetails, showDetails } from './rows.js';
 import { testState as communication, communicationStream, clearPulses } from './communication.js';
 import { $ } from './dom.js';
 
@@ -22,6 +23,7 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     recentCpu: 0, idleSec: null, isNew: false, etime: '01:00', ...extra,
   });
   const show = agents => render({ agents, subagents: [] });
+  const branchOf = row => { if (!$('detail-dialog').open || $('detail-title').textContent !== row.item.name) showDetails(row); return $('detail-branch'); };
   const a = agent(100, '/a');
   assert(!Object.hasOwn(window, 'render') && !Object.hasOwn(window, 'rows'), 'module internals do not become browser globals');
   const cycle = snapshotItems({ agents: [agent(1, '/cycle', { ppid: 2 }), agent(2, '/cycle', { ppid: 1 })] }, new Map());
@@ -37,8 +39,17 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   assert(matchMedia('(prefers-color-scheme: dark)').matches === (scenario.get('theme') === 'dark'), 'browser runs the requested color scheme');
   assert(matchMedia('(prefers-reduced-motion: reduce)').matches === (scenario.get('reduced') === 'true'), 'browser runs the requested motion preference');
   const brand = document.querySelector('.brand'), brandLogo = brand.querySelector('img');
-  assert(brandLogo.getBoundingClientRect().width === 24 && parseFloat(getComputedStyle(brand.querySelector('h1')).fontSize) === 16 && !brand.querySelector('p'), 'compact brand keeps the 24px logo, 16px name, and no tagline');
+  assert(brandLogo.getBoundingClientRect().width === 28 && parseFloat(getComputedStyle(brand).fontSize) >= 17 && !brand.querySelector('p'), 'compact brand keeps the real SVG, readable name, and no tagline');
   assert($('search-toggle').getBoundingClientRect().height >= 44 && $('search-toggle').getBoundingClientRect().width >= 44, 'Search retains a 44px target');
+  $('preferences-toggle').focus(); $('preferences-toggle').click();
+  assert($('preferences-dialog').open && !$('notify').closest('header') && $('communication-capability').textContent.includes('Waiting') && !document.querySelector('#preferences-dialog input[type=checkbox]'), 'Preferences contains the one real notification control and read-only capability, not a fake bridge switch');
+  for (const theme of ['dark', 'light', 'system', 'invalid']) {
+    $('appearance').value = theme; $('appearance').dispatchEvent(new Event('change'));
+    const valid = theme === 'invalid' ? 'system' : theme;
+    assert(JSON.parse(localStorage.getItem('swarmview.appearance')) === valid && document.documentElement.dataset.theme === (valid === 'system' ? matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' : valid), 'appearance validates and persists only the local light/dark/system preference');
+  }
+  $('preferences-dialog').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  assert(!$('preferences-dialog').open && document.activeElement === $('preferences-toggle'), 'Preferences Escape works without native dialog cancel and returns focus');
 
   for (const kind of ['aider', 'cursor-agent']) {
     show([{ ...a, kind, recentCpu: 0.1, idleSec: 0 }]);
@@ -57,25 +68,37 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   const metrics = rows.get('a:100');
   const taskStyle = getComputedStyle(metrics.btn), metricStyle = getComputedStyle(metrics.toggle);
   assert(parseFloat(taskStyle.paddingLeft) >= 8 && parseFloat(taskStyle.paddingRight) >= 8 && parseFloat(taskStyle.gap) >= 8 && metrics.identity.getBoundingClientRect().left - metrics.logo.getBoundingClientRect().right >= 8, 'task controls keep 8px horizontal padding and icon/text spacing');
-  assert(parseFloat(metricStyle.paddingLeft) >= 8 && parseFloat(metricStyle.paddingRight) >= 8 && metrics.toggle.getBoundingClientRect().right - metrics.mem.getBoundingClientRect().right >= 8, 'metric contents stay inset 8px inside the hover/focus control');
-  assert(metrics.st.getBoundingClientRect().width === 64 && metrics.mem.getBoundingClientRect().width === 64 && metrics.btn.getBoundingClientRect().height === 47, 'horizontal breathing room preserves 64px metric columns and 47px short rows');
-  const columnLabels = document.querySelector('.column-head').children;
-  assert(Math.abs(columnLabels[1].getBoundingClientRect().left - metrics.st.getBoundingClientRect().left) <= 1 && Math.abs(columnLabels[2].getBoundingClientRect().right - metrics.mem.getBoundingClientRect().right) <= 1, 'State and RAM headers align with inset metric content');
-  assert(metrics.cpu.textContent === 'CPU 136%' && metrics.mem.textContent === '~1.6 GB' && metrics.toggle.getAttribute('aria-label').includes('RAM'), 'metrics identify CPU (including multi-core use) and approximate RAM');
-  assert(metrics.up.textContent === 'Process age: 1m' && metrics.up.title.includes('process age'), 'uptime is labeled as process age');
-  assert(metrics.detail.hidden && !metrics.btn.contains(metrics.toggle) && !metrics.btn.contains(metrics.cpu) && !document.querySelector('button button'), 'CPU and age start in separate details, never nested terminal buttons');
+  assert(parseFloat(metricStyle.paddingLeft) >= 2 && metrics.toggle.getBoundingClientRect().left - metrics.mem.getBoundingClientRect().right >= 4, 'metrics and explicit Details keep a separate breathing gap');
+  assert(metrics.toggle.getBoundingClientRect().width >= 56 && metrics.btn.getBoundingClientRect().height === 47, 'explicit Details retains a usable width and short rows remain 47px');
+  assert(metrics.st.parentElement === metrics.mem.parentElement && metrics.st.getBoundingClientRect().right === metrics.mem.getBoundingClientRect().right, 'State and RAM share one aligned readable metric column');
+  assert(metrics.item.cpu === 'CPU 136%' && metrics.mem.textContent === '~1.6 GB' && metrics.toggle.getAttribute('aria-label').includes('RAM'), 'metrics identify CPU (including multi-core use) and approximate RAM');
+  assert(metrics.item.up === 'Process age: 1m', 'uptime is labeled as process age');
+  assert(!$('detail-dialog').open && !$('detail-body').children.length && !metrics.cpu && !metrics.detail && !metrics.btn.contains(metrics.toggle) && !document.querySelector('button button'), 'CPU and age are lazy in one shared dialog, never hidden per-row DOM or nested terminal buttons');
   const detailFetch = window.fetch;
   let detailRequests = 0;
   try {
     window.fetch = async () => { detailRequests++; throw new Error('Details must not request terminal focus'); };
     metrics.toggle.focus(); metrics.toggle.click();
-    assert(!metrics.detail.hidden && metrics.toggle.getAttribute('aria-expanded') === 'true' && document.getElementById(metrics.toggle.getAttribute('aria-controls')) === metrics.detail, 'monitoring-only details open accessibly');
-    assert(metrics.cpu.getBoundingClientRect().height > 0 && metrics.up.getBoundingClientRect().height > 0, 'opened details expose CPU and process age');
+    assert($('detail-dialog').open && metrics.toggle.getAttribute('aria-expanded') === 'true' && document.getElementById(metrics.toggle.getAttribute('aria-controls')) === $('detail-dialog'), 'monitoring-only details open accessibly');
+    assert($('detail-body').textContent.includes('CPU 136%') && $('detail-body').textContent.includes('Process age: 1m') && $('detail-body').getBoundingClientRect().height > 0, 'opened details expose CPU and process age');
+    assert($('detail-terminal').disabled, 'monitoring-only Details never invents a terminal destination');
+    const stableDetails = $('detail-body').firstChild;
+    freshness(); freshness();
+    assert($('detail-body').firstChild === stableDetails, 'unchanged freshness frames reuse the selected Details DOM rather than allocating another dialog body');
+    const detailsFocus = document.activeElement;
     show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
-    assert(!metrics.detail.hidden && document.activeElement === metrics.toggle, 'snapshot updates preserve details and keyboard focus');
-    metrics.toggle.click();
-    assert(metrics.detail.hidden && metrics.toggle.getAttribute('aria-expanded') === 'false', 'details close independently of terminal navigation');
+    assert($('detail-dialog').open && document.activeElement === detailsFocus, 'snapshot updates preserve details and keyboard focus');
+    closeDetails();
+    assert(!$('detail-dialog').open && !$('detail-body').children.length && document.activeElement === metrics.toggle && metrics.toggle.getAttribute('aria-expanded') === 'false', 'details close independently, release DOM, and return keyboard focus');
     assert(detailRequests === 0, 'details never requests terminal focus');
+    showDetails(metrics);
+    show([{ ...a, recentCpu: 0.5, memBytes: 500 * MB }]);
+    assert($('detail-body').textContent.includes('CPU 50%') && $('detail-body').textContent.includes('~500 MB'), 'the selected shared Details follows current measurements rather than retaining its opening snapshot');
+    $('detail-dialog').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    assert(!$('detail-dialog').open && !$('detail-body').children.length && document.activeElement === metrics.toggle, 'Details Escape releases selected DOM and safely restores focus');
+    showDetails(metrics); show([]); show([]);
+    assert(!$('detail-dialog').open && !$('detail-body').children.length && document.activeElement === $('search-toggle'), 'disappearing selected rows close Details and return focus to a connected control');
+    show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
   } finally { window.fetch = detailFetch; }
   assert(groups.get('r:/a').counts.textContent.includes('1 working'), 'repository counts include status text, not just color');
   assert(!$('reading').open && $('reading').textContent.includes('not percent complete'), 'metric help is available without leaving the dashboard');
@@ -90,6 +113,18 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     constructor(title, options) { notifications++; notificationBody = options.body; }
   };
   await $('notify').onclick();
+  await $('notify').onclick(); // turn off before testing an explicit permission request
+  let permissions = 0;
+  Notification.permission = 'default';
+  Notification.requestPermission = async () => { permissions++; return 'denied'; };
+  $('preferences-toggle').click();
+  $('appearance').dispatchEvent(new Event('change'));
+  $('close-preferences').click();
+  assert(permissions === 0, 'opening Preferences or changing appearance never prompts for OS notification permission');
+  await $('notify').onclick();
+  assert(permissions === 1 && $('notify').getAttribute('aria-pressed') === 'false', 'only explicit notification enable requests permission and denied permission stays off');
+  Notification.permission = 'granted'; await $('notify').onclick();
+  assert($('notify').getAttribute('aria-pressed') === 'true', 'the existing opt-in notification control can be re-enabled after permission is granted');
   show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
   show([{ ...a, idleSec: 14 }]);
   assert($('quiet').hidden && notifications === 0, 'quiet observation grace period');
@@ -146,6 +181,10 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     window.fetch = async () => { throw new Error('offline'); };
     await terminalRow.btn.onclick();
     assert(terminalRow.note.textContent === 'server unreachable' && terminalRow.note.isConnected && terminalRow.btn.getAttribute('aria-busy') === 'false', 'terminal focus failures stay visible and release the busy state');
+    showDetails(terminalRow);
+    await $('detail-terminal').onclick();
+    assert($('detail-dialog').open && $('detail-error').textContent === 'server unreachable', 'the shared Details keeps a terminal failure visible inside the modal');
+    closeDetails();
   } finally { window.fetch = focusFetch; }
   show([{ ...focusable, canFocus: false, tmuxAttached: false }]);
   assert(rows.get('a:100').btn.disabled && rows.get('a:100').target.textContent.includes('attach client'), 'detached pane shows recovery and disables selection');
@@ -226,6 +265,8 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   assert(document.activeElement === $('search'), 'up arrow from the first result returns to the query');
   search('path:/feature/src status:working');
   assert($('search-count').textContent === '1 match', 'working directory and live status are searchable');
+  search('kind:opencode worktree:/api/feature');
+  assert($('search-count').textContent === '1 match' && searchRows.has('a:502'), 'kind and worktree filters retain normalized identity and worktree semantics');
   search('pid:504 status:quiet');
   assert(searchRows.has('a:504') && searchRows.size === 1, 'visible quiet status is searchable');
   search('pid:504 status:waiting');
@@ -322,8 +363,8 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   render(fallbackSnapshot); render(fallbackSnapshot); $('expand').click();
   const fallbackRoot = rows.get('a:100'), survivor = rows.get('sub:survivor');
   assert(survivor.node.parentElement === fallbackRoot.kids && survivor.name.getBoundingClientRect().left > fallbackRoot.name.getBoundingClientRect().left, 'worker with an absent declared parent is placed and indented under its effective top-level parent');
-  assert(!fallbackRoot.branch.hidden && /\b1 worker\b/.test(fallbackRoot.workers.textContent), 'fallback worker contributes to its effective parent branch count and control');
-  assert(Math.abs(survivor.st.getBoundingClientRect().left - fallbackRoot.st.getBoundingClientRect().left) <= 1, 'fallback indentation does not move the state column');
+  assert(fallbackRoot.fold.count === 1 && /\b1 worker\b/.test(fallbackRoot.workers.textContent), 'fallback worker contributes to its effective parent branch count and control');
+  assert(Math.abs(survivor.st.getBoundingClientRect().right - fallbackRoot.st.getBoundingClientRect().right) <= 1, 'fallback indentation does not move the state column');
   const fallbackFetch = window.fetch;
   let fallbackFocusRequests = 0, fallbackFocusURL = null, fallbackFocusMethod = null, fallbackFocusBody = null;
   try {
@@ -331,11 +372,12 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
       fallbackFocusRequests++; fallbackFocusURL = url; fallbackFocusMethod = options?.method; fallbackFocusBody = options?.body;
       return { ok: true };
     };
-    fallbackRoot.toggle.click(); fallbackRoot.branch.click();
-    assert(fallbackRoot.kids.hidden && fallbackRoot.branch.textContent === 'Show 1 worker' && fallbackRoot.workers.textContent.includes('1 hidden worker') && fallbackRoot.branch.getAttribute('aria-expanded') === 'false', 'fallback worker can be hidden with an accurate count');
-    assert(document.getElementById(fallbackRoot.branch.getAttribute('aria-controls')) === fallbackRoot.kids, 'fallback branch control addresses its effective children accessibly');
-    fallbackRoot.branch.click();
-    assert(!fallbackRoot.kids.hidden && fallbackRoot.branch.textContent === 'Hide 1 worker', 'fallback worker can be shown again');
+    branchOf(fallbackRoot).click();
+    assert(fallbackRoot.kids.hidden && branchOf(fallbackRoot).textContent === 'Show 1 worker' && fallbackRoot.workers.textContent.includes('1 hidden worker') && branchOf(fallbackRoot).getAttribute('aria-expanded') === 'false', 'fallback worker can be hidden with an accurate count');
+    assert(document.getElementById(branchOf(fallbackRoot).getAttribute('aria-controls')) === fallbackRoot.kids, 'fallback branch control addresses its effective children accessibly');
+    branchOf(fallbackRoot).click();
+    assert(!fallbackRoot.kids.hidden && branchOf(fallbackRoot).textContent === 'Hide 1 worker', 'fallback worker can be shown again');
+    closeDetails();
     assert(fallbackFocusRequests === 0, 'fallback branch controls never request terminal focus');
     assert(await survivor.btn.onclick() === true, 'fallback worker terminal activation succeeds');
     assert(fallbackFocusURL === '/focus' && fallbackFocusMethod === 'POST', 'worker focus uses the terminal endpoint');
@@ -350,10 +392,10 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     assert(temporaryParent.node.classList.contains('s-exiting') && temporaryParent.btn.disabled && survivor.node.parentElement === temporaryParent.kids, 'disappeared parent is retained as exiting for one snapshot without losing its worker');
     render(fallbackSnapshot);
     assert(rows.size === 2 && !rows.has('sub:finished-parent') && !temporaryParent.node.isConnected && survivor.node.parentElement === fallbackRoot.kids, 'worker moves to its effective parent when the exiting declared parent is removed without leaking rows');
-    assert(survivor.name.getBoundingClientRect().left > fallbackRoot.name.getBoundingClientRect().left && !fallbackRoot.branch.hidden && /\b1 worker\b/.test(fallbackRoot.workers.textContent), 'removed-parent fallback restores indentation and the single-worker branch count');
-    fallbackRoot.branch.click();
-    assert(fallbackRoot.kids.hidden && fallbackRoot.branch.textContent === 'Show 1 worker', 'reparented worker remains foldable after its declared parent is removed');
-    fallbackRoot.branch.click(); fallbackRoot.toggle.click();
+    assert(survivor.name.getBoundingClientRect().left > fallbackRoot.name.getBoundingClientRect().left && fallbackRoot.fold.count === 1 && /\b1 worker\b/.test(fallbackRoot.workers.textContent), 'removed-parent fallback restores indentation and the single-worker branch count');
+    branchOf(fallbackRoot).click();
+    assert(fallbackRoot.kids.hidden && branchOf(fallbackRoot).textContent === 'Show 1 worker', 'reparented worker remains foldable after its declared parent is removed');
+    branchOf(fallbackRoot).click(); closeDetails();
     assert(!fallbackRoot.kids.hidden && fallbackFocusRequests === 1, 'reparented worker shows again without accidental terminal actions');
   } finally { window.fetch = fallbackFetch; }
 
@@ -374,49 +416,51 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   }
   const reference = rows.get('a:20000'), referenceState = reference.st.getBoundingClientRect(), referenceRAM = reference.mem.getBoundingClientRect();
   for (const r of rows.values()) {
-    const state = r.st.getBoundingClientRect(), ram = r.mem.getBoundingClientRect();
-    assert(Math.abs(state.left - referenceState.left) <= 1 && Math.abs(ram.right - referenceRAM.right) <= 1, 'state and RAM columns align across providers, five levels, and 20 workers');
+    const state = r.st.getBoundingClientRect(), ram = r.mem?.getBoundingClientRect();
+    assert(Math.abs(state.right - referenceState.right) <= 1 && (!ram || Math.abs(ram.right - referenceRAM.right) <= 1), 'available state and RAM columns align across providers, five levels, and 20 workers');
     assert(r.btn.getBoundingClientRect().right <= window.innerWidth && r.name.getBoundingClientRect().left >= 0 && r.name.getBoundingClientRect().right <= state.left, 'nested identity stays inside the viewport without overlapping metrics');
   }
   const deepest = rows.get('sub:level-4'), firstNested = rows.get('sub:level-0');
   assert(deepest.name.getBoundingClientRect().left > firstNested.name.getBoundingClientRect().left, 'nesting still indents task identity');
   assert(deepest.name.getBoundingClientRect().height > parseFloat(getComputedStyle(deepest.name).lineHeight), 'long nested task title wraps rather than truncates');
-  assert(deepest.mem.textContent.includes('—') && !deepest.mem.textContent.includes('0 MB'), 'unavailable worker RAM is a dash, not zero');
-  assert(deepest.cpu.textContent.includes('unavailable') && deepest.up.textContent.includes('unavailable'), 'worker details never invent CPU or process age');
+  assert(!deepest.mem && deepest.item.mem === null, 'unavailable worker RAM has no fabricated zero or idle metric DOM');
+  showDetails(deepest);
+  assert($('detail-body').textContent.includes('CPU: unavailable') && $('detail-body').textContent.includes('Process age: unavailable'), 'worker details never invent CPU or process age');
+  closeDetails();
   assert(document.documentElement.scrollWidth <= window.innerWidth, 'expanded five-level tree with 20 workers never causes horizontal overflow');
   assert($('tree').getAnimations({ subtree: true }).length === 0, 'CPU activity and nesting do not create communication pulses or a continuously animated tree');
   if (window.innerWidth >= 560) {
-    assert(Math.abs($('tree').getBoundingClientRect().width - 528) <= 1, 'native layout keeps 528px inner content inside the 560px body');
+    assert(Math.abs($('tree').getBoundingClientRect().width - 632) <= 1, 'native overview stays bounded inside a 680px body');
     assert(reference.btn.getBoundingClientRect().height <= 55, 'short native rows remain compact');
   }
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    assert([...rows.values()].every(r => getComputedStyle(r.logo).animationName === 'none'), 'reduced motion disables working-icon animation');
+    assert([...rows.values()].every(r => !r.logo || getComputedStyle(r.logo).animationName === 'none'), 'reduced motion disables working-icon animation');
   }
   const stableNode = deepest.node, stableElements = $('tree').querySelectorAll('*').length;
   for (let i = 0; i < 20; i++) render(treeSnapshot);
   assert(rows.size === 31 && rows.get('sub:level-4').node === stableNode && $('tree').querySelectorAll('*').length === stableElements, 'repeated snapshots reuse rows without DOM growth');
-  deepest.toggle.click(); deepest.branch.click();
-  assert(deepest.kids.hidden && deepest.branch.getAttribute('aria-expanded') === 'false' && deepest.workers.textContent.includes('20 hidden workers'), 'worker branch folds independently and keeps the hidden count');
+  branchOf(deepest).click();
+  assert(deepest.kids.hidden && branchOf(deepest).getAttribute('aria-expanded') === 'false' && deepest.workers.textContent.includes('20 hidden workers'), 'worker branch folds independently and keeps the hidden count');
   assert(!firstNested.kids.hidden && !groups.get('r:/synthetic').kids.hidden, 'folding one worker branch leaves ancestors expanded');
-  deepest.branch.click(); deepest.toggle.click();
+  branchOf(deepest).click(); closeDetails();
   assert(!deepest.kids.hidden, 'worker branch can be reopened from its details');
   const outerBranch = rows.get('sub:level-3');
   const branchFetch = window.fetch;
   let branchFocusRequests = 0;
   try {
     window.fetch = async () => { branchFocusRequests++; throw new Error('Branch controls must not focus a terminal'); };
-    outerBranch.toggle.click(); outerBranch.branch.click();
-    assert(outerBranch.kids.hidden && outerBranch.workers.textContent.includes('21 hidden workers') && outerBranch.branch.textContent === 'Show 21 workers', 'collapsing one child with 20 grandchildren reports all 21 hidden workers, not just the direct child');
+    branchOf(outerBranch).click();
+    assert(outerBranch.kids.hidden && outerBranch.workers.textContent.includes('21 hidden workers') && branchOf(outerBranch).textContent === 'Show 21 workers', 'collapsing one child with 20 grandchildren reports all 21 hidden workers, not just the direct child');
     assert(/\b20 workers\b/.test(deepest.workers.textContent) && /\b24 workers\b/.test(firstNested.workers.textContent) && /\b25 workers\b/.test(reference.workers.textContent), 'nested branch totals count each worker descendant once without including the branch itself');
     assert(groups.get('r:/synthetic').counts.textContent.includes('25 workers'), 'nested descendant totals do not double-count repository workers');
-    outerBranch.branch.click(); outerBranch.toggle.click();
-    assert(!outerBranch.kids.hidden && !deepest.kids.hidden && outerBranch.branch.textContent === 'Hide 21 workers', 'reopening the outer branch preserves its expanded child and full descendant count');
+    branchOf(outerBranch).click(); closeDetails();
+    assert(!outerBranch.kids.hidden && !deepest.kids.hidden && outerBranch.fold.label === 'Hide 21 workers', 'reopening the outer branch preserves its expanded child and full descendant count');
     const processChild = agent(20006, '/synthetic', { ppid: 20000, kind: 'codex', title: 'Nested process', recentCpu: 0.2 });
     render({ ...treeSnapshot, agents: [...fleet, processChild] });
-    reference.toggle.click(); reference.branch.click();
-    assert(reference.kids.hidden && reference.workers.textContent.includes('26 hidden nested agents') && reference.branch.textContent === 'Show 26 nested agents', 'mixed process and worker descendants are not mislabeled as 26 workers');
+    branchOf(reference).click();
+    assert(reference.kids.hidden && reference.workers.textContent.includes('26 hidden nested agents') && branchOf(reference).textContent === 'Show 26 nested agents', 'mixed process and worker descendants are not mislabeled as 26 workers');
     assert(groups.get('r:/synthetic').counts.textContent.includes('7 working') && groups.get('r:/synthetic').counts.textContent.includes('25 workers'), 'mixed descendants preserve distinct process and worker repository counts');
-    reference.branch.click(); reference.toggle.click();
+    branchOf(reference).click(); closeDetails();
     render(treeSnapshot); render(treeSnapshot);
     assert(!rows.has('a:20006') && /\b25 workers\b/.test(reference.workers.textContent) && branchFocusRequests === 0, 'removing a nested process restores worker-only totals without focus requests or retained rows');
   } finally { window.fetch = branchFetch; }
@@ -439,7 +483,7 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   show([agent(20000, '/synthetic')]);
   assert(rows.get('a:20000').mem.textContent.includes('—') && $('mem').textContent.includes('unavailable'), 'missing agent RAM and unavailable system telemetry stay distinct from zero');
   show([agent(20000, '/synthetic', { recentCpu: null, idleSec: 30 })]);
-  assert(rows.get('a:20000').st.textContent === 'unknown' && rows.get('a:20000').cpu.textContent.includes('unavailable') && $('quiet').hidden, 'missing activity telemetry is unknown, never quiet or zero CPU');
+  assert(rows.get('a:20000').st.textContent === 'unknown' && rows.get('a:20000').item.cpu.includes('unavailable') && $('quiet').hidden, 'missing activity telemetry is unknown, never quiet or zero CPU');
 
   const observations = Array.from({ length: 12 }, (_, i) => agent(30000 + i, '/observations', { recentCpu: 0.2, idleSec: 0 }));
   show(observations); show(observations);
@@ -467,44 +511,67 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   show([]); show([]);
   assert(rows.size === 0 && groups.size === 0 && quietRows.size === 0 && eps.size === 0, 'exited fleets release rows, observations, and notification episode metadata');
 
+  const sourceHost = agent(44000, '/source-cases', { kind: 'opencode', recentCpu: 0.5, canFocus: true });
+  render({ agents: [sourceHost, agent(44001, '/source-cases', { ppid: 44000, recentCpu: 0.2, memBytes: 38 * MB })],
+    subagents: [{ id: 'known-metadata', parentPid: 44000, cwd: '/source-cases', working: true, model: 'Known metadata model' }],
+    liveWorkers: [{ key: 'live:full-normalized:ses_actualsuffix', parent: 'a:44000', pid: 44000 }], communication: true, at: Date.now() });
+  const sourceLive = rows.get('live:full-normalized:ses_actualsuffix'), sourceMetadata = rows.get('sub:known-metadata');
+  assert(rows.get('a:44001').st.textContent === 'working' && rows.get('a:44001').mem.textContent === '~38 MB' && sourceMetadata.st.textContent === 'working' && !sourceMetadata.mem && sourceLive.item.status === 'unknown', 'process-backed child measurements, known Claude metadata activity and unknown native live status remain distinct');
+  assert(sourceLive.name.textContent === 'Worker suffix' && !sourceLive.logo && !sourceLive.agentKind && !sourceLive.target && !sourceLive.st && !sourceLive.mem && !sourceLive.detail && !sourceLive.cpu && !$('detail-body').children.length && !activeFeedback.size, 'short actual ID suffix does not allocate idle provider, metric, helper, event or hidden Details DOM');
+  openSearch(); $('search').value = 'ses_actualsuffix'; applySearch();
+  assert(searchRows.has(sourceLive.item.key), 'full normalized live worker identity remains searchable despite its compact suffix');
+  closeSearch(); showDetails(sourceLive);
+  assert($('detail-body').textContent.includes('live:full-normalized:ses_actualsuffix') && $('detail-body').textContent.includes('Immediate parent') && $('detail-body').textContent.includes('main agent’s terminal') && $('detail-body').textContent.includes('CPU: unavailable'), 'live Details preserves full identity, immediate-parent/host-terminal meaning and unavailable telemetry');
+  closeDetails(); showDetails(sourceMetadata);
+  assert($('detail-body').textContent.includes('Known metadata model') && $('detail-body').textContent.includes('log-write activity, not CPU'), 'Claude read-only lifecycle/model information is retained without claiming process measurements');
+  closeDetails();
+
   // Synthetic protocol frames only: no user provider, plugin, or agent is started.
   const liveHost = agent(45000, '/live-test', { kind: 'opencode', title: 'Review the complete parent task label without losing terminal navigation or moving the aligned state and RAM columns', canFocus: true, tmuxAttached: true, tmuxTarget: 'synthetic:%45' });
   const liveWorkers = Array.from({ length: 25 }, (_, i) => ({ key: 'live:test:' + i, parent: i > 0 && i < 5 ? 'live:test:' + (i - 1) : 'a:45000', pid: 45000 }));
   const liveSnapshot = { agents: [liveHost], liveWorkers, communication: true, at: Date.now() };
   render(liveSnapshot); render(liveSnapshot); $('expand').click(); window.scrollTo(0, 0);
-  assert(rows.size === 26 && $('count').textContent.startsWith('1 agents'), 'live workers do not fabricate process counts');
+  assert(rows.size === 26 && $('count').textContent.startsWith('1 agent ·'), 'live workers do not fabricate process counts');
   for (const w of liveWorkers) {
     const r = rows.get(w.key);
-    assert(r.st.textContent === 'unknown' && r.mem.textContent === '—' && r.cpu.textContent.includes('unavailable'), 'native session workers never invent CPU, RSS or lifecycle status');
-    assert(Math.abs(r.mem.getBoundingClientRect().right - rows.get('a:45000').mem.getBoundingClientRect().right) <= 1, 'live five-level/20-worker metrics remain aligned');
+    assert(!r.st && !r.mem && !r.cpu && !r.logo && r.item.stText === 'unknown' && r.item.mem === null && r.item.cpu.includes('unavailable'), 'native session workers never invent CPU, RSS or lifecycle status or allocate unavailable metric DOM');
+    assert(r.toggle.getBoundingClientRect().right === rows.get('a:45000').toggle.getBoundingClientRect().right, 'live five-level/20-worker Details stay aligned without dummy metrics');
   }
   assert(document.querySelectorAll('.communication-note').length === 0 && activeFeedback.size === 0, 'worker appearance does not communicate or allocate idle badges');
   const liveRow = rows.get('live:test:0'), liveParent = rows.get('a:45000');
   liveRow.name.textContent = 'Keep this long worker title completely readable while static feedback occupies only the existing secondary context line';
-  const beforeFeedback = [...rows.values()].map(r => [r, r.btn.getBoundingClientRect().height, r.st.getBoundingClientRect().left, r.mem.getBoundingClientRect().right]);
-  const originalIdentity = [liveRow.agentKind.textContent, liveRow.target.textContent, liveRow.name.textContent];
-  liveParent.btn.focus(); const beforeFocus = document.activeElement;
+  const beforeFeedback = [...rows.values()].map(r => [r, r.btn.getBoundingClientRect().height, r.toggle.getBoundingClientRect().left, r.toggle.getBoundingClientRect().right]);
+  const originalIdentity = [liveRow.item.agentName, liveRow.item.target, liveRow.name.textContent];
+  liveParent.btn.focus(); const beforeFocus = document.activeElement, cuePosition = liveRow.node.parentElement, cueScroll = scrollY;
   showFeedback('live:test:0', 'attempted');
   const activeSend = activeFeedback.get('live:test:0'), badge = activeSend.label;
-  assert(activeFeedback.size === 1 && badge.textContent === 'Attempted' && communicationFeedback.textContent.includes('acceptance not confirmed'), 'pre-admission attempt is explicitly uncertain static text');
+  assert(activeFeedback.size === 1 && badge.textContent === 'Attempted from parent · unconfirmed' && communicationFeedback.textContent.includes('acceptance not confirmed'), 'pre-admission attempt is explicitly uncertain static text');
   showFeedback('live:test:0', 'sent');
-  assert(activeFeedback.get('live:test:0') === activeSend && badge.textContent === 'Sent' && communicationFeedback.textContent.includes('Sent to worker'), 'confirmed send updates the same row badge and timer');
+  assert(activeFeedback.get('live:test:0') === activeSend && badge.textContent === 'Sent from parent' && communicationFeedback.textContent.includes('Sent to worker'), 'confirmed send updates the same row badge and timer');
   assert(communicationFeedback.textContent.includes(liveParent.name.textContent) && communicationFeedback.textContent.includes(liveRow.name.textContent) && communicationFeedback.getAttribute('aria-live') === 'polite', 'polite announcement includes the full bounded parent and worker labels');
-  assert(document.activeElement === beforeFocus && liveRow.btn.disabled === false && liveRow.st.textContent === 'unknown', 'feedback never steals focus, changes terminal capability, or invents activity state');
-  assert(originalIdentity.every((value, i) => value === [liveRow.agentKind.textContent, liveRow.target.textContent, liveRow.name.textContent][i]), 'provider identity, target, and long primary title remain intact');
-  assert(liveRow.btn.parentElement.classList.contains('communication-active') && !rows.get('live:test:1').btn.parentElement.classList.contains('communication-active'), 'only the observed row line highlights, never its subtree');
-  for (const [r, height, stateX, ramX] of beforeFeedback) assert(r.btn.getBoundingClientRect().height === height && r.st.getBoundingClientRect().left === stateX && r.mem.getBoundingClientRect().right === ramX, 'static feedback has no row-height or aligned-metric layout shift across five levels and 20 workers');
+  assert(document.activeElement === beforeFocus && liveRow.btn.disabled === false && liveRow.item.stText === 'unknown', 'feedback never steals focus, changes terminal capability, or invents activity state');
+  assert(originalIdentity.every((value, i) => value === [liveRow.item.agentName, liveRow.item.target, liveRow.name.textContent][i]), 'provider identity, target, and long primary title remain intact');
+  assert(getComputedStyle(liveRow.btn.parentElement).backgroundColor === 'rgba(0, 0, 0, 0)' && getComputedStyle(liveRow.btn.parentElement).outlineStyle === 'none' && !rows.get('live:test:1').context.textContent, 'communication is plain text only, never row/subtree fill, outline or a sibling cue');
+  for (const [r, height, stateX, ramX] of beforeFeedback) assert(r.btn.getBoundingClientRect().height === height && r.toggle.getBoundingClientRect().left === stateX && r.toggle.getBoundingClientRect().right === ramX, 'static feedback has no row-height or aligned-Details layout shift across five levels and 20 workers');
   const badgeBox = badge.getBoundingClientRect(), contextBox = liveRow.context.getBoundingClientRect();
   assert(badgeBox.left >= contextBox.left && badgeBox.right <= contextBox.right && badgeBox.bottom <= contextBox.bottom + .5 && liveRow.name.getBoundingClientRect().bottom <= contextBox.top, 'badge stays in its secondary slot without covering title or metrics');
   const contrast = (a, b) => {
     const light = color => color.match(/[\d.]+/g).slice(0, 3).map(Number).map(v => v / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
     const x = light(a), y = light(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
   };
-  const badgeStyle = getComputedStyle(badge), lineStyle = getComputedStyle(liveRow.btn.parentElement);
-  assert(contrast(badgeStyle.color, badgeStyle.backgroundColor) >= 4.5 && contrast(lineStyle.outlineColor, lineStyle.backgroundColor) >= 3 && parseFloat(badgeStyle.fontSize) >= 12, 'both themes keep readable text and a contrast-qualified accent without microscopic type');
+  const badgeStyle = getComputedStyle(badge), background = getComputedStyle(document.body).backgroundColor;
+  assert(contrast(badgeStyle.color, background) >= 4.5 && badgeStyle.backgroundColor === 'rgba(0, 0, 0, 0)' && badgeStyle.borderLeftWidth === '0px' && parseFloat(badgeStyle.fontSize) >= 13, 'both themes keep contrast-qualified plain text without chips, stripes or microscopic type');
   assert(!document.getAnimations().length && getComputedStyle(communicationFeedback).width === '1px', 'normal and reduced motion share static row feedback and a nonvisual announcement, not a viewport layer');
-  showFeedback('live:test:0', 'returned'); assert(badge.textContent === 'Reply', 'a genuinely different confirmation is never dropped during an active highlight');
-  showFeedback('live:test:0', 'attempted'); assert(badge.textContent === 'Attempted', 'a new attempt is not misreported as the previous confirmation');
+  showFeedback('live:test:0', 'returned'); assert(badge.textContent === 'Reply received by parent' && contrast(getComputedStyle(badge).color, background) >= 4.5, 'a genuinely different confirmation is never dropped and reply text meets contrast');
+  showFeedback('live:test:0', 'attempted'); assert(badge.textContent === 'Attempted from parent · unconfirmed' && contrast(getComputedStyle(badge).color, background) >= 4.5, 'a new attempt is not misreported as the previous confirmation and uncertain text meets contrast');
+  assert(liveRow.node.parentElement === cuePosition && scrollY === cueScroll && !liveParent.kids.hidden, 'cue appearance never reparents, scrolls or expands a branch');
+  showDetails(liveRow);
+  assert(activeFeedback.size === 0, 'opening shared Details drops active communication cues');
+  showFeedback('live:test:0', 'sent'); assert(activeFeedback.size === 0, 'Details-covered rows cannot admit or queue cues');
+  closeDetails();
+  $('preferences-toggle').click(); showFeedback('live:test:0', 'sent');
+  assert(activeFeedback.size === 0 && $('communication-capability').textContent.includes('Enabled by server'), 'Preferences-covered rows discard cues and report real server capability');
+  $('close-preferences').click();
   // Capacity needs five visible candidates, independent of nested long-title wrapping/font metrics.
   const capacitySnapshot = { ...liveSnapshot, agents: [{ ...liveHost, title: 'Parent' }], liveWorkers: liveWorkers.slice(0, 5).map(w => ({ ...w, parent: 'a:45000' })) };
   const treeFont = $('tree').style.fontSize, longWorkerTitle = liveRow.name.textContent;
@@ -517,6 +584,12 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     for (const w of capacitySnapshot.liveWorkers) showFeedback(w.key, 'sent');
     assert(activeFeedback.size === 4 && document.querySelectorAll('.communication-note').length === 4, 'active badges and timers are bounded at four without an idle-row journal');
     assert(capacitySnapshot.liveWorkers.slice(0, 4).every(w => activeFeedback.has(w.key)) && !activeFeedback.has('live:test:4'), 'capacity admits the first four visible targets and rejects the fifth visible target');
+    const stressRow = rows.get('live:test:3');
+    stressRow.context.style.fontSize = '17px'; stressRow.context.style.lineHeight = '1.5';
+    showFeedback('live:test:3', 'attempted');
+    const stressCue = activeFeedback.get('live:test:3').label, cueBox = stressCue.getBoundingClientRect(), stressBox = stressRow.context.getBoundingClientRect();
+    assert(stressCue.textContent.endsWith('· unconfirmed') && cueBox.right <= stressBox.right + .5 && cueBox.bottom <= stressBox.bottom + .5 && getComputedStyle(stressRow.context).overflow === 'visible', 'enlarged cue text wraps without clipping or shrinking the unconfirmed qualifier');
+    stressRow.context.style.fontSize = ''; stressRow.context.style.lineHeight = '';
   }
   clearPulses(); $('tree').style.fontSize = treeFont; render(liveSnapshot); window.scrollTo(0, 0);
   liveRow.name.textContent = longWorkerTitle;
@@ -542,12 +615,12 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   showFeedback('live:test:0', 'sent'); assert(activeFeedback.size === 0, 'covered rows do not queue feedback behind search');
   closeSearch();
   showFeedback('live:test:0', 'returned'); assert(communicationFeedback.textContent.includes('Reply received'), 'returned result has distinct accessible text');
-  rows.get('a:45000').branch.click();
+  branchOf(rows.get('a:45000')).click(); closeDetails();
   assert(activeFeedback.size === 0, 'fold clears active feedback');
   showFeedback('live:test:0', 'sent'); assert(activeFeedback.size === 0, 'collapsed rows never queue feedback');
-  rows.get('a:45000').branch.click();
+  branchOf(rows.get('a:45000')).click(); closeDetails();
   showFeedback('live:test:0', 'returned');
-  await new Promise(resolve => setTimeout(resolve, 1900));
+  await new Promise(resolve => setTimeout(resolve, 2600));
   assert(activeFeedback.size === 0 && !document.querySelector('.communication-note') && !document.querySelector('.communication-active') && communicationFeedback.textContent === '', 'feedback expiry removes badges, highlight, timers, and announcement without retaining an event');
   const previousEventSource = window.EventSource;
   let stream = null, opens = 0;
@@ -576,7 +649,7 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
         stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, key: stableWorkers[0].key, direction }) });
         const entry = activeFeedback.get(stableWorkers[0].key);
         if (!i) { reused = entry; steadyNodes = $('tree').querySelectorAll('*').length; }
-        assert(activeFeedback.size === 1 && entry === reused && entry.label.textContent === (i % 2 ? 'Reply' : 'Sent') && communicationFeedback.textContent.includes(i % 2 ? 'Reply received' : 'Sent to worker'), '36 unchanged worker frames present every confirmation using one reused badge/timer entry');
+        assert(activeFeedback.size === 1 && entry === reused && entry.label.textContent === (i % 2 ? 'Reply received by parent' : 'Sent from parent') && communicationFeedback.textContent.includes(i % 2 ? 'Reply received' : 'Sent to worker'), '36 unchanged worker frames present every confirmation using one reused badge/timer entry');
         assert($('tree').querySelectorAll('*').length === steadyNodes && !document.getAnimations().length, 'normal and reduced motion share stable static DOM without frame scheduling or Web Animations');
         assert(feedbackTimers.size === 1, 'updating an active row replaces its one expiry timer rather than accumulating timers');
       }
@@ -595,12 +668,16 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
       assert(work.renders === ++count && app.lastData.liveWorkers[0].key === stableWorkers.at(-1).key, 'changed worker order renders even when the same keys remain');
       frame(stableWorkers); count++;
       const reparented = stableWorkers.map((w, i) => i ? w : { ...w, parent: stableWorkers[5].key });
+      showDetails(rows.get(stableWorkers[0].key));
       frame(reparented);
       assert(work.renders === ++count && rows.get(stableWorkers[0].key).node.parentElement === rows.get(stableWorkers[5].key).kids, 'same-length parent changes reparent live rows');
+      assert(!$('detail-dialog').open && !$('detail-body').children.length, 'changed selected-worker parent identity closes shared Details instead of retaining a stale destination');
       frame(stableWorkers); count++;
       const rerouted = stableWorkers.map((w, i) => i ? w : { ...w, pid: routeHost.pid });
+      showDetails(rows.get(stableWorkers[0].key));
       frame(rerouted);
-      assert(work.renders === ++count && rows.get(stableWorkers[0].key).pid === routeHost.pid && rows.get(stableWorkers[0].key).terminal.textContent.includes('/live-route'), 'same-key owner changes refresh focus and presentation fields');
+      assert(work.renders === ++count && rows.get(stableWorkers[0].key).pid === routeHost.pid && rows.get(stableWorkers[0].key).item.cwd.includes('/live-route'), 'same-key owner changes refresh focus and presentation fields');
+      assert(!$('detail-dialog').open && !$('detail-body').children.length, 'changed selected-worker owner PID closes shared Details and releases the old source');
       frame(stableWorkers); count++;
       const replaced = stableWorkers.map((w, i) => i ? w : { ...w, key: 'live:replacement:0' });
       frame(replaced);
@@ -630,7 +707,7 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
       stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, lost: true, key: stableWorkers[0].key, direction: 'sent' }) });
       assert(work.renders === count && activeFeedback.size === 0 && communicationStatus.textContent.includes('dropped'), 'unchanged topology still acknowledges loss without replaying feedback');
       showFeedback(stableWorkers[0].key, 'returned');
-      stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, ambiguous: true }) });
+      stream.onmessage({ data: JSON.stringify({ workers: stableWorkers, ambiguous: true, key: stableWorkers[0].key, direction: 'sent' }) });
       assert(work.renders === count && activeFeedback.size === 0 && communicationStatus.textContent.includes('ambiguous'), 'unchanged topology still clears uncertain feedback and updates ambiguity availability');
     } finally {
       Element.prototype.animate = originalAnimate; window.requestAnimationFrame = originalRAF; window.getComputedStyle = originalStyle; Element.prototype.getBoundingClientRect = originalBounds; Element.prototype.getClientRects = originalRects;
@@ -659,6 +736,48 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     assert(opens === 2 && !communication.source && rows.size === 1, 'disabled bridge has no connection and releases live worker rows immediately');
   } finally { delete document.hidden; communication.closeSource(); window.EventSource = previousEventSource; clearPulses(); }
 
+  const detailA = agent(46000, '/details-review', { title: 'Details A', recentCpu: .5, memBytes: 123 * MB, canFocus: true, tmuxAttached: true, tmuxTarget: 'review:%1' });
+  const detailB = agent(46001, '/details-review', { title: 'Details B', recentCpu: .2, memBytes: 456 * MB, canFocus: true, tmuxAttached: true, tmuxTarget: 'review:%2' });
+  render({ agents: [detailA, detailB], at: Date.now() - 30000 });
+  const rowA = rows.get('a:46000'), rowB = rows.get('a:46001');
+  rowA.toggle.click();
+  assert($('detail-body').textContent.includes('stale · retained, not live state') && $('detail-body').textContent.includes('CPU 50%') && $('detail-body').textContent.includes('~123 MB'), 'opening already-stale Details immediately labels retained activity without replacing valid cached measurements');
+  closeDetails(); $('offline').hidden = false; freshness();
+  rowA.toggle.click();
+  assert($('detail-body').textContent.includes('offline · retained, not live state') && $('detail-body').textContent.includes('CPU 50%') && $('detail-body').textContent.includes('~123 MB'), 'opening already-offline Details immediately labels retained activity without another freshness pass');
+  closeDetails(); $('offline').hidden = true;
+  render({ agents: [detailA, detailB], at: Date.now() });
+  const detailsNow = Date.now;
+  try {
+    const agedNow = Date.now() + 16000;
+    Date.now = () => agedNow;
+    rowA.toggle.click();
+    assert($('detail-body').textContent.includes('stale · retained, not live state'), 'Details reads the current snapshot age even when it becomes stale between coordinator freshness passes');
+    closeDetails();
+  } finally { Date.now = detailsNow; }
+  const detailsFetch = window.fetch;
+  try {
+    for (const outcome of ['success', 'failure']) for (const replacement of [rowB, rowA]) {
+      let resolveFocus;
+      window.fetch = (url, options) => {
+        assert(url === '/focus' && options.method === 'POST' && JSON.parse(options.body).pid === detailA.pid, 'deferred Details requests retain the explicitly selected terminal PID');
+        return new Promise(resolve => { resolveFocus = resolve; });
+      };
+      rowA.toggle.click();
+      const pending = $('detail-terminal').onclick();
+      $('detail-dialog').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      replacement.toggle.click(); $('detail-terminal').focus();
+      const currentBody = $('detail-body').firstChild, currentFocus = document.activeElement, currentError = $('detail-error').textContent;
+      resolveFocus({ ok: outcome === 'success', json: async () => ({ error: 'Delayed error for ' + replacement.item.name }) });
+      await pending;
+      assert($('detail-dialog').open && $('detail-title').textContent === replacement.item.name && $('detail-body').firstChild === currentBody && document.activeElement === currentFocus && $('detail-error')?.textContent === currentError, 'old terminal ' + outcome + ' cannot change ' + (replacement === rowA ? 'same-row reopened' : 'replacement-row') + ' Details, its error content or its focus');
+      closeDetails();
+    }
+    window.fetch = async () => ({ ok: true });
+    rowA.toggle.click();
+    await $('detail-terminal').onclick();
+    assert(!$('detail-dialog').open && !$('detail-body').children.length && document.activeElement === rowA.toggle, 'a terminal success still closes and returns focus for its own current Details selection');
+  } finally { window.fetch = detailsFetch; closeDetails(); $('offline').hidden = true; }
   parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
   parent.document.body.dataset.uiTests = 'passed';
 } catch (error) {

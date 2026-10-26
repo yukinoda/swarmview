@@ -132,7 +132,7 @@ function liveItem(worker, index, host) {
     kind: 'opencode',
     sub: true,
     live: true,
-    name: 'OpenCode worker ' + worker.key.split(':').at(-1).slice(-6),
+    name: 'Worker ' + worker.key.split(':').at(-1).slice(-6),
     agentLabel: 'Observed live',
     mem: null,
     status: 'unknown',
@@ -142,7 +142,7 @@ function liveItem(worker, index, host) {
     cpu: 'CPU: unavailable',
     model: 'Model: unavailable',
     ord: 2e9 + index,
-    tip: 'Live session relationship, not process activity or task completion. Parent terminal only.'
+    tip: 'Live session relationship, not process activity or task completion. Opens main agent terminal when available; immediate parent may be another worker. Full worker ID: ' + worker.key
   };
 }
 export const label = (it) =>

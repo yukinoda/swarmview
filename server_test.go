@@ -157,15 +157,15 @@ func TestStaticCommunicationFeedback(t *testing.T) {
 	}
 	css, err := webFiles.ReadFile("web/app.css")
 	must(t, err)
-	start := strings.Index(string(css), ".row-line.communication-active")
+	start := strings.Index(string(css), ".communication-note {")
 	if start < 0 {
 		t.Fatal("static feedback styles missing")
 	}
-	end := strings.Index(string(css)[start:], "\n.agent {")
+	end := strings.Index(string(css)[start:], "\n.logo {")
 	if end < 0 {
 		t.Fatal("static feedback style boundary missing")
 	}
-	for _, forbidden := range []string{"animation:", "transition:", "transform:", "position: fixed", "box-shadow:", "filter:", "will-change:"} {
+	for _, forbidden := range []string{"animation:", "transition:", "transform:", "position: fixed", "box-shadow:", "filter:", "will-change:", "background:", "outline:", "border-left:"} {
 		if strings.Contains(string(css)[start:start+end], forbidden) {
 			t.Fatalf("static feedback adds a moving/compositing effect: %s", forbidden)
 		}

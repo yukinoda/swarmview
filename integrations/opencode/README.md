@@ -114,14 +114,16 @@ cleanup closes the socket/listeners/timer. Neither path installs the plugin.
   reconnects resume future observations automatically, never history.
   After a native service reconnect, use `/plugins` to disable and re-enable
   `swarmview.live-communication`; do not restart the service for this.
-- The observed worker's row briefly highlights and shows **Sent**, **Reply**, or
-  **Attempted** in its existing secondary context line for 1.8 seconds. Parent
+- The observed worker shows plain colored **Sent from parent**, **Reply received
+  by parent**, or **Attempted from parent · unconfirmed** in its existing secondary
+  context line for 2.5 seconds, without row fill, outline, stripe or motion. Parent
   and worker labels are announced politely (bounded to 160 characters each)
-  and available in the badge tooltip. Status/RAM remain unknown/unavailable;
-  the badge is not CPU state. Normal and reduced motion use the same static
+  and available in the cue tooltip. Status/RAM remain unknown/unavailable in
+  Details, without dummy unknown pills or RAM cells in the compact worker row.
+  The cue is not CPU state. Normal and reduced motion use the same static
   implementation: no travel, Web Animations, frame loop, or viewport layer.
-  At most four badge/timer entries exist; repeated events update the same
-  badge instead of allocating a history. Hidden/collapsed/offscreen rows do
+  At most four cue/timer entries exist; repeated events update the same
+  span instead of allocating a history. Hidden/collapsed/offscreen rows do
   not queue feedback. Fold/details/search/resize/scroll, topology changes,
   loss/ambiguity, disconnect, stale/offline state, or removal clear it.
 

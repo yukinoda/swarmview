@@ -41,12 +41,16 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
   - `app.js`: startup, polling, snapshot freshness, and wiring feature updates.
   - `agents.js`: snapshot normalization, parentage, statuses, and metric formatting.
   - `dashboard.js`: repository/worker tree, pinning, folding, and metric summaries.
-  - `rows.js`: shared task/detail rows, result cards, and terminal activation.
+  - `rows.js`: keyed task/result rows, one lazy selected-row Details dialog,
+    and terminal activation; reads current parent/host data through a dashboard callback
+    and current freshness through the coordinator's snapshot-state callback.
   - `search.js`: local search index, dialog, and keyboard navigation.
   - `notifications.js`: quiet observations, notification episodes, and tab badges.
-  - `communication.js`: opt-in live stream, up to four reused static row badges,
+  - `communication.js`: opt-in live stream, up to four reused plain-text worker cues,
     polite announcements, and visibility cleanup; reads dashboard rows without owning its tree or snapshot.
-  - `icons.js`, `dom.js`, `storage.js`: provider glyphs, DOM helpers, and saved preferences.
+  - `icons.js`, `dom.js`: provider glyphs and DOM helpers.
+  - `storage.js`: defensive local storage and the local appearance/Preferences dialog;
+    notification ownership stays in `notifications.js`, server capability in `communication.js`.
 - `web/app_test.js`, `ui_test.go`: browser assertions and their Go test harness.
 - `*_test.go`: tests beside their subjects; `test_helpers_test.go` contains shared fixtures.
 - `desktop/macos/`: native WebView host, installer, and packaging checks.

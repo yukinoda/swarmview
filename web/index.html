@@ -1,4 +1,5 @@
 <!doctype html>
+<html lang="en">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta
@@ -8,9 +9,11 @@
 <link rel="icon" href="/logo.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="/assets/app.css" />
 <title>Swarmview</title>
-<div class="brand">
-  <img src="/logo.svg" width="24" height="24" alt="" />
-  <h1>Swarmview</h1>
+<header class="app-header">
+ <div class="brand">
+  <img src="/logo.svg" width="28" height="28" alt="" />
+  <span>Swarmview</span>
+ </div>
   <span class="bar search-launch">
     <button
       id="search-toggle"
@@ -18,11 +21,13 @@
       aria-expanded="false"
       title="Search agents (Ctrl/⌘ K)"
     >
-      Search <kbd id="search-key">Ctrl K</kbd>
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg> Search <kbd id="search-key">Ctrl K</kbd>
     </button>
   </span>
-</div>
-<header>
+  <button id="preferences-toggle" aria-label="Preferences" aria-haspopup="dialog" title="Preferences"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg><span>Preferences</span></button>
+</header>
+<section class="overview" aria-labelledby="overview-title">
+  <div class="overview-heading"><h1 id="overview-title">Overview</h1><span id="freshness" role="status">Waiting for first snapshot</span></div>
   <span class="hl">
     <span id="count"></span>
     <span
@@ -31,14 +36,15 @@
       hidden
     ></span>
   </span>
+</section>
+<span id="offline" hidden>Connection unavailable · showing retained measurements</span>
+<div class="tree-toolbar">
+  <span id="tree-count"></span>
   <span class="bar">
-    <span id="offline" hidden>offline</span>
-    <button id="notify" hidden></button>
     <button id="expand">Expand all</button>
     <button id="collapse">Collapse all</button>
   </span>
-</header>
-<div id="freshness" role="status">Waiting for first snapshot</div>
+</div>
 <dialog id="search-panel" aria-labelledby="search-title" hidden>
   <div class="search-head">
     <h2 id="search-title">Find an agent</h2>
@@ -74,9 +80,10 @@
   <div id="quiet-list"></div>
 </section>
 <div id="empty" hidden>No agents running</div>
-<div class="column-head" aria-hidden="true"><span></span><span>State</span><span>RAM</span></div>
-<main id="tree"></main>
-<div id="legend"></div>
+<main id="tree" aria-label="Repositories and agents"></main>
+<template id="pin-icon"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3h8l-1 6 3 3v2h-5v7l-2-4v-3H6v-2l3-3-1-6Z"/></svg></template>
+<footer>
+<div id="legend" hidden></div>
 <details id="reading">
   <summary>Details: CPU, process age &amp; metric definitions</summary>
   <dl>
@@ -97,20 +104,20 @@
     <dd>
       Approximate resident memory of an agent and its child processes, excluding separately listed
       agents. Shared pages may be counted more than once, so values are not exact additive physical
-      RAM or reclaimable memory. Large values alone are not warnings. A dash means unavailable,
-      including per-worker RAM.
+      RAM or reclaimable memory. Large values alone are not warnings. A dash in a process row means
+      unavailable. Metadata-only workers omit metric cells; their unavailable values remain explicit in Details.
     </dd>
     <dt>Per-agent details</dt>
     <dd>
-      Click State or RAM to show CPU, process age, model and terminal context where available, or to
+      Click Details to show CPU, process age, model and terminal context where available, or to
       fold a worker branch. Details work for monitoring-only agents too. Click an enabled task to
       open its terminal; this is a separate action.
     </dd>
     <dt>Process age / CPU 36%</dt>
     <dd>
       Process age is not time spent on the current task. CPU includes child processes; 100% is one
-      CPU core and multi-core work can exceed 100%. This is not percent complete. Worker CPU and
-      process age are unavailable.
+      CPU core and multi-core work can exceed 100%. This is not percent complete. Metadata-only worker CPU
+      and process age are unavailable; detected child processes keep their actual measurements.
     </dd>
     <dt>OpenCode · dev:%42</dt>
     <dd>
@@ -141,8 +148,28 @@
     <dd>
       Lines show detected parentage, not messages. Communication is off by default. The optional
       OpenCode bridge shows static attempts and confirmed background sends or foreground replies
-      observed live; it collects no conversation contents or message history.
+      observed live; it collects no conversation contents or message history. Blue Sent from parent
+      is not completion; teal Reply received by parent is not success; amber Attempted from parent
+      means acceptance is unconfirmed. No cue means no current displayed observation, not idle.
+      Selecting a worker name opens the main agent's terminal, not necessarily its immediate parent.
     </dd>
   </dl>
 </details>
+<p class="mut">Local view. No conversation content.</p>
+</footer>
+<dialog id="detail-dialog" aria-labelledby="detail-title">
+  <div class="search-head"><h2 id="detail-title">Details</h2><button id="close-details" aria-label="Close Details">×</button></div>
+  <div id="detail-body"></div>
+</dialog>
+<dialog id="preferences-dialog" aria-labelledby="preferences-title">
+  <div class="search-head"><h2 id="preferences-title">Preferences</h2><button id="close-preferences" aria-label="Close preferences">×</button></div>
+  <label class="field">Appearance<select id="appearance"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <section id="communication-info">
+    <h3>Communication observations</h3>
+    <p id="communication-capability">Waiting for server capability</p>
+    <p>OpenCode TUI only. Brief colored text clears after 2.5 seconds. At most four cues; no content, queue, history, or replay.</p>
+    <details><summary>Connection and provider limits</summary><p>Manual setup requires OpenCode CLI and service 2.1.3 or 2.1.4. Quit/relaunch the native app with <code>Swarmview --communication</code>, or start the separate CLI with <code>./swarmview -communication</code>. Review the packaged <code>integrations/opencode/README.md</code> before adding its directory to your existing OpenCode <code>cli.json</code> plugins. The native copy is under <code>Contents/Resources/integrations/opencode</code>. No restart of the OpenCode service is needed. This preference does not install or enable anything. Other providers' communication is unavailable; detected process activity remains independent.</p></details>
+  </section>
+  <section><h3>Recently quiet notifications</h3><button id="notify" hidden></button><p>Optional OS notifications after observed activity becomes quiet—not a request for input. Permission is requested only when you enable them.</p></section>
+</dialog>
 <script type="module" src="/assets/app.js"></script>

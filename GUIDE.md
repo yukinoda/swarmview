@@ -3,7 +3,7 @@
 [← Overview and quick start](README.md)
 
 Use the dashboard to see activity across your coding agents, compare memory,
-and return to the right terminal. Click a task's **State / RAM** cells to open
+and return to the right terminal. Click a task's separate **Details** control to open
 **Details** for CPU and process age; opening it does not open a terminal. The
 metric help at the bottom explains the numbers without leaving your sessions.
 
@@ -14,7 +14,7 @@ metric help at the bottom explains the numbers without leaving your sessions.
 | `2 agents · 2 working` | Detected agent processes and how many are active; excludes subagent rows |
 | `2 working` | Working agents in this repository or worktree; quiet and worker counts appear separately |
 | `~1.6 GB` in RAM | Approximate resident RAM of the agent and its child processes |
-| `—` in the RAM column | Memory is unavailable, including for discovered Claude workers; not zero |
+| `—` in a process RAM cell, or unavailable metrics in worker Details | Missing measurements, not zero; live metadata workers omit empty process-metric cells |
 | `Process age: 1h` in Details | Process age, not duration of the current task |
 | `CPU 36%` in Details | Recent process-tree CPU use; 100% is one core, and values can exceed 100%. **Not task progress.** |
 | `OpenCode · dev:%42` | Agent identity and tmux session/pane target; not a metric |
@@ -43,10 +43,15 @@ notifications and the tab badge describe quiet activity, not confirmed attention
 Notifications fire once per quiet episode for agents seen working in that tab.
 Restarting Swarmview resets activity history.
 
-Native questions, permission requests, completion signals, and send/reply events
-are unavailable. Swarmview does not turn CPU activity or nesting into message
-pulses or claim that parentage proves communication. There is no transcript
-ingestion or communication-event history.
+Native questions, permission requests and task-completion signals are unavailable.
+Communication is off by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
+can show confirmed background admission (**Sent from parent**, blue), a correlated
+foreground return (**Reply received by parent**, teal), or an explicit
+**Attempted from parent · unconfirmed** observation (amber). Text carries the
+meaning as well as color. Cues clear after 2.5 seconds, with no history or replay;
+they do not change worker activity, imply success, or animate the tree.
+CPU activity and nesting never create communication observations. There is no
+transcript ingestion, and other providers have no communication adapter here.
 
 The main row shows the task title when known, with the agent name and tmux target
 underneath. OpenCode's `OC | …` pane title supplies its conversation title;
@@ -59,8 +64,11 @@ count once per process: it is a comparison tool, not a promise of reclaimable
 RAM. Swarmview does not infer reclaimable memory or recommend closing an agent
 merely because it is large or quiet. System RAM/swap indicators are macOS-only.
 
-Pin repositories, fold worktrees, and enable notifications with the
-**notification bell**. These preferences are stored in your browser. **Last updated** shows snapshot age even
+Pin repositories and fold worktrees in the overview. Open **Preferences** for
+System/Light/Dark appearance and opt-in quiet notifications. Opening Preferences
+does not request notification permission; enabling notifications is an explicit
+action. App preferences are stored in this page's browser profile, not agent CLI
+configuration. **Last updated** shows snapshot age even
 when the server is offline; the page retries failed or timed-out polls. After 15
 seconds, retained rows are labeled **stale**; failed polls label them **offline**.
 These states suppress quiet observations and badges instead of presenting old
@@ -70,8 +78,14 @@ Details also lets you hide/show a worker branch without folding its siblings.
 Hidden-worker counts include every worker descendant hidden by that branch,
 not just its direct children. Mixed process/worker branches are labeled nested
 agents rather than workers. Repository/worktree headers count each worker once
-and keep those totals when collapsed. Only task identity is indented;
-State and RAM stay aligned across the tree, including narrow screens.
+and keep those totals when collapsed. Only task identity is indented. Measured
+process activity and RAM stay aligned; live metadata workers use that space for
+identity, communication text and a visible Details control instead of empty
+metric cells. Their names open the mapped main agent's terminal, while
+communication refers to the immediate parent shown by the hierarchy. Preferences
+shows the actual communication capability and manual setup guidance; it does not
+install or enable the bridge. On narrow screens, worker rows reserve extra cue
+space so the unconfirmed qualifier can wrap without cue-induced row movement.
 
 ## Fast search
 
@@ -91,11 +105,14 @@ status:waiting
 status:quiet
 task:"review authentication"
 path:/feature pane:dev:%42
+kind:codex worktree:/feature
 pid:30394
 ```
 
-Fields are `task`, `agent`, `repo`, `path`, `status`, `pid`, and `pane`. Use `path:`
-or `repo:` to search full paths, and `pid:` for process IDs. PID
+Fields are `task`, `agent`, `kind`, `repo`, `path`, `worktree`, `status`, `pid`, and
+`pane`. `kind:` uses the normalized agent kind; full live-worker identities are
+also searchable without shortening. Use `path:`, `worktree:`, or `repo:` to search
+full paths, and `pid:` for process IDs. PID
 matching is exact; other fields use substrings. The palette displays at most
 **20 results**; refine the query to narrow larger sets. **↑/↓** move between
 selectable results and **Enter** opens the selected task (or the first match

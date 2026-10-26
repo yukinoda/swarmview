@@ -68,14 +68,14 @@ Requires macOS 13.3+; ad-hoc signed, not notarized.
 ## Read a task row
 
 ```text
-Task                    State     RAM
-Add request tracing     working   ~420 MB
-└ Task title            State     Agent RAM
-  Codex · dev:%3
-  └ Agent · tmux target (click the row to return to this pane)
+Task identity                  Process sample    Action
+Add request tracing                   working    Details
+OpenCode · dev:%3                     ~420 MB
+└ Worker abc123                                   Details
+  Sent from parent
 
-State / RAM → Details: CPU 13% · Process age: 24m
-            (separate disclosure, not a terminal action)
+Details → CPU 13% · Process age: 24m
+          (separate control, not a terminal action)
 ```
 
 | You see | It means |
@@ -98,7 +98,11 @@ CLI archives include `integrations/opencode` beside the binary; native apps
 include the same review-first files in
 `Contents/Resources/integrations/opencode`. Packaging them does not enable the
 plugin or change user settings; follow the manual setup linked above.
-Click a task's **State / RAM** cells for **Details**, or read the
+Use the separate **Details** control for CPU, process age, model and terminal
+context. Live metadata-worker rows keep unavailable process metrics in Details
+instead of showing empty metric cells; confirmed communication appears as plain
+colored text, not a worker activity state. Open **Preferences** for appearance
+and opt-in quiet notifications. Read the
 [dashboard guide](GUIDE.md#reading-the-dashboard) for status and metric definitions.
 
 ## Learn more

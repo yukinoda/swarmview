@@ -8,13 +8,14 @@ const activeFeedback = new Map();
 const communicationStatus = el('p');
 communicationStatus.id = 'communication-status';
 communicationStatus.hidden = true;
-document.body.append(communicationStatus);
+$('communication-info').append(communicationStatus);
 const communicationFeedback = el('p');
 communicationFeedback.id = 'communication-feedback';
 communicationFeedback.className = 'communication-announcement';
 communicationFeedback.hidden = true;
 communicationFeedback.setAttribute('role', 'status');
 communicationFeedback.setAttribute('aria-live', 'polite');
+communicationFeedback.setAttribute('aria-atomic', 'true');
 document.body.append(communicationFeedback);
 
 export function clearPulses() {
@@ -22,13 +23,14 @@ export function clearPulses() {
 }
 
 export function refreshCommunication(data) {
+  txt($('communication-capability'), data?.communication ? 'Enabled by server · OpenCode TUI metadata only' : 'Off · requires manual server and OpenCode TUI setup');
   communicationStatus.hidden = !data?.communication;
   communicationFeedback.hidden = !data?.communication;
   for (const entry of activeFeedback.values()) if (!entry.valid()) entry.clear();
 }
 
 function showFeedback(key, direction) {
-  if (document.hidden || readSnapshotState() || $('search-panel').open) return;
+  if (!readSnapshot()?.communication || document.hidden || readSnapshotState() || document.querySelector('dialog[open]')) return;
   const { item, child, parent } = getCommunicationRow(key);
   if (!item?.live || item.dying || !child || !parent || child.node.parentElement !== parent.kids) return;
   let entry = activeFeedback.get(key);
@@ -47,7 +49,7 @@ function showFeedback(key, direction) {
     entry = { label, line, parent: item.parent, pid: item.pid, timer: null, summary: '' };
     entry.valid = () => {
       const current = getCommunicationRow(key);
-      return readSnapshot()?.communication && !document.hidden && !readSnapshotState() && !$('search-panel').open &&
+      return readSnapshot()?.communication && !document.hidden && !readSnapshotState() && !document.querySelector('dialog[open]') &&
         current.item?.live && !current.item.dying && current.item.parent === entry.parent && current.item.pid === entry.pid &&
         current.child === child && current.parent === parent && child.node.isConnected &&
         parent.node.isConnected && child.node.parentElement === parent.kids && !child.node.closest('[hidden]');
@@ -56,16 +58,12 @@ function showFeedback(key, direction) {
       if (activeFeedback.get(key) !== entry) return;
       clearTimeout(entry.timer);
       label.remove();
-      line.classList.remove('communication-active');
-      child.context.classList.remove('has-communication');
       child.context.removeAttribute('data-communication');
       if (communicationFeedback.textContent === entry.summary) txt(communicationFeedback, '');
       activeFeedback.delete(key);
     };
     activeFeedback.set(key, entry);
     child.context.append(label);
-    child.context.classList.add('has-communication');
-    line.classList.add('communication-active');
   }
   const name = text => text.length > 160 ? text.slice(0, 160) + '…' : text;
   const from = name(direction === 'returned' ? child.name.textContent : parent.name.textContent);
@@ -74,12 +72,12 @@ function showFeedback(key, direction) {
     : direction === 'sent' ? 'Sent to worker' : 'Reply received';
   entry.summary = `${message}: ${from} → ${to} · observed live`;
   entry.direction = direction;
-  txt(entry.label, direction === 'attempted' ? 'Attempted' : direction === 'sent' ? 'Sent' : 'Reply');
+  txt(entry.label, direction === 'attempted' ? 'Attempted from parent · unconfirmed' : direction === 'sent' ? 'Sent from parent' : 'Reply received by parent');
   attr(entry.label, 'title', entry.summary);
   attr(child.context, 'data-communication', direction);
   txt(communicationFeedback, entry.summary);
   clearTimeout(entry.timer);
-  entry.timer = setTimeout(entry.clear, 1800);
+  entry.timer = setTimeout(entry.clear, 2500);
 }
 
 export function communicationStream() {
@@ -115,7 +113,7 @@ export function communicationStream() {
         : frame.workers.length ? 'Communication: observing live metadata only'
           : 'Communication: waiting for live worker metadata · requires opt-in OpenCode TUI bridge') +
       ' · other providers unavailable' + (communicationGap ? ' · some observations missing; no replay' : ''));
-    if (frame.key && ['attempted', 'sent', 'returned'].includes(frame.direction)) showFeedback(frame.key, frame.direction);
+    if (!frame.ambiguous && frame.key && ['attempted', 'sent', 'returned'].includes(frame.direction)) showFeedback(frame.key, frame.direction);
   };
   source.onerror = () => {
     if (communicationSource !== source) return;
