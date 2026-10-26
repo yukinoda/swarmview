@@ -825,22 +825,30 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
   for (const key of ['a:49000', 'a:49003', 'sub:scan-working']) {
     const row = rows.get(key);
     assert(getComputedStyle(row.name).color === activityColor && getComputedStyle(row.btn, '::before').borderTopColor === activityColor && row.st.textContent === 'working', 'each observed working row accents its own title and short branch while retaining status text, even when monitoring-only');
+    if (row.logo) assert(getComputedStyle(row.logo).color === activityColor && getComputedStyle(row.logo.querySelector('path')).fill === activityColor && row.logo.querySelector('path').getAttribute('d') === LOGOS[row.kind], 'working monochrome provider glyphs match the title using currentColor without changing their paths');
     assert(getComputedStyle(row.kids, '::before').borderLeftColor !== activityColor && getComputedStyle(row.node.parentElement, '::before').borderLeftColor !== activityColor, 'shared parent and child trunks never inherit a working row accent');
   }
   for (const key of ['a:49001', 'a:49002', 'sub:scan-quiet', 'sub:scan-unknown', 'live:scan']) {
     const row = rows.get(key);
     assert(getComputedStyle(row.name).color === foreground && getComputedStyle(row.btn, '::before').borderTopColor !== activityColor, 'quiet and unknown rows remain readable and never inherit activity from a parent or child');
+    if (row.logo) assert(getComputedStyle(row.logo).color !== activityColor && getComputedStyle(row.logo.querySelector('path')).fill !== activityColor, 'quiet/unknown provider glyphs do not inherit activity from working parents or children');
   }
   openSearch(); $('search').value = 'pid:49000'; applySearch();
-  assert(searchRows.get('a:49000').btn.disabled && getComputedStyle(searchRows.get('a:49000').name).color === activityColor, 'monitoring-only working titles retain the same activity cue in search'); closeSearch();
+  assert(searchRows.get('a:49000').btn.disabled && getComputedStyle(searchRows.get('a:49000').name).color === activityColor && getComputedStyle(searchRows.get('a:49000').logo.querySelector('path')).fill === activityColor, 'monitoring-only working titles and glyphs retain the same activity cue in search'); closeSearch();
   for (const retained of ['stale', 'offline']) {
     $('offline').hidden = retained !== 'offline'; freshness(activitySnapshot.at + 16000);
     for (const row of rows.values()) assert(getComputedStyle(row.name).color === foreground && getComputedStyle(row.btn, '::before').borderTopColor !== activityColor, 'stale/offline measurements cannot retain live working title or branch accents');
+    for (const row of rows.values()) if (row.logo) assert(getComputedStyle(row.logo).color !== activityColor, 'stale/offline glyphs cannot retain live activity color');
   }
   $('offline').hidden = true; freshness(activitySnapshot.at);
-  assert(getComputedStyle(rows.get('a:49000').name).color === activityColor, 'fresh recovery restores observed activity accents');
+  assert(getComputedStyle(rows.get('a:49000').name).color === activityColor && getComputedStyle(rows.get('a:49000').logo).color === activityColor, 'fresh recovery restores observed title and glyph accents');
   activitySnapshot.agents[0].recentCpu = 0; activitySnapshot.subagents[0].working = false; render(activitySnapshot);
   for (const key of ['a:49000', 'sub:scan-working']) assert(getComputedStyle(rows.get(key).name).color === foreground && getComputedStyle(rows.get(key).btn, '::before').borderTopColor !== activityColor, 'working-to-quiet updates remove title and branch accents without leaving inherited color');
+  assert(getComputedStyle(rows.get('a:49000').logo).color !== activityColor, 'working-to-quiet updates remove the provider glyph accent');
+  show([agent(49100, '/scan-fallback', { kind: 'unknown', recentCpu: .5 })]);
+  assert(rows.get('a:49100').logo.textContent === 'U' && getComputedStyle(rows.get('a:49100').logo).color === activityColor, 'working monogram fallbacks share the same activity cue without inventing a provider icon');
+  show([agent(49100, '/scan-fallback', { kind: 'unknown' })]);
+  assert(getComputedStyle(rows.get('a:49100').logo).color !== activityColor, 'quiet monogram fallbacks return to neutral');
 
   parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
   parent.document.body.dataset.uiTests = 'passed';

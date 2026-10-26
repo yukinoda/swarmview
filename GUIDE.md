@@ -35,7 +35,7 @@ details show their model when available rather than inventing process age or CPU
 | New | Process is less than 10 seconds old |
 | Exiting | Gone since the previous poll; shown briefly before removal |
 
-Working titles and their short incoming branches are green for at-a-glance activity;
+Working titles, monochrome provider glyphs and short incoming branches are green for at-a-glance activity;
 status text remains available without relying on color alone. Quiet and unknown
 titles stay readable, and shared vertical trunks remain neutral. Each accent uses
 that row's own observed activity, never its parent's state or a communication cue.

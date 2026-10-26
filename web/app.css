@@ -73,7 +73,7 @@ kbd { margin-left: 4px; border: 1px solid var(--line); border-radius: 4px; paddi
 .agent:hover:not(:disabled) { background: transparent; }
 .agent:disabled .kind { color: var(--fg); }
 .agent:hover:not(:disabled) .kind { color: var(--accent); }
-.s-working > .row-line > .agent .kind, .node.s-working > .agent .kind { color: var(--working); }
+.s-working > .row-line > .agent :is(.kind, .logo), .node.s-working > .agent :is(.kind, .logo) { color: var(--working); }
 .s-working > .row-line > .agent::before { border-top-color: var(--working); }
 .agent.busy { cursor: progress; }
 .identity { flex: 1; min-width: 0; }
