@@ -7,18 +7,40 @@ import { mkdtemp, mkdir, chmod, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+// Re-exports node:net for the plugin, but records each client socket and its end/destroy calls.
+const netSpy = `
+import { connect as realConnect } from 'node:net';
+export * from 'node:net';
+export function connect(...args) {
+  const socket = realConnect(...args);
+  socket.calls = [];
+  for (const method of ['end', 'destroy']) {
+    const original = socket[method].bind(socket);
+    socket[method] = (...rest) => {
+      socket.calls.push(method);
+      return original(...rest);
+    };
+  }
+  globalThis.__swarmviewSocket = socket;
+  globalThis.__swarmviewOnConnect?.(socket);
+  return socket;
+}`;
+
 test(
   'actual TUI plugin: route identity, owner-only transport, native signals and cleanup',
   { skip: typeof Module.registerHooks !== 'function' },
   async () => {
     const hooks = Module.registerHooks({
       resolve(specifier, context, next) {
+        const isPlugin = context.parentURL?.endsWith('/tui.ts');
         const code =
-          specifier === '@opencode/plugin/tui'
-            ? 'export const Plugin = { define: x => x };'
-            : specifier === 'solid-js'
-              ? 'export function createEffect(fn) { (globalThis.__swarmviewPulseEffects ??= []).push(fn); globalThis.__swarmviewPulseEffect ??= fn; fn(); } export function createSignal(value) { return [() => value, update => (value = typeof update === "function" ? update(value) : update)]; }'
-              : null;
+          specifier === 'node:net' && isPlugin
+            ? netSpy
+            : specifier === '@opencode/plugin/tui'
+              ? 'export const Plugin = { define: x => x };'
+              : specifier === 'solid-js'
+                ? 'export function createEffect(fn) { (globalThis.__swarmviewPulseEffects ??= []).push(fn); globalThis.__swarmviewPulseEffect ??= fn; fn(); } export function createSignal(value) { return [() => value, update => (value = typeof update === "function" ? update(value) : update)]; }'
+                : null;
         return code
           ? {
               url: 'data:text/javascript,' + encodeURIComponent(code),
@@ -190,6 +212,38 @@ test(
         cleanup = null;
         await chmod(target, target === directory ? 0o700 : 0o600);
       }
+      // A normal dispose says goodbye, then ends the socket so the line is flushed.
+      const sent = lines.length;
+      cleanup = plugin.setup(context);
+      await wait(() => lines.length > sent);
+      const gracefulSocket = globalThis.__swarmviewSocket;
+      cleanup();
+      cleanup = null;
+      await wait(() => lines.at(-1).type === 'bye');
+      await wait(() => sockets.size === 0);
+      assert.equal(gracefulSocket.calls[0], 'end');
+      const goodbye = lines.at(-1);
+      const presence = lines.findLast((x) => x.type === 'presence');
+      assert.equal(goodbye.service, presence.service);
+      assert.equal(goodbye.session, presence.session);
+      // Disposing while the socket is still connecting must destroy it without a goodbye.
+      const beforeEarly = lines.length;
+      let earlySocket;
+      let wasConnecting;
+      let disposeEarly;
+      globalThis.__swarmviewOnConnect = (socket) => {
+        earlySocket = socket;
+        wasConnecting = socket.connecting;
+        queueMicrotask(disposeEarly);
+      };
+      disposeEarly = plugin.setup(context);
+      await wait(() => earlySocket);
+      delete globalThis.__swarmviewOnConnect;
+      assert.equal(wasConnecting, true);
+      assert.deepEqual(earlySocket.calls.slice(0, 1), ['destroy']);
+      assert(!earlySocket.calls.includes('end'));
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      assert.equal(lines.length, beforeEarly);
       // Without a service identity the transport stays closed instead of timing out and reconnecting.
       cleanup = plugin.setup({
         ...context,
@@ -221,6 +275,8 @@ test(
       hooks.deregister();
       delete globalThis.__swarmviewPulseEffect;
       delete globalThis.__swarmviewPulseEffects;
+      delete globalThis.__swarmviewSocket;
+      delete globalThis.__swarmviewOnConnect;
     }
   },
 );

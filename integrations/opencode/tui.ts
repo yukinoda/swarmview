@@ -162,7 +162,15 @@ export default Plugin.define({
       clearInterval(heartbeat);
       stops.forEach((stop) => stop());
       unslot();
-      socket?.destroy();
+      if (socket && ready) {
+        // Tell the viewer this is a deliberate quit, then flush the line before closing.
+        observer.bye();
+        const connection = socket;
+        connection.end();
+        connection.once('finish', () => connection.destroy());
+      } else {
+        socket?.destroy();
+      }
       observer.reset();
     };
   },
