@@ -275,20 +275,26 @@ kbd {
   position: relative;
   --tree-step: 24px;
   --tree-pad: 16px;
-  --worker-pad: 44px;
-  --group-origin: 8px;
+  /* Titles start after the 20px logo and 8px gap; logo-less worker titles keep that column. */
+  --worker-pad: calc(var(--tree-pad) + 28px);
 }
 .kids:empty {
   display: none;
 }
 /* Resolve each child junction on its parent container, before the child overrides --depth. */
 .group > .kids {
-  --connector-origin: var(--group-origin);
+  --connector-origin: calc(var(--tree-pad) / 2);
 }
-/* The trunk drops from the parent's 20px logo; rows past the depth cap share the capped column. */
+/* The trunk drops from the parent's 20px logo, or from the start of a worker parent's title.
+   Rows at the depth cap share one column, so their children sit beside the parent. */
 .node > .kids {
   --connector-origin: calc(
     var(--tree-pad) + 10px + min(var(--depth, 0), 3) * var(--tree-step)
+  );
+}
+.node.worker > .kids {
+  --connector-origin: calc(
+    var(--worker-pad) + 4px + min(var(--depth, 0), 3) * var(--tree-step)
   );
 }
 .group > .kids::before,
@@ -416,7 +422,8 @@ kbd {
 .worker-caption {
   font-size: 12px;
   color: var(--mut);
-  padding: 6px 8px 10px 16px;
+  padding: 6px 8px 10px;
+  padding-left: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
 }
 .live-worker > .row-line {
   grid-template-columns: minmax(0, 1fr) 64px;
@@ -427,7 +434,7 @@ kbd {
 /* Workers have no logo, so their branch points at the title line instead of the row middle. */
 .worker > .row-line > .agent::before {
   top: 14px;
-  width: calc(var(--row-pad) - var(--connector-origin) - 6px);
+  width: calc(var(--row-pad) - var(--connector-origin) - 4px);
 }
 .live-worker > .row-line .context {
   min-height: 20px;
@@ -696,10 +703,8 @@ select {
     grid-template-columns: minmax(0, 1fr) 56px;
   }
   .kids {
-    --tree-step: 18px;
+    --tree-step: 16px;
     --tree-pad: 12px;
-    --worker-pad: 40px;
-    --group-origin: 6px;
   }
   .live-worker > .row-line .context {
     min-height: 40px;
@@ -707,9 +712,6 @@ select {
   .counts {
     gap: 2px 4px;
     font-size: 11px;
-  }
-  .worker-caption {
-    padding-left: 8px;
   }
   .detail-list {
     grid-template-columns: 95px minmax(0, 1fr);

@@ -2632,6 +2632,19 @@ const {
         'horizontal branches reach just short of the row logo or title: ' +
           JSON.stringify({ key, stubWidth, stubGap }),
       );
+      const parentRow = rows.get(row.item.parent),
+        parentDepth = parentRow ? +parentRow.node.style.getPropertyValue('--depth') : 0;
+      if (parentRow && parentDepth < 4) {
+        const parentContentLeft =
+            parentRow.btn.firstElementChild.getBoundingClientRect().left,
+          trunkOffset = trunkRight - 1 - parentContentLeft,
+          maxOffset = parentRow.item.sub ? 8 : 20;
+        assert(
+          trunkOffset >= 0 && trunkOffset <= maxOffset,
+          'child trunks drop from the parent logo, or the start of a worker parent title: ' +
+            JSON.stringify({ key, parentDepth, trunkOffset }),
+        );
+      }
       connectorJunctions.push({
         key,
         source: row.item.live ? 'live' : row.item.sub ? 'metadata' : 'process',
