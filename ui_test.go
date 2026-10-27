@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
@@ -100,6 +102,13 @@ func TestUI(t *testing.T) {
 		}
 		modules[name] = "const testWork = { calls: 0 };\n" + strings.Replace(string(code), signature, signature+" testWork.calls++;", 1) + "\nexport const testState = { work: testWork };\n"
 	}
+	if !strings.Contains(string(page), `<html lang="en">`) {
+		t.Fatal("index.html lacks the <html lang=\"en\"> injection point")
+	}
+	// Only the harness frames the page; production is never framed.
+	if !strings.Contains(csp, "frame-ancestors 'none'") {
+		t.Fatal("csp no longer contains frame-ancestors 'none'; update the harness override")
+	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if name, ok := strings.CutPrefix(r.URL.Path, "/assets/"); ok {
 			if code, ok := modules[name]; ok {
@@ -139,8 +148,24 @@ func TestUI(t *testing.T) {
 		if r.URL.Query().Get("platform") == "MacIntel" {
 			platform = "MacIntel"
 		}
-		init := "Object.defineProperty(navigator, 'platform', { value: " + string(marshal(platform)) + " });\n"
-		w.Write([]byte(strings.Replace(string(page), `<script type="module" src="/assets/app.js">`, "<script>"+init+`</script><script type="module" src="/assets/app.js">`, 1)))
+		// First in the document, so it also sees violations from the initial parse.
+		// A single line, so line numbers in violation reports match index.html.
+		platformScript := "Object.defineProperty(navigator, 'platform', { value: " +
+			string(marshal(platform)) + " }); "
+		violation := "e.violatedDirective + ' ' + e.blockedURI + " +
+			"' at ' + e.sourceFile + ':' + e.lineNumber"
+		recorder := "window.cspViolations = []; " +
+			"document.addEventListener('securitypolicyviolation', " +
+			"(e) => cspViolations.push(" + violation + "));"
+		init := platformScript + recorder
+		// Run under the production policy, allowing only the injected platform script.
+		sum := sha256.Sum256([]byte(init))
+		hash := base64.StdEncoding.EncodeToString(sum[:])
+		framed := strings.Replace(csp, "frame-ancestors 'none'", "frame-ancestors 'self'", 1)
+		policy := framed + "; script-src 'self' 'sha256-" + hash + "'"
+		w.Header().Set("Content-Security-Policy", policy)
+		injected := `<html lang="en"><script>` + init + `</script>`
+		w.Write([]byte(strings.Replace(string(page), `<html lang="en">`, injected, 1)))
 	}))
 	defer srv.Close()
 	// Four runs cover both shortcut platforms, compact/native widths, themes,
