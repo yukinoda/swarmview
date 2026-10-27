@@ -202,12 +202,19 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 		}
 		seenDir[dir] = true
 		// Several claude processes share this cwd: attribute sessions by each process's
-		// sessions/<pid>.json, read only in this ambiguous case.
+		// sessions/<pid>.json, read only in this ambiguous case. A session claimed by
+		// two processes (e.g. resumed in a second terminal) stays unattributed (0).
 		owner := map[string]int{}
 		if len(g.pids) > 1 {
 			for _, pid := range g.pids {
 				metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
-				if id, _ := readSessionID(metaPath, pid, g.cwd); id != "" {
+				id, _ := readSessionID(metaPath, pid, g.cwd)
+				if id == "" {
+					continue
+				}
+				if _, claimed := owner[id]; claimed {
+					owner[id] = 0
+				} else {
 					owner[id] = pid
 				}
 			}
@@ -269,7 +276,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				var pp *int
 				if len(g.pids) == 1 {
 					pp = &g.pids[0]
-				} else if pid, ok := owner[session]; ok {
+				} else if pid := owner[session]; pid != 0 {
 					pp = &pid
 				}
 				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, c.model, now-jt < 60e3})

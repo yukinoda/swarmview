@@ -157,8 +157,12 @@ session status or conversation metadata.
   Machine-wide warning colors require the macOS pressure signal; free RAM and
   existing swap alone do not establish pressure.
 - Claude Code has additional read-only subagent discovery under
-  `~/.claude/projects`. Matching is by working directory; an exact parent is
-  assigned only when one Claude agent runs in that directory.
+  `~/.claude/projects`. Matching is by working directory. When one Claude agent
+  runs in that directory it is the parent; when several do, the parent is the
+  agent whose `~/.claude/sessions/<pid>.json` (matching PID and working
+  directory) names the subagent's session. Sessions no running agent claims, or
+  that two agents claim, and older CLI versions without that file, have no
+  exact parent.
 - When Claude's pane title is generic or unavailable, generated task titles are
   read from `ai-title` metadata records in the last 64 KiB of the session JSONL.
   This requires matching PID and working directory metadata in

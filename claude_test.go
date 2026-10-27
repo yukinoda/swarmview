@@ -222,6 +222,16 @@ func TestTwoClaudeInCwdAttachBySessionMetadata(t *testing.T) {
 	if parents["a3"] != nil {
 		t.Error("a session no running process claims keeps a nil parentPid")
 	}
+
+	// a second live process resuming s101 makes its owner ambiguous
+	resumed := marshal(map[string]any{"pid": 102, "sessionId": s101, "cwd": "/w/a"})
+	must(t, os.WriteFile(filepath.Join(sessions, "102.json"), resumed, 0o644))
+	for _, s := range subs(root, now, claude(100, "/w/a"), claude(101, "/w/a"), claude(102, "/w/a")) {
+		parents[s.Id] = s.ParentPid
+	}
+	if parents["a1"] == nil || *parents["a1"] != 100 || parents["a2"] != nil {
+		t.Errorf("a doubly claimed session should stay unattributed: a1=%v a2=%v", parents["a1"], parents["a2"])
+	}
 }
 
 func TestSubagentEdgeCases(t *testing.T) {
