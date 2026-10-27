@@ -164,6 +164,19 @@ an instance is active would split the ownership lock. It stores no event/PID/
 session data. This serializes cooperating Swarmview instances; it is not a
 guarantee against a same-account program deliberately replacing private paths.
 
+A normal shutdown of a TUI with a selected session sends a final `bye` record
+and then closes the socket. `bye` ends the stream (later records are never
+read), and the viewer drops that TUI's workers without a missing-observation
+indication. Observations are session-scoped, so a TUI with no selected session
+(home screen, or quitting before the connection opens) sends no `bye` and its
+disconnect is never a loss. Any other disconnect of a TUI with a session
+is reported as lost: a crash or SIGKILL, a timeout, an invalid record, `bye` for
+the wrong session, a deliberate drop (the TUI closing the connection because its
+write queue backed up or a line was too long), or OpenCode switching to a
+replacement server (`server.connected`), where the bridge stops observing a
+still-running TUI. When Swarmview itself stops the bridge, no lost frame is
+sent, because the viewers are being torn down.
+
 Maximums: 16 TUI socket connections, 64 workers per TUI, 1024-byte protocol
 records, 64 records/second per TUI, 10-second missing-heartbeat expiry, four
 browser viewers, one transient frame per viewer, four simultaneous UI

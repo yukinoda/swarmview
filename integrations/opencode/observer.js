@@ -28,6 +28,9 @@ export function observeCommunication(
     session = nextSession;
     if (service) emit({ type: 'presence', service, session });
   }
+  function bye() {
+    if (service && session) emit({ type: 'bye', service, session });
+  }
   function reset() {
     calls.clear();
     workers.clear();
@@ -187,6 +190,7 @@ export function observeCommunication(
   }
   return {
     presence,
+    bye,
     reset,
     event,
     reconcile,

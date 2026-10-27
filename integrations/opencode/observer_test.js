@@ -69,6 +69,26 @@ function fixture() {
     },
   };
 }
+test('bye is emitted only once a service and session are selected', () => {
+  const output = [];
+  const observer = observeCommunication(
+    { data: { session: { get: () => undefined } } },
+    (m) => output.push(m),
+  );
+  observer.bye();
+  assert.deepEqual(output, []);
+  observer.presence('12:2.1.4', '');
+  observer.bye();
+  assert(output.every((m) => m.type !== 'bye'));
+  observer.presence('12:2.1.4', 'ses_root');
+  observer.bye();
+  assert.deepEqual(output.at(-1), {
+    type: 'bye',
+    service: '12:2.1.4',
+    session: 'ses_root',
+  });
+});
+
 test('progress is an attempt, unrelated inbox admission never confirms send; foreground returns once', () => {
   const f = fixture();
   f.start();

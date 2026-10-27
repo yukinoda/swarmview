@@ -63,6 +63,9 @@ type pulseBridge struct {
 	closed  bool
 }
 
+// errBye ends a peer's stream after its goodbye record: a deliberate, lossless quit.
+var errBye = errors.New("peer said goodbye")
+
 var pulseID = regexp.MustCompile(`^ses[a-zA-Z0-9_-]{1,120}$`)
 var pulseService = regexp.MustCompile(`^[a-f0-9]{64}:2\.1\.[34]$`)
 
@@ -76,7 +79,8 @@ func decodePulse(b []byte) (pulseMessage, error) {
 	if m.Seq == 0 || !pulseService.MatchString(m.Service) || (m.Session != "" && !pulseID.MatchString(m.Session)) {
 		return m, errors.New("invalid live metadata")
 	}
-	if (m.Type == "presence" || m.Type == "gap") && m.Child == "" && m.Parent == "" {
+	bare := m.Type == "presence" || m.Type == "gap" || m.Type == "bye"
+	if bare && m.Child == "" && m.Parent == "" {
 		return m, nil
 	}
 	switch m.Type {
@@ -191,10 +195,16 @@ func (b *pulseBridge) accept(s *server, c net.Conn) {
 	}
 	b.peers[p] = c
 	b.mu.Unlock()
+	clean := false
 	defer func() {
 		b.mu.Lock()
 		delete(b.peers, p)
-		b.broadcastLocked("", "", true)
+		// Observations are session-scoped; a peer that never selected a session has nothing to lose.
+		lost := !clean && p.session != ""
+		// On bridge shutdown the viewers are being torn down; nothing to report.
+		if !b.closed {
+			b.broadcastLocked("", "", lost)
+		}
 		b.mu.Unlock()
 	}()
 	scan := bufio.NewScanner(c)
@@ -221,6 +231,7 @@ func (b *pulseBridge) accept(s *server, c net.Conn) {
 		err = b.applyLocked(p, m)
 		b.mu.Unlock()
 		if err != nil {
+			clean = errors.Is(err, errBye)
 			return
 		}
 	}
@@ -244,6 +255,9 @@ func (b *pulseBridge) applyLocked(p *pulsePeer, m pulseMessage) error {
 	}
 	if p.service != m.Service || p.session == "" || p.session != m.Session {
 		return errors.New("session mismatch")
+	}
+	if m.Type == "bye" {
+		return errBye
 	}
 	if m.Type == "gap" {
 		b.broadcastLocked("", "", true)
