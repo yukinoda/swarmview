@@ -1340,11 +1340,16 @@ const {
     };
     checkOverviewWidth();
     // Classic scrollbars consume layout width; overlay scrollbars do not. Test both without resizing.
-    const scrollbarFixture = document.createElement('style'),
+    const scrollbarFixture = new CSSStyleSheet(),
       originalViewport = [innerWidth, innerHeight];
-    scrollbarFixture.textContent =
-      'html { overflow-y: scroll; scrollbar-gutter: stable; } html::-webkit-scrollbar { width: 17px; }';
-    document.head.append(scrollbarFixture);
+    scrollbarFixture.replaceSync(
+      'html { overflow-y: scroll; scrollbar-gutter: stable; } ' +
+        'html::-webkit-scrollbar { width: 17px; }',
+    );
+    document.adoptedStyleSheets = [
+      ...document.adoptedStyleSheets,
+      scrollbarFixture,
+    ];
     try {
       assert(
         innerWidth === originalViewport[0] &&
@@ -1358,7 +1363,9 @@ const {
       );
       checkOverviewWidth();
     } finally {
-      scrollbarFixture.remove();
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+        (s) => s !== scrollbarFixture,
+      );
     }
     if (window.innerWidth >= 560)
       assert(
@@ -2803,12 +2810,19 @@ const {
       'quiet monogram fallbacks return to neutral',
     );
 
+    await new Promise((r) => setTimeout(r)); // violation events are queued tasks
+    assert(
+      !cspViolations.length,
+      'no Content-Security-Policy violations: ' + cspViolations.join(', '),
+    );
     parent.document.body.dataset.searchMs = document.body.dataset.searchMs;
     parent.document.body.dataset.uiTests = 'passed';
   } catch (error) {
     parent.document.body.dataset.uiTests = 'failed';
     const failure = document.createElement('pre');
-    failure.textContent = error.stack;
+    failure.textContent =
+      error.stack +
+      (cspViolations.length ? ' | CSP: ' + cspViolations.join(', ') : '');
     parent.document.body.append(failure);
   }
 })();

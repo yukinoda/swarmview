@@ -61,16 +61,11 @@ func (t *procTree) paneFor(pid int, panes map[int]tmuxPane) (tmuxPane, bool) {
 }
 
 func focusAgent(pid int, agents []Agent, run Runner, ghostty bool) (bool, string) {
-	var agent *Agent
-	for i := range agents {
-		if agents[i].Pid == pid {
-			agent = &agents[i]
-			break
-		}
-	}
-	if agent == nil {
+	i := slices.IndexFunc(agents, func(a Agent) bool { return a.Pid == pid })
+	if i < 0 {
 		return false, "unknown pid"
 	}
+	agent := &agents[i]
 	if !paneRe.MatchString(agent.pane) {
 		return false, "not in a tmux pane"
 	}

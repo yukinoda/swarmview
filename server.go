@@ -130,10 +130,22 @@ func (s *server) writeJSON(w http.ResponseWriter, code int, v any, extra ...stri
 	w.Write(marshal(v))
 }
 
+// The UI loads only same-origin scripts, styles, fetches, and its data: favicon badge.
+const csp = "default-src 'self'; " +
+	"img-src 'self' data:; " +
+	"object-src 'none'; " +
+	"base-uri 'none'; " +
+	"form-action 'none'; " +
+	"frame-ancestors 'none'"
+
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	local := func(prefix string) []string {
 		return []string{fmt.Sprintf("%s127.0.0.1:%d", prefix, s.port), fmt.Sprintf("%slocalhost:%d", prefix, s.port)}
 	}
+	h := w.Header() // restrict content, framing, and MIME sniffing
+	h.Set("content-security-policy", csp)
+	h.Set("x-frame-options", "DENY")
+	h.Set("x-content-type-options", "nosniff")
 	// State-changing and live routes refuse requests from another site.
 	crossSite := func() bool {
 		o := r.Header.Get("Origin")
@@ -143,10 +155,6 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(403)
 		return
 	}
-	h := w.Header() // block clickjacking and MIME sniffing
-	h.Set("content-security-policy", "frame-ancestors 'none'")
-	h.Set("x-frame-options", "DENY")
-	h.Set("x-content-type-options", "nosniff")
 	switch r.Method + " " + r.RequestURI {
 	case "GET /":
 		w.Header().Set("content-type", "text/html")

@@ -193,14 +193,28 @@ func TestStaticCommunicationFeedback(t *testing.T) {
 
 func TestSecurityHeaders(t *testing.T) {
 	s := srvWith(func(string, ...string) (string, error) { return "", nil })
-	w := do(s, "GET", "/", "127.0.0.1:4777", nil, "")
-	for k, v := range map[string]string{
-		"Content-Security-Policy": "frame-ancestors 'none'",
-		"X-Frame-Options":         "DENY",
-		"X-Content-Type-Options":  "nosniff",
-	} {
-		if got := w.Header().Get(k); got != v {
-			t.Errorf("%s = %q, want %q", k, got, v)
+	// The bad-host 403 must carry the headers too.
+	for _, tc := range []struct {
+		host string
+		code int
+	}{{"127.0.0.1:4777", 200}, {"evil.com", 403}} {
+		w := do(s, "GET", "/", tc.host, nil, "")
+		for k, v := range map[string]string{
+			"Content-Security-Policy": "default-src 'self'; " +
+				"img-src 'self' data:; " +
+				"object-src 'none'; " +
+				"base-uri 'none'; " +
+				"form-action 'none'; " +
+				"frame-ancestors 'none'",
+			"X-Frame-Options":        "DENY",
+			"X-Content-Type-Options": "nosniff",
+		} {
+			if got := w.Header().Get(k); got != v {
+				t.Errorf("%s: %s = %q, want %q", tc.host, k, got, v)
+			}
+		}
+		if w.Code != tc.code {
+			t.Errorf("%s: code %d, want %d", tc.host, w.Code, tc.code)
 		}
 	}
 }
