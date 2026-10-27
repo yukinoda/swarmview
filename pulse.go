@@ -191,7 +191,12 @@ func (b *pulseBridge) accept(s *server, c net.Conn) {
 	}
 	b.peers[p] = c
 	b.mu.Unlock()
-	defer func() { b.mu.Lock(); delete(b.peers, p); b.broadcastLocked("", "", true); b.mu.Unlock() }()
+	defer func() {
+		b.mu.Lock()
+		delete(b.peers, p)
+		b.broadcastLocked("", "", true)
+		b.mu.Unlock()
+	}()
 	scan := bufio.NewScanner(c)
 	scan.Buffer(make([]byte, 1025), 1024)
 	second, count := time.Now().Unix(), 0

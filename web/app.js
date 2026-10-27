@@ -68,13 +68,23 @@ async function poll() {
 }
 
 setupCommunication({ snapshot: () => lastData, snapshotState, render, freshness });
-setupDashboard(() => { clearPulses(); return lastData && render(lastData, true); }, clearPulses, snapshotState);
+setupDashboard(
+  () => {
+    clearPulses();
+    return lastData && render(lastData, true);
+  },
+  clearPulses,
+  snapshotState
+);
 setupSearch(snapshotState, () => {
   clearPulses();
   closeDetails();
   if ($('preferences-dialog').open) $('close-preferences').click();
 });
-setupPreferences(() => { clearPulses(); closeDetails(); });
+setupPreferences(() => {
+  clearPulses();
+  closeDetails();
+});
 setupNotifications(focusAgent);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
