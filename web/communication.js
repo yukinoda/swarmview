@@ -99,7 +99,7 @@ export function communicationStream() {
     // All worker presentation fields, including order; metrics still update through ordinary polls.
     const unchanged = frame.workers.length === previous.length && frame.workers.every((worker, index) =>
       worker.key === previous[index].key && worker.parent === previous[index].parent && worker.pid === previous[index].pid);
-    if (!unchanged) { clearPulses(); renderSnapshot({ ...snapshot, liveWorkers: frame.workers }); }
+    if (!unchanged) { clearPulses(); renderSnapshot({ ...snapshot, liveWorkers: frame.workers }, true); } // a stream frame is not a new poll
     else refreshSnapshot();
     if (frame.lost) {
       clearPulses();
@@ -117,6 +117,8 @@ export function communicationStream() {
   };
   source.onerror = () => {
     if (communicationSource !== source) return;
+    // Non-200 replies (e.g. viewer limit) close without retry; let the next poll reconnect.
+    if (source.readyState === 2) communicationSource = null; // EventSource.CLOSED
     communicationGap = true;
     clearPulses();
     txt(communicationStatus, 'Communication disconnected · observations may be missing; no replay');

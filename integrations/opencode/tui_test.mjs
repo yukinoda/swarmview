@@ -68,6 +68,10 @@ test('actual TUI plugin: route identity, owner-only transport, native signals an
       await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(sockets.size, 0);
       cleanup(); cleanup = null; await chmod(target, target === directory ? 0o700 : 0o600);
     }
+    // Without a service identity the transport stays closed instead of timing out and reconnecting.
+    cleanup = plugin.setup({ ...context, client: { server: { async info() { throw new Error('unavailable'); } } } });
+    await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(sockets.size, 0);
+    cleanup(); cleanup = null;
     assert.equal(plugin.setup({ ...context, app: { version: '1.9.0' } }), undefined);
   } finally {
     cleanup?.(); for (const socket of sockets) socket.destroy(); await new Promise(resolve => server.close(resolve));

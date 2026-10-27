@@ -63,6 +63,10 @@ func TestPulseStateAndLoss(t *testing.T) {
 		t.Fatal("accepted cycle")
 	}
 	seq++
+	if err := b.applyLocked(p, pulseMessage{"sent", seq, service, "ses_root", "ses_root", "ses_child"}); err == nil {
+		t.Fatal("accepted the selected session as its own worker")
+	}
+	seq++
 	if err := b.applyLocked(p, pulseMessage{"sent", seq, service, "ses_wrong", "ses_x", "ses_wrong"}); err == nil {
 		t.Fatal("accepted mismatched session")
 	}

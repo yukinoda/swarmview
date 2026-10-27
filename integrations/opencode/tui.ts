@@ -30,14 +30,16 @@ export default Plugin.define({
       service = ''; observer.reset();
       try {
         const info = await context.client.server.info({ signal: AbortSignal.timeout(2000) });
-        if (stopped || !['2.1.3', '2.1.4'].includes(info.version)) return;
+        if (!['2.1.3', '2.1.4'].includes(info.version)) stopped = true;
+        if (stopped) return;
         // Namespace by the connected service descriptor, not PID alone across hosts.
         const identity = JSON.stringify([info.pid, info.version, [...info.urls].sort(), info.paths.tmp]);
         service = `${createHash('sha256').update(identity).digest('hex')}:${info.version}`; presence();
       } catch { /* A cosmetic observer must never block the TUI. */ }
     }
     async function attach() {
-      if (socket || stopped || connecting) return;
+      // Without a service identity the server would only time the connection out; identify first.
+      if (socket || stopped || connecting || !service) return;
       connecting = true;
       try {
         const [directory, endpoint] = await Promise.all([lstat(join(cache, 'swarmview')), lstat(path)]);
@@ -64,8 +66,8 @@ export default Plugin.define({
       stopped = true; service = ''; observer.presence('', ''); socket?.destroy();
       clearInterval(heartbeat);
     }));
-    void identify(); void attach();
-    if (!stopped) heartbeat = setInterval(() => { void attach(); if (ready) { presence(); observer.reconcile(); } }, 3000);
+    void identify().then(attach);
+    if (!stopped) heartbeat = setInterval(() => { if (!service) void identify().then(attach); else void attach(); if (ready) { presence(); observer.reconcile(); } }, 3000);
     return () => { stopped = true; clearInterval(heartbeat); stops.forEach(stop => stop()); unslot(); socket?.destroy(); observer.reset(); };
   },
 });

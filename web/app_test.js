@@ -88,6 +88,9 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     const detailsFocus = document.activeElement;
     show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
     assert($('detail-dialog').open && document.activeElement === detailsFocus, 'snapshot updates preserve details and keyboard focus');
+    const polledDetails = $('detail-body').firstChild;
+    show([{ ...a, recentCpu: 1.36, memBytes: 1.6 * GB }]);
+    assert($('detail-body').firstChild === polledDetails, 'an unchanged poll keeps the open Details DOM even though snapshot objects are rebuilt');
     closeDetails();
     assert(!$('detail-dialog').open && !$('detail-body').children.length && document.activeElement === metrics.toggle && metrics.toggle.getAttribute('aria-expanded') === 'false', 'details close independently, release DOM, and return keyboard focus');
     assert(detailRequests === 0, 'details never requests terminal focus');
@@ -749,6 +752,9 @@ const { activeFeedback, showFeedback, communicationFeedback, communicationStatus
     assert(activeFeedback.size === 0 && !communication.source, 'disabled capability clears feedback even if a retained graph is still supplied');
     render({ agents: [liveHost], at: Date.now() }); communicationStream();
     assert(opens === 2 && !communication.source && rows.size === 1, 'disabled bridge has no connection and releases live worker rows immediately');
+    render(liveSnapshot); communicationStream(); assert(opens === 3, 'enabled bridge reconnects');
+    const refused = stream; refused.readyState = 2; refused.onerror(); communicationStream(); // EventSource.CLOSED, e.g. 503 viewer limit
+    assert(opens === 4 && stream !== refused && communication.source === stream, 'a closed (non-200) stream reconnects on the next poll instead of staying disconnected');
   } finally { delete document.hidden; communication.closeSource(); window.EventSource = previousEventSource; clearPulses(); }
 
   const detailA = agent(46000, '/details-review', { title: 'Details A', recentCpu: .5, memBytes: 123 * MB, canFocus: true, tmuxAttached: true, tmuxTarget: 'review:%1' });

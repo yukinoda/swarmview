@@ -237,6 +237,9 @@ func (b *pulseBridge) applyLocked(p *pulsePeer, m pulseMessage) error {
 		b.broadcastLocked("", "", true)
 		return nil
 	}
+	if m.Child == p.session {
+		return errors.New("worker cycle")
+	}
 	if m.Parent != p.session {
 		if _, ok := p.workers[m.Parent]; !ok {
 			return errors.New("unknown parent")

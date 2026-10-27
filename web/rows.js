@@ -49,12 +49,6 @@ export function refreshDetails(retained = readDetailsState()) {
   if (!selectedRow) return;
   const { item, row, parent, host } = detailLookup(selectedRow.item.key);
   if (!item || row !== selectedRow || item.dying || ![item.pid, item.parent, item.live, item.sub].every((value, i) => value === selectedIdentity[i]) || !row.node.isConnected) { closeDetails(); return; }
-  const current = [item, parent, host, row.fold, retained];
-  if (detailCurrent && current.every((value, i) => value === detailCurrent[i])) return;
-  detailCurrent = current;
-  txt($('detail-title'), item.name);
-  const body = $('detail-body'), hadFocus = body.contains(document.activeElement), focusID = document.activeElement.id;
-  const list = el('dl', 'detail-list');
   const pairs = [
     ['Provider', item.agentName],
     ['Source', item.live ? 'Live OpenCode session metadata' : item.sub ? 'Read-only Claude worker metadata · log-write activity, not CPU' : 'Detected process · PID ' + item.pid],
@@ -65,6 +59,13 @@ export function refreshDetails(retained = readDetailsState()) {
     ['Approx. RAM', item.mem == null ? 'Unavailable' : '~' + fmtBytes(item.mem) + ' · process-tree RSS'],
     ['CPU', item.cpu], ['Process age', item.up], ['Model', item.model || 'Unavailable']
   ];
+  // Snapshots rebuild item/fold objects every poll; compare what is shown so an open dialog keeps its DOM.
+  const current = JSON.stringify([item.name, pairs, item.sub, row.btn.disabled, row.note?.textContent, row.fold?.count, row.fold?.label, row.fold?.closed]);
+  if (current === detailCurrent) return;
+  detailCurrent = current;
+  txt($('detail-title'), item.name);
+  const body = $('detail-body'), hadFocus = body.contains(document.activeElement), focusID = document.activeElement.id;
+  const list = el('dl', 'detail-list');
   for (const [key, value] of pairs) list.append(elText('dt', key), elText('dd', value));
   const help = elText('p', 'Activity is not progress or a request for input. RSS is approximate, not additive physical memory or guaranteed reclaimable RAM. CPU 100% is one core, not task progress. Process age is not task duration.');
   help.className = 'detail-help';
