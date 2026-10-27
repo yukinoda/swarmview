@@ -2625,9 +2625,12 @@ const {
       const stubLeft =
           row.btn.getBoundingClientRect().left + parseFloat(stub.left),
         stubWidth = parseFloat(stub.width);
+      const contentLeft = row.btn.firstElementChild.getBoundingClientRect().left,
+        stubGap = contentLeft - (stubLeft + stubWidth);
       assert(
-        stubWidth === (innerWidth <= 480 ? 5 : 6),
-        'connector repair retains the existing compact/native horizontal stub lengths',
+        stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
+        'horizontal branches reach just short of the row logo or title: ' +
+          JSON.stringify({ key, stubWidth, stubGap }),
       );
       connectorJunctions.push({
         key,
