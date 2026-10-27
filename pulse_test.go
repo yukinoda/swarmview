@@ -185,17 +185,38 @@ func pulseWait(t *testing.T, b *pulseBridge, condition func() bool) {
 	t.Fatal("live state did not settle")
 }
 
+// pulseSnap returns a fresh snapshot; the cache expires after a second.
+func pulseSnap(kind string) *snap {
+	agents := []Agent{{Pid: os.Getpid(), Kind: kind}}
+	return &snap{at: time.Now().UnixMilli(), agents: agents}
+}
+
+// pulseDial refreshes the snapshot so the bridge accepts this process as the peer, then connects.
+func pulseDial(t *testing.T, s *server, b *pulseBridge, kind string) net.Conn {
+	t.Helper()
+	s.mu.Lock()
+	s.snap = pulseSnap(kind)
+	s.mu.Unlock()
+	c, err := net.Dial("unix", b.path)
+	must(t, err)
+	return c
+}
+
+func pulseLine(kind string, seq int) string {
+	return pulseSessionLine("ses_root", kind, seq)
+}
+
+func pulseSessionLine(session, kind string, seq int) string {
+	service := strings.Repeat("a", 64) + ":2.1.4"
+	line := fmt.Sprintf(`{"type":%q,"seq":%d,"service":%q,"session":%q}`, kind, seq, service, session)
+	return line + "\n"
+}
+
 func TestPulseSocketBoundary(t *testing.T) {
-	root, err := os.MkdirTemp("", "sv-")
-	must(t, err)
-	defer os.RemoveAll(root)
-	t.Setenv("HOME", root)
-	t.Setenv("XDG_CACHE_HOME", root)
-	cache, err := os.UserCacheDir()
-	must(t, err)
-	dir := filepath.Join(cache, "swarmview")
-	must(t, os.MkdirAll(dir, 0755))
-	s := &server{snap: &snap{at: time.Now().UnixMilli(), agents: []Agent{{Pid: os.Getpid(), Kind: "opencode"}}}}
+	_, socket := pulseHome(t)
+	dir := filepath.Dir(socket)
+	must(t, os.Chmod(dir, 0755))
+	s := &server{snap: pulseSnap("opencode")}
 	b := newPulseBridge()
 	if b.start(s) == nil {
 		b.close()
@@ -213,22 +234,9 @@ func TestPulseSocketBoundary(t *testing.T) {
 		other.close()
 		t.Fatal("replaced existing live listener")
 	}
-	service := strings.Repeat("a", 64) + ":2.1.4"
-	line := func(kind string, seq int) string {
-		return fmt.Sprintf(`{"type":%q,"seq":%d,"service":%q,"session":"ses_root"}`, kind, seq, service) + "\n"
-	}
 	kind := "opencode"
-	connect := func() net.Conn {
-		t.Helper()
-		s.mu.Lock()
-		s.snap = &snap{at: time.Now().UnixMilli(), agents: []Agent{{Pid: os.Getpid(), Kind: kind}}}
-		s.mu.Unlock()
-		c, e := net.Dial("unix", b.path)
-		must(t, e)
-		return c
-	}
-	c := connect()
-	_, err = io.WriteString(c, line("presence", 1))
+	c := pulseDial(t, s, b, kind)
+	_, err = io.WriteString(c, pulseLine("presence", 1))
 	must(t, err)
 	pulseWait(t, b, func() bool {
 		for p := range b.peers {
@@ -241,8 +249,8 @@ func TestPulseSocketBoundary(t *testing.T) {
 	// The live kernel-authenticated socket, not a reusable PID cache, owns identity.
 	c.Close()
 	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
-	for _, bad := range []string{`{"pid":999}` + "\n", strings.Repeat("x", 1025) + "\n", line("unknown", 1)} {
-		c = connect()
+	for _, bad := range []string{`{"pid":999}` + "\n", strings.Repeat("x", 1025) + "\n", pulseLine("unknown", 1)} {
+		c = pulseDial(t, s, b, kind)
 		io.WriteString(c, bad)
 		c.SetReadDeadline(time.Now().Add(time.Second))
 		_, err = c.Read(make([]byte, 1))
@@ -252,9 +260,9 @@ func TestPulseSocketBoundary(t *testing.T) {
 		}
 		pulseWait(t, b, func() bool { return len(b.peers) == 0 })
 	}
-	c = connect()
+	c = pulseDial(t, s, b, kind)
 	for i := 1; i <= 200; i++ {
-		if _, e := io.WriteString(c, line("presence", i)); e != nil {
+		if _, e := io.WriteString(c, pulseLine("presence", i)); e != nil {
 			break
 		}
 	}
@@ -265,8 +273,8 @@ func TestPulseSocketBoundary(t *testing.T) {
 		t.Fatal("unbounded protocol burst accepted")
 	}
 	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
-	c = connect()
-	_, err = io.WriteString(c, line("presence", 1))
+	c = pulseDial(t, s, b, kind)
+	_, err = io.WriteString(c, pulseLine("presence", 1))
 	must(t, err)
 	pulseWait(t, b, func() bool {
 		for p := range b.peers {
@@ -284,12 +292,97 @@ func TestPulseSocketBoundary(t *testing.T) {
 	}
 	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
 	kind = "claude"
-	c = connect()
+	c = pulseDial(t, s, b, kind)
 	c.SetReadDeadline(time.Now().Add(time.Second))
 	_, err = c.Read(make([]byte, 1))
 	c.Close()
 	if err != io.EOF {
 		t.Fatalf("non-OpenCode peer accepted: %v", err)
+	}
+}
+
+// pulseViewer registers a viewer queue directly and returns a receive helper with a timeout.
+func pulseViewer(t *testing.T, b *pulseBridge) (chan pulseFrame, func(string) pulseFrame) {
+	t.Helper()
+	ch := make(chan pulseFrame, pulseQueue)
+	b.mu.Lock()
+	b.viewers[ch] = true
+	b.mu.Unlock()
+	frame := func(what string) pulseFrame {
+		t.Helper()
+		select {
+		case f := <-ch:
+			return f
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no frame: %s", what)
+		}
+		return pulseFrame{}
+	}
+	return ch, frame
+}
+
+func TestPulseDisconnectLoss(t *testing.T) {
+	pulseHome(t)
+	s := &server{snap: pulseSnap("opencode")}
+	b := newPulseBridge()
+	must(t, b.start(s))
+	defer b.close()
+	ch, frame := pulseViewer(t, b)
+	rootPresence := pulseLine("presence", 1)
+	homePresence := pulseSessionLine("", "presence", 1) // a TUI on a non-session screen
+	for _, tc := range []struct {
+		name       string
+		presence   string
+		lines      []string
+		closeFirst bool // the peer hangs up; otherwise the bridge must drop it
+		lost       bool
+	}{
+		{"goodbye", rootPresence, []string{pulseLine("bye", 2)}, true, false},
+		{"records after goodbye are never read", rootPresence, []string{pulseLine("bye", 2), pulseLine("gap", 3)}, true, false},
+		{"close without goodbye", rootPresence, nil, true, true},
+		{"invalid line", rootPresence, []string{"{\n"}, false, true},
+		{"goodbye for another session", rootPresence, []string{pulseSessionLine("ses_other", "bye", 2)}, false, true},
+		{"goodbye without a session", homePresence, []string{pulseSessionLine("", "bye", 2)}, true, false},
+		{"close without a session", homePresence, nil, true, false},
+	} {
+		c := pulseDial(t, s, b, "opencode")
+		_, err := io.WriteString(c, tc.presence)
+		must(t, err)
+		frame(tc.name + " presence")
+		for _, l := range tc.lines {
+			_, err = io.WriteString(c, l)
+			must(t, err)
+		}
+		if tc.closeFirst {
+			c.Close()
+		}
+		last := frame(tc.name + " disconnect")
+		pulseWait(t, b, func() bool { return len(b.peers) == 0 })
+		if !tc.closeFirst {
+			c.Close()
+		}
+		if last.Lost != tc.lost || len(ch) != 0 {
+			t.Fatalf("%s: lost=%v queued=%d, want lost=%v and nothing else", tc.name, last.Lost, len(ch), tc.lost)
+		}
+	}
+}
+
+func TestPulseBridgeCloseIsNotLoss(t *testing.T) {
+	pulseHome(t)
+	s := &server{snap: pulseSnap("opencode")}
+	b := newPulseBridge()
+	must(t, b.start(s))
+	defer b.close()
+	ch, frame := pulseViewer(t, b)
+	c := pulseDial(t, s, b, "opencode")
+	defer c.Close()
+	_, err := io.WriteString(c, pulseLine("presence", 1))
+	must(t, err)
+	frame("presence")
+	b.close()
+	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
+	if len(ch) != 0 {
+		t.Fatal("bridge shutdown broadcast a frame")
 	}
 }
 

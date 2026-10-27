@@ -17,6 +17,7 @@ import (
 
 func pulseHome(t *testing.T) (string, string) {
 	t.Helper()
+	// t.TempDir() makes the unix socket path too long on macOS.
 	home, err := os.MkdirTemp("", "s-")
 	must(t, err)
 	t.Cleanup(func() { os.RemoveAll(home) })
