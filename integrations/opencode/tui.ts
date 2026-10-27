@@ -30,7 +30,7 @@ export default Plugin.define({
       service = ''; observer.reset();
       try {
         const info = await context.client.server.info({ signal: AbortSignal.timeout(2000) });
-        if (!['2.1.3', '2.1.4'].includes(info.version)) stopped = true;
+        if (!['2.1.3', '2.1.4'].includes(info.version)) { stopped = true; clearInterval(heartbeat); }
         if (stopped) return;
         // Namespace by the connected service descriptor, not PID alone across hosts.
         const identity = JSON.stringify([info.pid, info.version, [...info.urls].sort(), info.paths.tmp]);
