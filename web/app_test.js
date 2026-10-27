@@ -1953,6 +1953,8 @@ const {
       workerLabel = liveRow.name.textContent;
     liveParent.name.textContent = 'Parent '.repeat(24);
     liveRow.name.textContent = 'Worker '.repeat(24);
+    // Long labels wrap the nested compact rows; feedback is only shown for an onscreen worker.
+    liveRow.btn.scrollIntoView({ block: 'nearest' });
     showFeedback('live:test:0', 'returned');
     assert(
       communicationFeedback.textContent.length <= 400 &&
@@ -1961,6 +1963,7 @@ const {
     );
     liveParent.name.textContent = parentLabel;
     liveRow.name.textContent = workerLabel;
+    window.scrollTo(0, 0);
     clearPulses();
     showFeedback('live:test:24', 'sent');
     assert(
