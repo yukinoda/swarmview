@@ -32,9 +32,11 @@ jobs:
           export GOOS="${TARGET%-*}" GOARCH="${TARGET#*-}"
           mkdir -p dist
           go build -trimpath -ldflags='-s -w' -o dist/swarmview .
-          tar -czf "swarmview_${GITHUB_REF_NAME}_${TARGET}.tar.gz" \
+          COPYFILE_DISABLE=1 tar -czf "swarmview_${GITHUB_REF_NAME}_${TARGET}.tar.gz" \
             -C dist swarmview -C "$GITHUB_WORKSPACE" \
-            LICENSE README.md GUIDE.md COMPATIBILITY.md CONTRIBUTING.md SECURITY.md assets
+            LICENSE README.md GUIDE.md COMPATIBILITY.md CONTRIBUTING.md SECURITY.md assets \
+            integrations/opencode/package.json integrations/opencode/tui.ts \
+            integrations/opencode/observer.js integrations/opencode/README.md
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swarmview-${{ matrix.target }}

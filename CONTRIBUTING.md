@@ -32,6 +32,8 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `server.go`: HTTP routes, snapshot caching, and embedded web files.
 - `process.go`: process discovery, agent detection, and activity sampling.
 - `claude.go`: Claude session titles and worker metadata.
+- `pulse*.go`: opt-in local metadata IPC, bounded live relationship/feedback delivery,
+  peer authentication, and socket lifecycle; no conversation/event history.
 - `tmux.go`, `sys_*.go`: terminal navigation and platform-specific integration.
 - `system.go`: machine-wide memory measurements.
 - `web/`: build-free browser interface; `index.html` loads `app.css` and the
@@ -39,19 +41,30 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
   - `app.js`: startup, polling, snapshot freshness, and wiring feature updates.
   - `agents.js`: snapshot normalization, parentage, statuses, and metric formatting.
   - `dashboard.js`: repository/worker tree, pinning, folding, and metric summaries.
-  - `rows.js`: shared task/detail rows, result cards, and terminal activation.
+  - `rows.js`: keyed task/result rows, one lazy selected-row Details dialog,
+    and terminal activation; reads current parent/host data through a dashboard callback
+    and current freshness through the coordinator's snapshot-state callback.
   - `search.js`: local search index, dialog, and keyboard navigation.
   - `notifications.js`: quiet observations, notification episodes, and tab badges.
-  - `icons.js`, `dom.js`, `storage.js`: provider glyphs, DOM helpers, and saved preferences.
+  - `communication.js`: opt-in live stream, up to four reused plain-text worker cues,
+    polite announcements, and visibility cleanup; reads dashboard rows without owning its tree or snapshot.
+  - `icons.js`, `dom.js`: provider glyphs and DOM helpers.
+  - `storage.js`: defensive local storage and the local appearance/Preferences dialog;
+    notification ownership stays in `notifications.js`, server capability in `communication.js`.
 - `web/app_test.js`, `ui_test.go`: browser assertions and their Go test harness.
 - `*_test.go`: tests beside their subjects; `test_helpers_test.go` contains shared fixtures.
 - `desktop/macos/`: native WebView host, installer, and packaging checks.
+- `integrations/opencode/`: manually configured TUI-only metadata observer; uses
+  the existing provider connection and forwards identifiers to local IPC.
 - `assets/`: shared branding and documentation images.
 
 The data flow is `web/app.js` → `GET /agents` → `server.snapshot` → process and
 worker discovery → JSON → the dashboard, search, and notification modules. Terminal activation is a separate
 `POST /focus` request. The macOS app hosts the same interface in WebKit. Feature
 modules do not import `app.js`; it coordinates them without a shared global store.
+The optional TUI observer → private socket → `GET /communication` stream supplies
+live relationships; `app.js` retains snapshot/render ownership. Unchanged ordered
+worker key/parent/PID frames refresh feedback/freshness without rebuilding the tree.
 
 Keep this map current in the same change when adding, moving, or changing the
 responsibility of a directory or entry point. Update affected embedding, test,

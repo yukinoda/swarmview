@@ -122,6 +122,33 @@ function subItem(s, i, host) {
     sub: true
   };
 }
+
+function liveItem(worker, index, host) {
+  return {
+    ...host,
+    key: worker.key,
+    parent: worker.parent,
+    size: 16,
+    kind: 'opencode',
+    sub: true,
+    live: true,
+    name: 'Worker ' + worker.key.split(':').at(-1).slice(-6),
+    agentLabel: 'Observed live',
+    mem: null,
+    status: 'unknown',
+    stText: 'unknown',
+    idleSec: null,
+    up: 'Process age: unavailable',
+    cpu: 'CPU: unavailable',
+    model: 'Model: unavailable',
+    ord: 2e9 + index,
+    tip:
+      'Live session relationship, not process activity or task completion. ' +
+      'Opens main agent terminal when available; immediate parent may be another worker. ' +
+      'Full worker ID: ' +
+      worker.key,
+  };
+}
 export const label = (it) =>
   it.wt === it.repo ? it.repoName : it.repoName + ' / ' + it.wt.split('/').pop();
 
@@ -139,8 +166,15 @@ export function snapshotItems(data, last, again = false) {
     const it = subItem(s, i, byPid.get(s.parentPid) ?? byCwd.get(s.cwd));
     cur.set(it.key, it);
   });
+  (data.liveWorkers || []).forEach((worker, index) => {
+    const host = cur.get('a:' + worker.pid);
+    if (host?.kind === 'opencode') {
+      const item = liveItem(worker, index, host);
+      cur.set(item.key, item);
+    }
+  });
   for (const [k, it] of last) // gone since last poll: one poll in red, then removed
-    if (!cur.has(k) && !it.dying)
+    if (!cur.has(k) && !it.dying && !it.live)
       cur.set(k, { ...it, dying: true, status: 'exiting', stText: 'exiting' });
   // Resolve orphaned workers once so counts, indentation and placement share the same parent.
   for (const it of cur.values()) {

@@ -35,6 +35,7 @@ type server struct {
 	procAt    int64
 	ghostty   bool
 	noCwd     map[int]int64 // pid -> next lsof retry
+	pulse     *pulseBridge
 }
 
 func newServer(run Runner) *server {
@@ -50,14 +51,16 @@ type snap struct {
 }
 
 type payload struct {
-	Agents    []Agent    `json:"agents"`
-	Subagents []Subagent `json:"subagents"`
-	At        int64      `json:"at"`
-	System    system     `json:"system"`
+	Agents        []Agent      `json:"agents"`
+	Subagents     []Subagent   `json:"subagents"`
+	At            int64        `json:"at"`
+	System        system       `json:"system"`
+	Communication bool         `json:"communication,omitempty"`
+	LiveWorkers   []liveWorker `json:"liveWorkers,omitempty"`
 }
 
 func toPayload(s snap) payload {
-	p := payload{s.agents, s.subagents, s.at, s.system}
+	p := payload{Agents: s.agents, Subagents: s.subagents, At: s.at, System: s.system}
 	if p.Agents == nil {
 		p.Agents = []Agent{}
 	}
@@ -92,7 +95,8 @@ func (s *server) focus(pid int, now int64) (bool, string, error) {
 	return ok, e, nil
 }
 
-//go:embed web/index.html web/app.css web/app.js web/agents.js web/dashboard.js web/rows.js web/search.js web/notifications.js web/icons.js web/dom.js web/storage.js
+//go:embed web/index.html web/app.css web/app.js web/agents.js web/dashboard.js web/rows.js
+//go:embed web/search.js web/notifications.js web/icons.js web/dom.js web/storage.js web/communication.js
 var webFiles embed.FS
 
 //go:embed assets/logo.svg
@@ -130,6 +134,11 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	local := func(prefix string) []string {
 		return []string{fmt.Sprintf("%s127.0.0.1:%d", prefix, s.port), fmt.Sprintf("%slocalhost:%d", prefix, s.port)}
 	}
+	// State-changing and live routes refuse requests from another site.
+	crossSite := func() bool {
+		o := r.Header.Get("Origin")
+		return (o != "" && !slices.Contains(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site"
+	}
 	if !slices.Contains(local(""), r.Host) { // block DNS rebinding
 		w.WriteHeader(403)
 		return
@@ -145,7 +154,8 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Write(uiAsset("web/index.html", page))
 	case "GET /assets/app.js", "GET /assets/agents.js", "GET /assets/dashboard.js",
 		"GET /assets/rows.js", "GET /assets/search.js", "GET /assets/notifications.js",
-		"GET /assets/icons.js", "GET /assets/dom.js", "GET /assets/storage.js", "GET /assets/app.css":
+		"GET /assets/icons.js", "GET /assets/dom.js", "GET /assets/storage.js",
+		"GET /assets/communication.js", "GET /assets/app.css":
 		name := "web/" + path.Base(r.URL.Path)
 		mime := "text/javascript"
 		if strings.HasSuffix(name, ".css") {
@@ -163,9 +173,24 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
-		s.writeJSON(w, 200, toPayload(sn), "cache-control", "no-store")
+		p := toPayload(sn)
+		if s.pulse != nil {
+			p.Communication = true
+			p.LiveWorkers = s.pulse.workers()
+		}
+		s.writeJSON(w, 200, p, "cache-control", "no-store")
+	case "GET /communication":
+		if s.pulse == nil {
+			w.WriteHeader(404)
+			return
+		}
+		if crossSite() {
+			w.WriteHeader(403)
+			return
+		}
+		s.pulse.stream(w, r)
 	case "POST /focus":
-		if o := r.Header.Get("Origin"); (o != "" && !slices.Contains(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		if crossSite() {
 			w.WriteHeader(403)
 			return
 		}

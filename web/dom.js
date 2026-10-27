@@ -14,5 +14,9 @@ export function cls(element, value) {
   if (element.className !== value) element.className = value;
 }
 
+export function attr(element, name, value) {
+  if (element.getAttribute(name) !== String(value)) element.setAttribute(name, value);
+}
+
 let nextID = 0;
 export const uniqueID = (prefix) => prefix + nextID++;

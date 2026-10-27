@@ -69,7 +69,12 @@ func TestUI(t *testing.T) {
 		t.Fatal("initial poll not found")
 	}
 	script = script[:i] + `import('./app_test.js');` + script[i+len("poll();"):]
-	script += "\nexport const testState = { render, poll, freshness, get timer() { return timer; } };\n"
+	if !strings.Contains(script, "function render(data, again = false) {") {
+		t.Fatal("render instrumentation target missing")
+	}
+	script = "const testWork = { renders: 0 };\n" + strings.Replace(script,
+		"function render(data, again = false) {", "function render(data, again = false) { testWork.renders++;", 1)
+	script += "\nexport const testState = { render, poll, freshness, work: testWork, get timer() { return timer; }, get lastData() { return lastData; } };\n"
 	modules := map[string]string{
 		"app.js":      script,
 		"app_test.js": string(checks),
@@ -78,10 +83,22 @@ func TestUI(t *testing.T) {
 		"dashboard.js":     "export const testState = { rows, groups, quietRows };",
 		"search.js":        "export const testState = { searchRows, searchIndex, get searchReturnFocus() { return searchReturnFocus; } };",
 		"notifications.js": "export const testState = { eps };",
+		"communication.js": "export const testState = { activeFeedback, showFeedback, communicationFeedback, communicationStatus, get source() { return communicationSource; }, closeSource() { communicationSource?.close(); communicationSource = null; } };",
 	} {
 		code, err := webFiles.ReadFile("web/" + name)
 		must(t, err)
 		modules[name] = string(code) + "\n" + extra
+	}
+	for name, signature := range map[string]string{
+		"rows.js":   "export function updateAgentRow(r, it) {",
+		"agents.js": "function agentItem(a) {",
+	} {
+		code, err := webFiles.ReadFile("web/" + name)
+		must(t, err)
+		if !strings.Contains(string(code), signature) {
+			t.Fatalf("missing test instrumentation target: %s", signature)
+		}
+		modules[name] = "const testWork = { calls: 0 };\n" + strings.Replace(string(code), signature, signature+" testWork.calls++;", 1) + "\nexport const testState = { work: testWork };\n"
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if name, ok := strings.CutPrefix(r.URL.Path, "/assets/"); ok {

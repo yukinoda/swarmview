@@ -1,5 +1,7 @@
 import { $, txt } from './dom.js';
 import { formatDuration } from './agents.js';
+import { setupPreferences } from './storage.js';
+import { closeDetails } from './rows.js';
 import {
   renderDashboard,
   refreshDashboard,
@@ -9,6 +11,7 @@ import {
 } from './dashboard.js';
 import { setupSearch, updateSearch, refreshSearch } from './search.js';
 import { setupNotifications, updateNotifications, clearBadge } from './notifications.js';
+import { setupCommunication, refreshCommunication, communicationStream, clearPulses } from './communication.js';
 
 const POLL_MS = 2000;
 const POLL_HIDDEN_MS = 5000;
@@ -43,6 +46,7 @@ function freshness(now = Date.now()) {
   refreshDashboard(retained);
   refreshSearch(retained);
   if (retained) clearBadge();
+  refreshCommunication(lastData);
 }
 
 async function poll() {
@@ -54,6 +58,7 @@ async function poll() {
     if (!response.ok) throw new Error(response.status);
     $('offline').hidden = true;
     render(await response.json());
+    communicationStream();
   } catch {
     $('offline').hidden = false;
   }
@@ -62,8 +67,24 @@ async function poll() {
   timer = setTimeout(poll, document.hidden ? POLL_HIDDEN_MS : POLL_MS);
 }
 
-setupDashboard(() => lastData && render(lastData, true));
-setupSearch(snapshotState);
+setupCommunication({ snapshot: () => lastData, snapshotState, render, freshness });
+setupDashboard(
+  () => {
+    clearPulses();
+    return lastData && render(lastData, true);
+  },
+  clearPulses,
+  snapshotState
+);
+setupSearch(snapshotState, () => {
+  clearPulses();
+  closeDetails();
+  if ($('preferences-dialog').open) $('close-preferences').click();
+});
+setupPreferences(() => {
+  clearPulses();
+  closeDetails();
+});
 setupNotifications(focusAgent);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {

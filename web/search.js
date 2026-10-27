@@ -4,6 +4,7 @@ import { syncAgentCards, focusTerminal } from './rows.js';
 
 let items = new Map();
 let readSnapshotState;
+let beforeOpen = () => {};
 const searchIndex = new Map();
 
 export const SEARCH_LIMIT = 20;
@@ -12,10 +13,12 @@ let firstSearchMatch = null,
   searchActive = false;
 function searchFields(it) {
   const fields = {
-    task: it.name,
+    task: [it.name, it.live ? it.key : ''].join(' '),
     agent: [it.kind, it.agentName].filter(Boolean).join(' '),
+    kind: it.kind,
     repo: it.repoName + ' ' + it.repo,
     path: [it.wt, it.cwd].filter(Boolean).join(' '),
+    worktree: it.wt,
     status: [it.status, it.stText].join(' '),
     pid: String(it.pid ?? ''),
     pane: it.target || ''
@@ -32,7 +35,7 @@ export function applySearch() {
     .map((token) => {
       const colon = token.indexOf(':'),
         field = token.slice(0, colon);
-      return colon > 0 && ['task', 'agent', 'repo', 'path', 'status', 'pid', 'pane'].includes(field)
+      return colon > 0 && ['task', 'agent', 'kind', 'repo', 'path', 'worktree', 'status', 'pid', 'pane'].includes(field)
         ? [field, token.slice(colon + 1).replaceAll('"', '')]
         : ['text', token.replaceAll('"', '')];
     })
@@ -94,6 +97,7 @@ export function applySearch() {
 
 let searchReturnFocus = null;
 export function openSearch() {
+  beforeOpen();
   if ($('search-panel').hidden) searchReturnFocus = document.activeElement;
   $('search-panel').hidden = false;
   if (!$('search-panel').open) $('search-panel').showModal();
@@ -117,7 +121,8 @@ export function closeSearch() {
     : $('search-toggle')
   ).focus({ preventScroll: true });
 }
-export function setupSearch(snapshotState) {
+export function setupSearch(snapshotState, onOpen = () => {}) {
+  beforeOpen = onOpen;
   readSnapshotState = snapshotState;
   const isMac = navigator.platform.startsWith('Mac');
   const searchShortcut = isMac ? '⌘ K' : 'Ctrl K';
