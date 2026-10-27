@@ -70,14 +70,21 @@ func decodePulse(b []byte) (pulseMessage, error) {
 	var m pulseMessage
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
-	if len(b) > 1024 || d.Decode(&m) != nil || d.Decode(new(any)) != io.EOF || m.Seq == 0 || !pulseService.MatchString(m.Service) || (m.Session != "" && !pulseID.MatchString(m.Session)) {
+	if len(b) > 1024 || d.Decode(&m) != nil || d.Decode(new(any)) != io.EOF {
+		return m, errors.New("invalid live metadata")
+	}
+	if m.Seq == 0 || !pulseService.MatchString(m.Service) || (m.Session != "" && !pulseID.MatchString(m.Session)) {
 		return m, errors.New("invalid live metadata")
 	}
 	if (m.Type == "presence" || m.Type == "gap") && m.Child == "" && m.Parent == "" {
 		return m, nil
 	}
-	if (m.Type == "attempted" || m.Type == "forget" || m.Type == "sent" || m.Type == "returned") && pulseID.MatchString(m.Session) && pulseID.MatchString(m.Parent) && pulseID.MatchString(m.Child) && m.Parent != m.Child {
-		return m, nil
+	switch m.Type {
+	case "attempted", "forget", "sent", "returned":
+		ids := pulseID.MatchString(m.Session) && pulseID.MatchString(m.Parent) && pulseID.MatchString(m.Child)
+		if ids && m.Parent != m.Child {
+			return m, nil
+		}
 	}
 	return m, errors.New("invalid live event")
 }

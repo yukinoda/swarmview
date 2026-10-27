@@ -24,7 +24,8 @@ func lockPulseDirectory(dir string) (*os.File, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	fd, err := syscall.Open(path, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
+	flags := syscall.O_CREAT | syscall.O_RDWR | syscall.O_CLOEXEC | syscall.O_NOFOLLOW | syscall.O_NONBLOCK
+	fd, err := syscall.Open(path, flags, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +123,11 @@ func listenPulseSocket(path string) (*net.UnixListener, os.FileInfo, error) {
 	if err != nil {
 		ln.Close()
 		// A failed chmod may leave the initial socket mode; do not touch a replacement.
-		if current, e := os.Lstat(path); e == nil && inode != nil && current.Mode().Type() == os.ModeSocket && os.SameFile(inode, current) {
-			if stat, ok := current.Sys().(*syscall.Stat_t); ok && stat.Uid == uint32(os.Getuid()) && stat.Nlink == 1 {
+		current, e := os.Lstat(path)
+		same := e == nil && inode != nil && current.Mode().Type() == os.ModeSocket && os.SameFile(inode, current)
+		if same {
+			stat, ok := current.Sys().(*syscall.Stat_t)
+			if ok && stat.Uid == uint32(os.Getuid()) && stat.Nlink == 1 {
 				_ = os.Remove(path)
 			}
 		}

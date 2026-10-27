@@ -142,7 +142,11 @@ function liveItem(worker, index, host) {
     cpu: 'CPU: unavailable',
     model: 'Model: unavailable',
     ord: 2e9 + index,
-    tip: 'Live session relationship, not process activity or task completion. Opens main agent terminal when available; immediate parent may be another worker. Full worker ID: ' + worker.key
+    tip:
+      'Live session relationship, not process activity or task completion. ' +
+      'Opens main agent terminal when available; immediate parent may be another worker. ' +
+      'Full worker ID: ' +
+      worker.key,
   };
 }
 export const label = (it) =>

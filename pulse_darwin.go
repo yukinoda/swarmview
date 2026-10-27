@@ -12,7 +12,8 @@ func pulsePeerPID(c net.Conn) (int, error) {
 	}
 	var pid int
 	var opErr error
-	err = raw.Control(func(fd uintptr) { pid, opErr = syscall.GetsockoptInt(int(fd), 0, 2) }) // XNU SOL_LOCAL / LOCAL_PEERPID
+	// XNU: level SOL_LOCAL (0), option LOCAL_PEERPID (2).
+	err = raw.Control(func(fd uintptr) { pid, opErr = syscall.GetsockoptInt(int(fd), 0, 2) })
 	if err == nil {
 		err = opErr
 	}

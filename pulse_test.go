@@ -21,7 +21,18 @@ func TestPulseDecode(t *testing.T) {
 	if _, err := decodePulse([]byte(valid)); err != nil {
 		t.Fatal(err)
 	}
-	for _, bad := range []string{valid + "junk", valid + `{}`, strings.Replace(valid, `"seq":1`, `"seq":0`, 1), strings.Replace(valid, `ses_root`, `../secret`, 1), strings.Replace(valid, `2.1.4`, `1.2.0`, 1), strings.Replace(valid, `"type":`, `"prompt":"secret","type":`, 1), strings.Repeat("x", 1025), `null`, `[]`, `{}`} {
+	for _, bad := range []string{
+		valid + "junk",
+		valid + `{}`,
+		strings.Replace(valid, `"seq":1`, `"seq":0`, 1),
+		strings.Replace(valid, `ses_root`, `../secret`, 1),
+		strings.Replace(valid, `2.1.4`, `1.2.0`, 1),
+		strings.Replace(valid, `"type":`, `"prompt":"secret","type":`, 1),
+		strings.Repeat("x", 1025),
+		`null`,
+		`[]`,
+		`{}`,
+	} {
 		if _, err := decodePulse([]byte(bad)); err == nil {
 			t.Errorf("accepted invalid metadata: %q", bad[:min(len(bad), 100)])
 		}

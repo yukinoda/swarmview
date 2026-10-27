@@ -196,7 +196,12 @@ export function renderDashboard(data, again = false) {
       count ? ` · ${count} ${closed ? 'hidden ' : ''}${noun}${count === 1 ? '' : 's'}` : ''
     );
     r.kids.hidden = closed;
-    r.fold = { count, closed, label: `${closed ? 'Show' : 'Hide'} ${count} ${noun}${count === 1 ? '' : 's'}`, toggle: () => toggleFold(it.key) };
+    r.fold = {
+      count,
+      closed,
+      label: `${closed ? 'Show' : 'Hide'} ${count} ${noun}${count === 1 ? '' : 's'}`,
+      toggle: () => toggleFold(it.key),
+    };
     if (!r.kids.id) r.kids.id = uniqueID('k');
     const liveBranch = !it.live && liveParents.has(it.key);
     if (liveBranch && !r.caption) {
@@ -225,13 +230,12 @@ export function renderDashboard(data, again = false) {
     }
 
   const mine = items.filter((i) => !i.dying && !i.sub);
+  const working = mine.filter((it) => it.status === 'working').length;
   updateSystemMemory(data.system);
-  txt(
-    $('count'),
-    `${mine.length} agent${mine.length === 1 ? '' : 's'} · ${mine.filter((it) => it.status === 'working').length} working`
-  );
+  txt($('count'), `${mine.length} agent${mine.length === 1 ? '' : 's'} · ${working} working`);
   $('empty').hidden = items.length > 0;
-  txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${items.filter(it => it.sub && !it.dying).length} workers`);
+  const workers = items.filter((it) => it.sub && !it.dying).length;
+  txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} workers`);
   return { items: new Map([...rows.keys()].map((key) => [key, last.get(key)])), agents: mine };
 }
 
@@ -241,13 +245,12 @@ export function refreshDashboard(retained) {
   for (const [key, r] of rows) {
     const it = last.get(key),
       state = offline ? 'offline' : stale ? 'stale' : it.stText;
-    cls(r.node, 'node s-' + (retained ? 'unknown' : it.status) + (it.sub ? ' worker' : '') + (it.live ? ' live-worker' : ''));
+    const status = retained ? 'unknown' : it.status;
+    cls(r.node, `node s-${status}` + (it.sub ? ' worker' : '') + (it.live ? ' live-worker' : ''));
     if (r.st) txt(r.st, state);
-    attr(
-      r.toggle,
-      'aria-label',
-      `Details for ${it.name}: ${state}, RAM ${r.mem?.textContent || 'unavailable'}${offline || stale ? ' (retained)' : ''}`
-    );
+    const ram = r.mem?.textContent || 'unavailable';
+    const note = offline || stale ? ' (retained)' : '';
+    attr(r.toggle, 'aria-label', `Details for ${it.name}: ${state}, RAM ${ram}${note}`);
   }
   if (retained) $('quiet').hidden = true;
   refreshDetails(retained);
