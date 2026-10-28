@@ -37,6 +37,9 @@ has not been run by hand.
    too old to know `-claude-hook`. It does nothing when none is found and never
    fails a hook. New Claude sessions pick up the plugin.
 
+   If you added these hooks to `~/.claude/settings.json` by hand, remove those
+   entries when you install the plugin; otherwise every event shows twice.
+
    [hooks]: https://github.com/yukinoda/swarmview/blob/main/integrations/claude/hooks/hooks.json
    [launcher]: https://github.com/yukinoda/swarmview/blob/main/integrations/claude/hooks/forward.sh
 

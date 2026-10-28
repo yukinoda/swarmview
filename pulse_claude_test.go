@@ -136,7 +136,18 @@ func TestClaudeHookBridge(t *testing.T) {
 		t.Fatalf("parallel starts queued %d of 3 cues", len(ch))
 	}
 
-	// A stopped bridge leaves no path for the launcher to prefer.
+	// Shutdown keeps a live.exe another bridge wrote, and removes its own.
+	other := []byte("/elsewhere/swarmview\n")
+	must(t, os.WriteFile(liveExePath(filepath.Dir(b.path)), other, 0600))
+	unpublishHookBinary(filepath.Dir(b.path))
+	kept, err := os.ReadFile(liveExePath(filepath.Dir(b.path)))
+	if err != nil {
+		t.Fatalf("shutdown removed another bridge's live.exe: %v", err)
+	}
+	if string(kept) != string(other) {
+		t.Fatalf("live.exe changed to %q", kept)
+	}
+	publishHookBinary(filepath.Dir(b.path))
 	b.close()
 	if _, err := os.Stat(liveExePath(filepath.Dir(b.path))); !os.IsNotExist(err) {
 		t.Fatalf("live.exe outlived the bridge: %v", err)
@@ -244,6 +255,7 @@ func TestClaudePluginLauncher(t *testing.T) {
 	must(t, os.MkdirAll(dir, 0700))
 	ln, err := net.Listen("unix", filepath.Join(dir, "live.sock"))
 	must(t, err)
+	t.Cleanup(func() { ln.Close() })
 	bin := filepath.Join(home, "bin")
 	must(t, os.Mkdir(bin, 0700))
 	running := filepath.Join(home, "running")

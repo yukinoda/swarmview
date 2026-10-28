@@ -99,6 +99,22 @@ func publishHookBinary(dir string) {
 	}
 }
 
+// unpublishHookBinary removes live.exe only while it still names this binary,
+// so a bridge that replaced it keeps its own.
+func unpublishHookBinary(dir string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	recorded, err := os.ReadFile(liveExePath(dir))
+	if err != nil {
+		return
+	}
+	if string(recorded) == exe+"\n" {
+		os.Remove(liveExePath(dir))
+	}
+}
+
 // liveExePath is where the bridge records its binary for the plugin launcher.
 func liveExePath(dir string) string {
 	return filepath.Join(dir, "live.exe")

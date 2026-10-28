@@ -149,7 +149,7 @@ func (b *pulseBridge) close() {
 		if b.ln != nil {
 			b.ln.Close()
 			_ = removePulseSocket(b.path, b.inode)
-			os.Remove(liveExePath(filepath.Dir(b.path)))
+			unpublishHookBinary(filepath.Dir(b.path))
 		}
 		b.mu.Lock()
 		b.closed = true
