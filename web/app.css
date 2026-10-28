@@ -427,11 +427,11 @@ kbd {
   --row-pad: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
   --slot-pad: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step));
 }
-/* Workers have no logo: the branch ends at the empty logo slot, like a process
-   child's, and a node dot sits in that slot on the title line. */
+/* Workers have no logo: the branch runs into a node dot in the empty logo slot,
+   on the title line. */
 .worker > .row-line > .agent::before {
   top: 14px;
-  width: calc(var(--slot-pad) - var(--connector-origin) - 2px);
+  width: calc(var(--slot-pad) + 7px - var(--connector-origin));
 }
 .worker > .row-line > .agent::after {
   content: '';

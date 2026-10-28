@@ -2716,16 +2716,17 @@ const {
         slotLeft =
           row.btn.getBoundingClientRect().left +
           parseFloat(getComputedStyle(row.btn).paddingLeft) -
-          28,
-        contentLeft = isWorker
-          ? slotLeft
-          : row.btn.firstElementChild.getBoundingClientRect().left,
-        stubGap = contentLeft - (stubLeft + stubWidth);
-      assert(
-        stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
-        'horizontal branches reach just short of the row logo or worker logo slot: ' +
-          JSON.stringify({ key, stubWidth, stubGap }),
-      );
+          28;
+      if (!isWorker) {
+        const contentLeft =
+            row.btn.firstElementChild.getBoundingClientRect().left,
+          stubGap = contentLeft - (stubLeft + stubWidth);
+        assert(
+          stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
+          'horizontal branches reach just short of the row logo: ' +
+            JSON.stringify({ key, stubWidth, stubGap }),
+        );
+      }
       if (isWorker) {
         const dot = getComputedStyle(row.btn, '::after'),
           dotTop = row.btn.getBoundingClientRect().top + parseFloat(dot.top),
@@ -2737,9 +2738,18 @@ const {
             parseFloat(dot.width) === 6 &&
             Math.abs(dotCenterY - stubY - 0.5) <= 1 &&
             dotLeft >= slotLeft &&
-            dotLeft + 6 <= slotLeft + 20,
-          'worker branches end in a node dot inside the logo slot on the title line: ' +
-            JSON.stringify({ key, dotCenterY, stubY, dotLeft, slotLeft }),
+            dotLeft + 6 <= slotLeft + 20 &&
+            stubWidth >= 4 &&
+            Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
+          'worker branches run into a node dot inside the logo slot on the title line: ' +
+            JSON.stringify({
+              key,
+              dotCenterY,
+              stubY,
+              dotLeft,
+              slotLeft,
+              stubWidth,
+            }),
         );
       }
       const parentRow = rows.get(row.item.parent),
