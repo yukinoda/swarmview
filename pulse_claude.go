@@ -70,7 +70,8 @@ func runClaudeHook(stdin io.Reader) {
 		return // Swarmview is not running with -communication
 	}
 	defer c.Close()
-	c.SetDeadline(time.Now().Add(2 * time.Second))
+	// Async hooks never delay Claude, so leave a busy bridge time to finish its check.
+	c.SetDeadline(time.Now().Add(5 * time.Second))
 	if _, err = c.Write(append(marshal(rec), '\n')); err != nil {
 		return
 	}

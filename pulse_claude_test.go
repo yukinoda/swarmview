@@ -69,7 +69,9 @@ func TestClaudeHookBridge(t *testing.T) {
 	}}
 	setKind := func(kind string) {
 		s.mu.Lock()
-		s.snap = &snap{at: time.Now().UnixMilli(), agents: []Agent{{Pid: host, Kind: kind}}}
+		// Dated an hour ahead so a slow run never refreshes it through the fake ps.
+		at := time.Now().Add(time.Hour).UnixMilli()
+		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind}}}
 		s.mu.Unlock()
 	}
 	b := newPulseBridge()

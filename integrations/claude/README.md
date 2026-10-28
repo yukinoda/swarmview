@@ -67,7 +67,7 @@ has not been run by hand.
 
 Disable by removing the three entries. When Swarmview isn't running with
 communication enabled, the hook finds no socket and exits at once. Otherwise it
-gives up after at most 2.5 seconds (a 0.5-second connect plus a 2-second
+gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
 exchange). It never fails a Claude tool call, and with `"async": true` it
 never delays one.
 
@@ -98,7 +98,7 @@ only if that process is a detected Claude process or descends from one within
 four parent hops (Claude runs hooks through a shell). The cue carries that
 Claude's PID, and the dashboard marks a worker row only if it belongs to the
 same Claude. A hook stays connected while it is checked, which keeps its PID in
-use. If the check outlasts the hook's 2-second limit, the hook exits and the
+use. If the check outlasts the hook's 5-second limit, the hook exits and the
 record is rejected because its process is gone. Any program Claude runs is also
 its descendant, so it could send cues for that Claude's own workers. It can't
 affect other sessions.
