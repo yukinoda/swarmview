@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -299,7 +301,9 @@ func TestPulseSocketBoundary(t *testing.T) {
 	c.SetReadDeadline(time.Now().Add(time.Second))
 	_, err = c.Read(make([]byte, 1))
 	c.Close()
-	if err != io.EOF {
+	// The bridge closes mid-record (it exceeds a hook record's size), which Linux reports as a reset.
+	closed := err == io.EOF || errors.Is(err, syscall.ECONNRESET)
+	if !closed {
 		t.Fatalf("OpenCode protocol accepted from a Claude peer: %v", err)
 	}
 	if len(ch) != 0 {
