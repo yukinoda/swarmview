@@ -79,6 +79,21 @@ func runClaudeHook(stdin io.Reader) {
 	io.Copy(io.Discard, c)
 }
 
+// publishHookBinary records this binary's path beside the socket, so the Claude
+// plugin's launcher runs the build that is listening, wherever it was started from.
+// Best effort: without it the launcher falls back to PATH and the native app.
+func publishHookBinary(dir string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	tmp := filepath.Join(dir, "live.exe.tmp")
+	if os.WriteFile(tmp, []byte(exe+"\n"), 0600) != nil {
+		return
+	}
+	os.Rename(tmp, filepath.Join(dir, "live.exe"))
+}
+
 func pulseSocketPath() (string, error) {
 	cache, err := os.UserCacheDir()
 	if err != nil {

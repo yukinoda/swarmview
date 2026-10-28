@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,6 +82,12 @@ func TestClaudeHookBridge(t *testing.T) {
 	b := newPulseBridge()
 	must(t, b.start(s))
 	defer b.close()
+	exe, err := os.Executable()
+	must(t, err)
+	published, err := os.ReadFile(filepath.Join(filepath.Dir(b.path), "live.exe"))
+	if err != nil || string(published) != exe+"\n" {
+		t.Fatalf("bridge did not publish its binary for the plugin launcher: %q %v", published, err)
+	}
 	ch, frame := pulseViewer(t, b)
 	hook := func(payload string) { runClaudeHook(strings.NewReader(payload)) }
 
@@ -125,9 +133,8 @@ func TestClaudeHookBridge(t *testing.T) {
 	}
 }
 
-// The plugin must register exactly the events claudeHookRecord maps, asynchronously,
-// through a launcher that never fails Claude's hook.
-func TestClaudePlugin(t *testing.T) {
+// The plugin registers async hooks for events claudeHookRecord maps, through the launcher.
+func TestClaudePluginHooks(t *testing.T) {
 	var cfg struct {
 		Hooks map[string][]struct {
 			Matcher string `json:"matcher"`
@@ -141,31 +148,98 @@ func TestClaudePlugin(t *testing.T) {
 	b, err := os.ReadFile("integrations/claude/hooks/hooks.json")
 	must(t, err)
 	must(t, json.Unmarshal(b, &cfg))
-	want := map[string]string{"SubagentStart": "", "SubagentStop": "", "PreToolUse": "SendMessage"}
-	if len(cfg.Hooks) != len(want) {
-		t.Fatalf("plugin hooks %v, want %v", cfg.Hooks, want)
+	// One payload per registered event; each must map to a cue.
+	samples := map[string]string{
+		"SubagentStart": `{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`,
+		"SubagentStop":  `{"hook_event_name":"SubagentStop","agent_id":"a1234567"}`,
+		"PreToolUse":    `{"hook_event_name":"PreToolUse","tool_name":"SendMessage","tool_input":{"to":"a1234567"}}`,
 	}
-	for event, matcher := range want {
+	if len(cfg.Hooks) != len(samples) {
+		t.Fatalf("plugin registers %d events, want %d", len(cfg.Hooks), len(samples))
+	}
+	for event, payload := range samples {
+		if _, ok := claudeHookRecord(strings.NewReader(payload)); !ok {
+			t.Fatalf("%s is registered but claudeHookRecord does not map it", event)
+		}
 		groups := cfg.Hooks[event]
-		if len(groups) != 1 || groups[0].Matcher != matcher || len(groups[0].Hooks) != 1 {
-			t.Fatalf("%s: %+v", event, groups)
+		if len(groups) != 1 {
+			t.Fatalf("%s: want one hook group, got %d", event, len(groups))
+		}
+		if event == "PreToolUse" && groups[0].Matcher != "SendMessage" {
+			t.Fatalf("PreToolUse matcher %q, want SendMessage", groups[0].Matcher)
+		}
+		if len(groups[0].Hooks) != 1 {
+			t.Fatalf("%s: want one hook, got %d", event, len(groups[0].Hooks))
 		}
 		hook := groups[0].Hooks[0]
-		if hook.Type != "command" || !hook.Async || hook.Command != `"${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
-			t.Fatalf("%s hook: %+v", event, hook)
+		if hook.Type != "command" {
+			t.Fatalf("%s: hook type %q", event, hook.Type)
+		}
+		if !hook.Async {
+			t.Fatalf("%s: hook must be async so Claude never waits", event)
+		}
+		if hook.Command != `"${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
+			t.Fatalf("%s: hook command %q", event, hook.Command)
 		}
 	}
+}
 
-	// An older swarmview without -claude-hook exits 2 on the unknown flag;
-	// the launcher must still succeed silently.
-	dir := t.TempDir()
-	old := filepath.Join(dir, "swarmview")
-	must(t, os.WriteFile(old, []byte("#!/bin/sh\necho usage >&2\nexit 2\n"), 0755))
-	cmd := exec.Command("integrations/claude/hooks/forward.sh")
-	cmd.Env = append(os.Environ(), "PATH="+dir+":/usr/bin:/bin", "HOME="+dir)
-	cmd.Stdin = strings.NewReader(`{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`)
-	out, err := cmd.CombinedOutput()
-	if err != nil || len(out) != 0 {
-		t.Fatalf("launcher must exit 0 silently: %v %q", err, out)
+// launcherStub writes an executable that records its stdin to marker. An old stub
+// instead rejects -claude-hook before reading stdin, like a pre-hook swarmview.
+func launcherStub(t *testing.T, path, marker string, old bool) {
+	t.Helper()
+	script := fmt.Sprintf("#!/bin/sh\ncat > %q\necho noise >&2\n", marker)
+	if old {
+		script = fmt.Sprintf("#!/bin/sh\n: > %q\necho usage >&2\nexit 2\n", marker)
+	}
+	must(t, os.WriteFile(path, []byte(script), 0755))
+}
+
+func TestClaudePluginLauncher(t *testing.T) {
+	payload := `{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`
+	run := func(home, path string) string {
+		t.Helper()
+		cmd := exec.Command("integrations/claude/hooks/forward.sh")
+		cmd.Env = append(os.Environ(), "PATH="+path+":/usr/bin:/bin", "HOME="+home, "XDG_CACHE_HOME="+filepath.Join(home, ".cache"))
+		cmd.Stdin = strings.NewReader(payload)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("launcher must exit 0: %v", err)
+		}
+		return string(out)
+	}
+	home := t.TempDir()
+	cache := filepath.Join(home, ".cache")
+	if runtime.GOOS == "darwin" {
+		cache = filepath.Join(home, "Library", "Caches")
+	}
+	must(t, os.MkdirAll(filepath.Join(cache, "swarmview"), 0700))
+	bin := filepath.Join(home, "bin")
+	must(t, os.Mkdir(bin, 0700))
+
+	// The binary Swarmview recorded beside its socket wins over PATH.
+	running := filepath.Join(home, "running")
+	launcherStub(t, running, filepath.Join(home, "running.got"), false)
+	launcherStub(t, filepath.Join(bin, "swarmview"), filepath.Join(home, "path.got"), false)
+	must(t, os.WriteFile(filepath.Join(cache, "swarmview", "live.exe"), []byte(running+"\n"), 0600))
+	if out := run(home, bin); out != "" {
+		t.Fatalf("launcher must be silent, got %q", out)
+	}
+	got, err := os.ReadFile(filepath.Join(home, "running.got"))
+	if err != nil || string(got) != payload {
+		t.Fatalf("recorded binary did not receive the event: %q %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "path.got")); err == nil {
+		t.Fatal("PATH binary ran although the recorded one succeeded")
+	}
+
+	// A recorded binary too old for -claude-hook fails; the PATH one still gets the event.
+	launcherStub(t, running, filepath.Join(home, "running.got"), true)
+	if out := run(home, bin); out != "" {
+		t.Fatalf("launcher must be silent, got %q", out)
+	}
+	got, err = os.ReadFile(filepath.Join(home, "path.got"))
+	if err != nil || string(got) != payload {
+		t.Fatalf("PATH binary did not get the event after the old one failed: %q %v", got, err)
 	}
 }

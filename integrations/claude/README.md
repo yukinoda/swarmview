@@ -27,14 +27,18 @@ has not been run by hand.
    /plugin install swarmview@swarmview
    ```
 
-   Review [`hooks/hooks.json`](hooks/hooks.json) and
-   [`hooks/forward.sh`](hooks/forward.sh) first; they are the whole plugin. It
-   registers async `SubagentStart`, `SubagentStop`, and `PreToolUse`
-   (`SendMessage`) hooks, so Claude never waits for them. The launcher runs
-   `swarmview` from your `PATH`, or else the native app in `/Applications` or
-   `~/Applications`. It does nothing when neither is installed, and never fails
-   a hook, even with a Swarmview too old to know `-claude-hook`. New Claude
-   sessions pick up the plugin.
+   Review [`hooks/hooks.json`][hooks] and [`hooks/forward.sh`][launcher]
+   first; they are the whole plugin. It registers async `SubagentStart`,
+   `SubagentStop`, and `PreToolUse` (`SendMessage`) hooks, so Claude never
+   waits for them. The launcher runs the binary Swarmview recorded beside its
+   socket (`live.exe`, written when `-communication` starts), so it finds a CLI
+   started from any folder. Otherwise it tries `swarmview` on your `PATH`, then
+   the native app in `/Applications` or `~/Applications`, skipping any binary
+   too old to know `-claude-hook`. It does nothing when none is found and never
+   fails a hook. New Claude sessions pick up the plugin.
+
+   [hooks]: https://github.com/yukinoda/swarmview/blob/main/integrations/claude/hooks/hooks.json
+   [launcher]: https://github.com/yukinoda/swarmview/blob/main/integrations/claude/hooks/forward.sh
 
 Disable with `/plugin disable swarmview`, or remove it with
 `/plugin uninstall swarmview`. When Swarmview isn't running with communication
@@ -122,3 +126,7 @@ use. If the check outlasts the hook's 5-second limit, the hook exits and the
 record is rejected because its process is gone. Any program Claude runs is also
 its descendant, so it could send cues for that Claude's own workers. It can't
 affect other sessions.
+
+Starting `-communication` also writes `live.exe` (mode `0600`) beside the
+socket. It holds only the running binary's path, for the plugin's launcher, and
+no event, PID, or session data.

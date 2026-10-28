@@ -125,6 +125,7 @@ func (b *pulseBridge) start(s *server) error {
 		return err
 	}
 	b.path, b.ln, b.inode, b.lock = path, ln, inode, lock
+	publishHookBinary(dir)
 	go func() {
 		slots := make(chan bool, pulsePeers)
 		for {
