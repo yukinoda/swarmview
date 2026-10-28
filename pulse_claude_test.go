@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,5 +122,50 @@ func TestClaudeHookBridge(t *testing.T) {
 	wg.Wait()
 	if len(ch) != 3 {
 		t.Fatalf("parallel starts queued %d of 3 cues", len(ch))
+	}
+}
+
+// The plugin must register exactly the events claudeHookRecord maps, asynchronously,
+// through a launcher that never fails Claude's hook.
+func TestClaudePlugin(t *testing.T) {
+	var cfg struct {
+		Hooks map[string][]struct {
+			Matcher string `json:"matcher"`
+			Hooks   []struct {
+				Type    string `json:"type"`
+				Command string `json:"command"`
+				Async   bool   `json:"async"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	b, err := os.ReadFile("integrations/claude/hooks/hooks.json")
+	must(t, err)
+	must(t, json.Unmarshal(b, &cfg))
+	want := map[string]string{"SubagentStart": "", "SubagentStop": "", "PreToolUse": "SendMessage"}
+	if len(cfg.Hooks) != len(want) {
+		t.Fatalf("plugin hooks %v, want %v", cfg.Hooks, want)
+	}
+	for event, matcher := range want {
+		groups := cfg.Hooks[event]
+		if len(groups) != 1 || groups[0].Matcher != matcher || len(groups[0].Hooks) != 1 {
+			t.Fatalf("%s: %+v", event, groups)
+		}
+		hook := groups[0].Hooks[0]
+		if hook.Type != "command" || !hook.Async || hook.Command != `"${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
+			t.Fatalf("%s hook: %+v", event, hook)
+		}
+	}
+
+	// An older swarmview without -claude-hook exits 2 on the unknown flag;
+	// the launcher must still succeed silently.
+	dir := t.TempDir()
+	old := filepath.Join(dir, "swarmview")
+	must(t, os.WriteFile(old, []byte("#!/bin/sh\necho usage >&2\nexit 2\n"), 0755))
+	cmd := exec.Command("integrations/claude/hooks/forward.sh")
+	cmd.Env = append(os.Environ(), "PATH="+dir+":/usr/bin:/bin", "HOME="+dir)
+	cmd.Stdin = strings.NewReader(`{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`)
+	out, err := cmd.CombinedOutput()
+	if err != nil || len(out) != 0 {
+		t.Fatalf("launcher must exit 0 silently: %v %q", err, out)
 	}
 }

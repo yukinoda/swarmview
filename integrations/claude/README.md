@@ -1,4 +1,4 @@
-# Optional live communication (Claude Code hooks)
+# Optional live communication (Claude Code plugin)
 
 Claude Code runs `swarmview -claude-hook` for a few hook events. Each run reads
 the hook's JSON from stdin, keeps only the event name and a subagent ID, sends
@@ -8,17 +8,47 @@ results are discarded in that process and never reach Swarmview.
 Tested with Claude Code 2.1.312 on macOS. Linux uses the same code paths but
 has not been run by hand.
 
-## Manual opt-in — nothing is installed automatically
+## Opt-in setup — nothing is installed automatically
 
 1. Start Swarmview with communication enabled, as described in the
    [OpenCode bridge setup](../opencode/README.md#manual-opt-in--nothing-is-installed-automatically):
    `./swarmview -communication`, or the native app launched with
    `--communication`. Both bridges share the same owner-only socket.
-2. Add hooks to your **existing** `~/.claude/settings.json`, preserving
-   other settings. Use the absolute path of the binary: the extracted CLI
-   `swarmview`, or
-   `/Applications/Swarmview.app/Contents/MacOS/swarmview-server` for the
-   native app.
+2. Install the Swarmview plugin from inside Claude Code (2.1.275 or later):
+
+   ```
+   /plugin install swarmview --marketplace yukinoda/swarmview
+   ```
+
+   On older versions, add the marketplace first:
+
+   ```
+   /plugin marketplace add yukinoda/swarmview
+   /plugin install swarmview@swarmview
+   ```
+
+   Review [`hooks/hooks.json`](hooks/hooks.json) and
+   [`hooks/forward.sh`](hooks/forward.sh) first; they are the whole plugin. It
+   registers async `SubagentStart`, `SubagentStop`, and `PreToolUse`
+   (`SendMessage`) hooks, so Claude never waits for them. The launcher runs
+   `swarmview` from your `PATH`, or else the native app in `/Applications` or
+   `~/Applications`. It does nothing when neither is installed, and never fails
+   a hook, even with a Swarmview too old to know `-claude-hook`. New Claude
+   sessions pick up the plugin.
+
+Disable with `/plugin disable swarmview`, or remove it with
+`/plugin uninstall swarmview`. When Swarmview isn't running with communication
+enabled, the hook finds no socket and exits at once. Otherwise it gives up
+after at most 5.5 seconds (a 0.5-second connect plus a 5-second exchange). It
+never fails or delays a Claude tool call.
+
+### Without the plugin
+
+Add the same hooks to your **existing** `~/.claude/settings.json` yourself,
+preserving other settings. Use the absolute path of the binary: the extracted
+CLI `swarmview`, or
+`/Applications/Swarmview.app/Contents/MacOS/swarmview-server` for the native
+app. Disable by removing the three entries.
 
    ```json
    {
@@ -60,16 +90,6 @@ has not been run by hand.
      }
    }
    ```
-
-   `"async": true` runs the hook in the background, so Claude never waits for
-   it. New Claude sessions pick up the hooks. If you move the binary or app,
-   update the path.
-
-Disable by removing the three entries. When Swarmview isn't running with
-communication enabled, the hook finds no socket and exits at once. Otherwise it
-gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
-exchange). It never fails a Claude tool call, and with `"async": true` it
-never delays one.
 
 ## What the UI means
 

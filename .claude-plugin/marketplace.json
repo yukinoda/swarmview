@@ -1,0 +1,14 @@
+{
+  "name": "swarmview",
+  "owner": {
+    "name": "Yuki Noda"
+  },
+  "description": "Optional Swarmview integrations for Claude Code",
+  "plugins": [
+    {
+      "name": "swarmview",
+      "source": "./integrations/claude",
+      "description": "Live Claude Code subagent cues for an opted-in Swarmview dashboard"
+    }
+  ]
+}

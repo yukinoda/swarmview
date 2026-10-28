@@ -58,8 +58,9 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `desktop/macos/`: native WebView host, installer, and packaging checks.
 - `integrations/opencode/`: manually configured TUI-only metadata observer; uses
   the existing provider connection and forwards identifiers to local IPC.
-- `integrations/claude/`: setup for Claude Code hooks that run the binary's
-  `-claude-hook` mode; no shipped code of its own.
+- `integrations/claude/`: opt-in Claude Code plugin (async hooks plus a
+  launcher) that runs the binary's `-claude-hook` mode; the repository-root
+  `.claude-plugin/marketplace.json` lists it for `/plugin install`.
 - `assets/`: shared branding and documentation images.
 
 The data flow is `web/app.js` → `GET /agents` → `server.snapshot` → process and

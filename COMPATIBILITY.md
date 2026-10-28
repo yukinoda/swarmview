@@ -147,7 +147,7 @@ session status or conversation metadata.
   available by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
   observes confirmed sends and foreground result returns for CLI/service 2.1.3–2.1.4
   with manual TUI opt-in on macOS/Linux. Optional
-  [Claude Code hooks](integrations/claude/README.md) observe subagent
+  [Claude Code plugin](integrations/claude/README.md) hooks observe subagent
   start/finish and follow-up messages; other providers remain unsupported for
   communication. Live relationships do not establish worker process status.
   Recently quiet observations and notifications do not confirm that
