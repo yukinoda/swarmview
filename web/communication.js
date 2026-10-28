@@ -45,7 +45,7 @@ export function refreshCommunication(data) {
 }
 
 // pid is set for Claude cues: the worker row must belong to that Claude process.
-function showFeedback(key, direction, pid, until = Date.now() + 2500) {
+function showFeedback(key, direction, pid, until = Date.now() + 5000) {
   if (
     !readSnapshot()?.communication ||
     document.hidden ||
@@ -217,7 +217,7 @@ export function communicationStream() {
       communicationStatus,
       (frame.ambiguous
         ? 'Communication: ambiguous TUI views · affected pulses unavailable; select the session in one terminal'
-        : frame.workers.length
+        : frame.workers.length || frame.pid
           ? 'Communication: observing live metadata only'
           : 'Communication: waiting for live worker metadata · requires opt-in OpenCode TUI bridge or Claude hooks') +
         ' · other providers unavailable' +

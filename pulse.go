@@ -19,7 +19,8 @@ import (
 )
 
 // The socket carries live metadata only. No journal, replay cursor, or event history.
-const pulsePeers, pulseWorkers, pulseViewers, pulseQueue = 16, 64, 4, 1
+// A viewer queue holds as many frames as the UI shows cues, so parallel Claude subagent starts fit.
+const pulsePeers, pulseWorkers, pulseViewers, pulseQueue = 16, 64, 4, 4
 
 type liveWorker struct {
 	Key    string `json:"key"`

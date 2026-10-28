@@ -179,7 +179,7 @@ sent, because the viewers are being torn down.
 
 Maximums: 16 TUI socket connections, 64 workers per TUI, 1024-byte protocol
 records, 64 records/second per TUI, 10-second missing-heartbeat expiry, four
-browser viewers, one transient frame per viewer, four simultaneous UI
+browser viewers, four transient frames per viewer, four simultaneous UI
 pulses. Slow viewers drop/coalesce frames and explicitly report missing
 observations; they never replay. Socket writing does not block tool execution;
 backpressure disconnects rather than growing a queue; connection attempts time

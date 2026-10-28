@@ -104,4 +104,18 @@ func TestClaudeHookBridge(t *testing.T) {
 	if len(ch) != 0 {
 		t.Fatal("unexpected extra cue")
 	}
+
+	// Parallel subagent starts all reach a viewer that has not read yet.
+	var wg sync.WaitGroup
+	for _, id := range []string{"a1111111", "a2222222", "a3333333"} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			hook(`{"hook_event_name":"SubagentStart","agent_id":"` + id + `"}`)
+		}()
+	}
+	wg.Wait()
+	if len(ch) != 3 {
+		t.Fatalf("parallel starts queued %d of 3 cues", len(ch))
+	}
 }

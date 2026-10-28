@@ -5,7 +5,8 @@ the hook's JSON from stdin, keeps only the event name and a subagent ID, sends
 one record to a running opted-in Swarmview, and exits. Prompts, messages, and
 results are discarded in that process and never reach Swarmview.
 
-Tested with Claude Code 2.1.312 on macOS and Linux.
+Tested with Claude Code 2.1.312 on macOS. Linux uses the same code paths but
+has not been run by hand.
 
 ## Manual opt-in — nothing is installed automatically
 
@@ -42,8 +43,8 @@ Tested with Claude Code 2.1.312 on macOS and Linux.
    update the path.
 
 Disable by removing the three entries. When Swarmview isn't running with
-communication enabled, the hook finds no socket and exits at once; it never
-fails or delays a Claude tool call beyond its one-second limit.
+communication enabled, the hook finds no socket and exits at once. Otherwise it
+waits at most about two seconds for Swarmview, and never fails a Claude tool call.
 
 ## What the UI means
 
@@ -59,7 +60,7 @@ no history or replay).
   This means the message was issued, not that the worker read it.
 
 A cue that arrives before the next poll has rendered its worker row waits up
-to 2.5 seconds for it, then is dropped.
+to 5 seconds for it, then is dropped.
 
 Not shown yet: messages between teammates, messages addressed by name, and
 messages to other Claude sessions. Those need a sideways display that the

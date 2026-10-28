@@ -142,6 +142,12 @@ func claudeHost(s *server, sn snap, pid int) int {
 // acceptClaude reads one record from a hook connected while its process is still alive.
 // The cue names the host PID so the viewer only marks a worker row owned by that Claude.
 func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
+	b.mu.Lock()
+	watched := len(b.viewers) > 0
+	b.mu.Unlock()
+	if !watched {
+		return // nobody would see the cue: skip the ancestry walk
+	}
 	host := claudeHost(s, sn, pid)
 	if host == 0 {
 		return
