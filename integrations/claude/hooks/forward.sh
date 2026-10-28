@@ -11,17 +11,24 @@ dir="$cache/swarmview"
 if [ -S "$dir/live.sock" ]; then
   running=""
   # Trust the recorded path only from your own directory, as your own regular
-  # file, naming a binary you own.
+  # file. Shutdown may remove it at any moment, so read it quietly.
   if [ -O "$dir" ]; then
     if [ -O "$dir/live.exe" ]; then
-      if [ ! -h "$dir/live.exe" ]; then
-        running="$(cat "$dir/live.exe")"
+      if [ -f "$dir/live.exe" ]; then
+        if [ ! -h "$dir/live.exe" ]; then
+          running="$(cat "$dir/live.exe" 2>/dev/null)"
+        fi
       fi
     fi
   fi
+  # Run the recorded binary only if you or root own it: a file someone else
+  # placed at a stale path (say a deleted /tmp build) belongs to them.
   if [ -n "$running" ]; then
     if [ ! -O "$running" ]; then
-      running=""
+      owner="$(ls -ln "$running" 2>/dev/null | awk '{print $3}')"
+      if [ "$owner" != 0 ]; then
+        running=""
+      fi
     fi
   fi
   for bin in \

@@ -151,12 +151,7 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	victim := filepath.Join(t.TempDir(), "victim")
 	must(t, os.WriteFile(victim, []byte("keep\n"), 0600))
 	must(t, os.Symlink(victim, liveExePath(dir)))
-	leftover := liveExePath(dir) + ".crashed"
-	must(t, os.WriteFile(leftover, []byte("old\n"), 0600))
 	publishHookBinary(dir)
-	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
-		t.Fatalf("a temp file left by a crash survived publishing: %v", err)
-	}
 	kept, err := os.ReadFile(victim)
 	must(t, err)
 	if string(kept) != "keep\n" {
@@ -260,7 +255,8 @@ func TestClaudePluginLauncher(t *testing.T) {
 	// pulseHome sets HOME and XDG_CACHE_HOME, which the launcher inherits.
 	home, socket := pulseHome(t)
 	dir := filepath.Dir(socket)
-	run := func(path string) string {
+	// run invokes the launcher, which must always exit 0 without output.
+	run := func(path string) {
 		t.Helper()
 		cmd := exec.Command("sh", "integrations/claude/hooks/forward.sh")
 		cmd.Env = append(os.Environ(), "PATH="+path+":/usr/bin:/bin")
@@ -269,7 +265,9 @@ func TestClaudePluginLauncher(t *testing.T) {
 		if err != nil {
 			t.Fatalf("launcher must exit 0: %v", err)
 		}
-		return string(out)
+		if len(out) != 0 {
+			t.Fatalf("launcher must be silent, got %q", out)
+		}
 	}
 	received := func(marker string) string {
 		t.Helper()
@@ -292,9 +290,7 @@ func TestClaudePluginLauncher(t *testing.T) {
 	launcherStub(t, running, runningGot, false)
 	launcherStub(t, filepath.Join(bin, "swarmview"), pathGot, false)
 	must(t, os.WriteFile(liveExePath(dir), []byte(running+"\n"), 0600))
-	if out := run(bin); out != "" {
-		t.Fatalf("launcher must be silent, got %q", out)
-	}
+	run(bin)
 	if got := received(runningGot); got != payload {
 		t.Fatalf("recorded binary got %q, want the event", got)
 	}
@@ -305,9 +301,7 @@ func TestClaudePluginLauncher(t *testing.T) {
 	// A recorded binary too old for -claude-hook fails before reading;
 	// the PATH one still gets the whole event.
 	launcherStub(t, running, runningGot, true)
-	if out := run(bin); out != "" {
-		t.Fatalf("launcher must be silent, got %q", out)
-	}
+	run(bin)
 	if got := received(runningGot); got != "" {
 		t.Fatalf("an old binary must fail before reading the event, got %q", got)
 	}
@@ -323,9 +317,7 @@ func TestClaudePluginLauncher(t *testing.T) {
 	must(t, os.WriteFile(target, []byte(running+"\n"), 0600))
 	must(t, os.Symlink(target, liveExePath(dir)))
 	must(t, os.Remove(runningGot))
-	if out := run(bin); out != "" {
-		t.Fatalf("launcher must be silent, got %q", out)
-	}
+	run(bin)
 	if _, err := os.Stat(runningGot); err == nil {
 		t.Fatal("launcher trusted a symlinked live.exe")
 	}
@@ -333,23 +325,23 @@ func TestClaudePluginLauncher(t *testing.T) {
 		t.Fatalf("PATH binary got %q, want the event", got)
 	}
 
-	// A recorded binary you don't own is skipped. `true` is root-owned and would
-	// succeed, swallowing the event, if the launcher trusted it.
+	// A root-owned recorded binary (a system install outside PATH) is trusted:
+	// `true` runs and succeeds, so the PATH binary must not. A binary owned by
+	// another regular user is refused, but that needs root to set up here.
 	trueBin, err := exec.LookPath("true")
 	must(t, err)
 	info, err := os.Stat(trueBin)
 	must(t, err)
-	foreign := info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid())
-	if foreign {
+	rootOwned := info.Sys().(*syscall.Stat_t).Uid == 0
+	if rootOwned {
 		must(t, os.Remove(pathGot))
 		must(t, os.Remove(liveExePath(dir)))
 		must(t, os.WriteFile(liveExePath(dir), []byte(trueBin+"\n"), 0600))
-		if out := run(bin); out != "" {
-			t.Fatalf("launcher must be silent, got %q", out)
+		run(bin)
+		if _, err := os.Stat(pathGot); err == nil {
+			t.Fatal("launcher skipped a root-owned recorded binary")
 		}
-		if got := received(pathGot); got != payload {
-			t.Fatalf("PATH binary got %q, want the event", got)
-		}
+		must(t, os.WriteFile(pathGot, nil, 0600))
 	}
 
 	// Without a live socket no Swarmview is listening, so no binary starts.
@@ -357,9 +349,7 @@ func TestClaudePluginLauncher(t *testing.T) {
 	os.Remove(socket)
 	// The symlink step above left only the PATH marker.
 	must(t, os.Remove(pathGot))
-	if out := run(bin); out != "" {
-		t.Fatalf("launcher must be silent without a socket, got %q", out)
-	}
+	run(bin)
 	for _, marker := range []string{runningGot, pathGot} {
 		if _, err := os.Stat(marker); err == nil {
 			t.Fatalf("%s ran with no Swarmview listening", filepath.Base(marker))

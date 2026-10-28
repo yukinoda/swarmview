@@ -83,31 +83,24 @@ func runClaudeHook(stdin io.Reader) {
 // plugin's launcher runs the build that is listening, wherever it was started from.
 // Best effort: without it the launcher falls back to PATH and the native app.
 func publishHookBinary(dir string) {
-	// Never leave an older bridge's path in front of the launcher's fallbacks,
-	// nor temp files a crash left mid-publish; the owner lock excludes writers.
+	// Never leave an older bridge's path in front of the launcher's fallbacks.
+	// The owner lock excludes other writers, so delete-then-exclusive-create
+	// can't follow a planted symlink or race another bridge.
 	os.Remove(liveExePath(dir))
-	leftovers, _ := filepath.Glob(liveExePath(dir) + ".*")
-	for _, leftover := range leftovers {
-		os.Remove(leftover)
-	}
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
-	// A fresh, exclusively created temp file: never follow a planted name.
-	tmp, err := os.CreateTemp(dir, "live.exe.*")
+	f, err := os.OpenFile(liveExePath(dir), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return
 	}
-	_, err = tmp.WriteString(exe + "\n")
-	if closeErr := tmp.Close(); err == nil {
+	_, err = f.WriteString(exe + "\n")
+	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
-	if err == nil {
-		err = os.Rename(tmp.Name(), liveExePath(dir))
-	}
 	if err != nil {
-		os.Remove(tmp.Name())
+		os.Remove(liveExePath(dir))
 	}
 }
 
