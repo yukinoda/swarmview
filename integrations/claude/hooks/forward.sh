@@ -53,34 +53,31 @@ if [ -S "$dir/live.sock" ]; then
       fi
       ;;
   esac
-  # swarmview from the absolute PATH entries only.
-  onpath=""
+  # Candidates in order: the private copy, every swarmview in an absolute PATH
+  # entry, then the native app. None of these paths can contain a colon.
+  candidates="$running"
   IFS=:
   set -f
   for entry in $absolute; do
     if [ -n "$entry" ]; then
-      if [ -x "$entry/swarmview" ]; then
-        onpath="$entry/swarmview"
-        break
+      candidates="$candidates:$entry/swarmview"
+    fi
+  done
+  candidates="$candidates:/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
+  candidates="$candidates:$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
+  for bin in $candidates; do
+    if [ -f "$bin" ]; then
+      if [ -x "$bin" ]; then
+        # Hook mode exits 0 unless the binary itself fails; a binary too old
+        # for the flag fails before reading stdin, so the next one gets the event.
+        if "$bin" -claude-hook 2>/dev/null; then
+          break
+        fi
       fi
     fi
   done
   set +f
   IFS="$saved_ifs"
-  for bin in \
-    "$running" \
-    "$onpath" \
-    /Applications/Swarmview.app/Contents/MacOS/swarmview-server \
-    "$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
-  do
-    if [ -x "$bin" ]; then
-      # Hook mode exits 0 unless the binary itself fails; a binary too old for
-      # the flag fails before reading stdin, so the next one gets the event.
-      if "$bin" -claude-hook 2>/dev/null; then
-        break
-      fi
-    fi
-  done
 fi
 # Drain anything left unread so Claude never writes into a closed pipe.
 cat >/dev/null

@@ -119,9 +119,9 @@ func (b *pulseBridge) start(s *server) error {
 	if err != nil {
 		return err
 	}
-	// Copy before listening and rename right after, so the socket never pairs
-	// with a missing or crashed bridge's copy, and a failed start leaves a live
-	// bridge's copy alone.
+	// Copy before listening and rename right after: a crashed bridge's copy can
+	// answer only in the instant between bind and rename, and a failed start
+	// leaves a live bridge's copy alone.
 	staged := stageHookBinary(dir)
 	ln, inode, err := listenPulseSocket(path)
 	if err != nil {

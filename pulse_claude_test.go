@@ -438,6 +438,23 @@ func TestClaudePluginLauncher(t *testing.T) {
 		t.Fatalf("absolute PATH entry got %q, want the event", got)
 	}
 
+	// An old swarmview and a directory named swarmview earlier on PATH don't hide
+	// the current build later on PATH.
+	reset(true)
+	oldDir := filepath.Join(home, "old")
+	must(t, os.Mkdir(oldDir, 0700))
+	oldGot := filepath.Join(home, "old.got")
+	launcherStub(t, filepath.Join(oldDir, "swarmview"), oldGot, true)
+	dirEntry := filepath.Join(home, "dirs")
+	must(t, os.MkdirAll(filepath.Join(dirEntry, "swarmview"), 0700))
+	run(oldDir + ":" + dirEntry + ":" + bin)
+	if !ran(oldGot) {
+		t.Fatal("the old PATH binary was not tried first")
+	}
+	if got := received(pathGot); got != payload {
+		t.Fatalf("current PATH binary got %q after an old one, want the event", got)
+	}
+
 	// An inherited setgid bit grants no access, so the copy still runs.
 	reset(false)
 	must(t, os.Chmod(dir, 0700|os.ModeSetgid))

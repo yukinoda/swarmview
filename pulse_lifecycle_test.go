@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -333,6 +334,24 @@ func TestPulseCLILifecycle(t *testing.T) {
 			}
 		})
 	}
+	t.Run("nohup-keeps-running", func(t *testing.T) {
+		// A child started with SIGHUP ignored (nohup) inherits that and must keep it.
+		signal.Ignore(syscall.SIGHUP)
+		home, path := pulseHome(t)
+		p := startPulseChild(t, home, pulseChildPort(t), true)
+		signal.Reset(syscall.SIGHUP)
+		p.awaitReady(t)
+		must(t, p.cmd.Process.Signal(syscall.SIGHUP))
+		select {
+		case <-p.exit:
+			t.Fatalf("nohup'd server exited on SIGHUP: %s", p.stderr.String())
+		case <-time.After(500 * time.Millisecond):
+		}
+		if _, err := os.Lstat(path); err != nil {
+			t.Fatal("nohup'd server lost its socket on SIGHUP", err)
+		}
+		p.stop(t, syscall.SIGTERM)
+	})
 	t.Run("killed-owner-recovery", func(t *testing.T) {
 		home, path := pulseHome(t)
 		p := startPulseChild(t, home, pulseChildPort(t), true)
