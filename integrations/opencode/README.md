@@ -152,7 +152,9 @@ process instance; closed/expired sockets lose all identity state, so PID reuse
 cannot inherit a mapping. The source is a user-reviewed local plugin, not an
 audit/security attestation of a remote OpenCode server.
 
-Ctrl-C/SIGTERM unwind owned listener cleanup. SIGKILL cannot run defers, so the
+Ctrl-C, SIGTERM, and closing the terminal (SIGHUP) unwind owned listener
+cleanup; a server started with `nohup` keeps ignoring SIGHUP and keeps running.
+SIGKILL cannot run defers, so the
 next opted-in start acquires the exclusive lock and reclaims only an owned,
 single-link `0600` socket whose connection probe reports `ECONNREFUSED` and
 whose inode still matches. Symlinks, regular files, lax modes, unexpected lock

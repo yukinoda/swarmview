@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -254,8 +255,19 @@ func pulseChildPort(t *testing.T) string {
 
 func startPulseChild(t *testing.T, home, port string, enabled bool) *pulseChild {
 	t.Helper()
+	return startPulseChildIgnoring(t, home, port, enabled, false)
+}
+
+// startPulseChildIgnoring can start the child with SIGHUP ignored, as nohup does,
+// through a shell, so this test process's own signal handling never changes.
+func startPulseChildIgnoring(t *testing.T, home, port string, enabled, ignoreHup bool) *pulseChild {
+	t.Helper()
 	p := &pulseChild{exit: make(chan struct{}), ready: make(chan string, 1)}
-	p.cmd = exec.Command(os.Args[0], "-test.run=^TestPulseCLIHelper$")
+	argv := []string{os.Args[0], "-test.run=^TestPulseCLIHelper$"}
+	if ignoreHup {
+		argv = append([]string{"/bin/sh", "-c", `trap "" HUP; exec "$0" "$@"`}, argv...)
+	}
+	p.cmd = exec.Command(argv[0], argv[1:]...)
 	flag := "0"
 	if enabled {
 		flag = "1"
@@ -313,8 +325,13 @@ func (p *pulseChild) stop(t *testing.T, sig os.Signal) {
 }
 
 func TestPulseCLILifecycle(t *testing.T) {
-	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+	// SIGHUP is a closed terminal; it must clean up like Ctrl-C and SIGTERM.
+	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP} {
 		t.Run(sig.String(), func(t *testing.T) {
+			if sig == syscall.SIGHUP && signal.Ignored(syscall.SIGHUP) {
+				// Running under nohup: children inherit the ignore, as they should.
+				t.Skip("SIGHUP is ignored by this test run")
+			}
 			home, path := pulseHome(t)
 			for i := 0; i < 2; i++ {
 				p := startPulseChild(t, home, pulseChildPort(t), true)
@@ -332,6 +349,22 @@ func TestPulseCLILifecycle(t *testing.T) {
 			}
 		})
 	}
+	t.Run("nohup-keeps-running", func(t *testing.T) {
+		// A child started with SIGHUP ignored (nohup) inherits that and must keep it.
+		home, path := pulseHome(t)
+		p := startPulseChildIgnoring(t, home, pulseChildPort(t), true, true)
+		p.awaitReady(t)
+		must(t, p.cmd.Process.Signal(syscall.SIGHUP))
+		select {
+		case <-p.exit:
+			t.Fatalf("nohup'd server exited on SIGHUP: %s", p.stderr.String())
+		case <-time.After(500 * time.Millisecond):
+		}
+		if _, err := os.Lstat(path); err != nil {
+			t.Fatal("nohup'd server lost its socket on SIGHUP", err)
+		}
+		p.stop(t, syscall.SIGTERM)
+	})
 	t.Run("killed-owner-recovery", func(t *testing.T) {
 		home, path := pulseHome(t)
 		p := startPulseChild(t, home, pulseChildPort(t), true)
