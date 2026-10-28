@@ -1960,6 +1960,8 @@ const {
       workerLabel = liveRow.name.textContent;
     liveParent.name.textContent = 'Parent '.repeat(24);
     liveRow.name.textContent = 'Worker '.repeat(24);
+    // Long labels wrap the nested compact rows; feedback is only shown for an onscreen worker.
+    liveRow.btn.scrollIntoView({ block: 'nearest' });
     showFeedback('live:test:0', 'returned');
     assert(
       communicationFeedback.textContent.length <= 400 &&
@@ -1968,6 +1970,7 @@ const {
     );
     liveParent.name.textContent = parentLabel;
     liveRow.name.textContent = workerLabel;
+    window.scrollTo(0, 0);
     clearPulses();
     showFeedback('live:test:24', 'sent');
     assert(
@@ -2632,10 +2635,26 @@ const {
       const stubLeft =
           row.btn.getBoundingClientRect().left + parseFloat(stub.left),
         stubWidth = parseFloat(stub.width);
+      const contentLeft = row.btn.firstElementChild.getBoundingClientRect().left,
+        stubGap = contentLeft - (stubLeft + stubWidth);
       assert(
-        stubWidth === (innerWidth <= 480 ? 5 : 6),
-        'connector repair retains the existing compact/native horizontal stub lengths',
+        stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
+        'horizontal branches reach just short of the row logo or title: ' +
+          JSON.stringify({ key, stubWidth, stubGap }),
       );
+      const parentRow = rows.get(row.item.parent),
+        parentDepth = parentRow ? +parentRow.node.style.getPropertyValue('--depth') : 0;
+      if (parentRow && parentDepth < 4) {
+        const parentContentLeft =
+            parentRow.btn.firstElementChild.getBoundingClientRect().left,
+          trunkOffset = trunkRight - 1 - parentContentLeft,
+          maxOffset = parentRow.item.sub ? 8 : 20;
+        assert(
+          trunkOffset >= 0 && trunkOffset <= maxOffset,
+          'child trunks drop from the parent logo, or the start of a worker parent title: ' +
+            JSON.stringify({ key, parentDepth, trunkOffset }),
+        );
+      }
       connectorJunctions.push({
         key,
         source: row.item.live ? 'live' : row.item.sub ? 'metadata' : 'process',

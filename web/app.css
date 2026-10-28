@@ -273,20 +273,29 @@ kbd {
 }
 .kids {
   position: relative;
-  --connector-step: 8px;
-  --connector-origin: calc(
-    (var(--connector-depth) + 1) * var(--connector-step)
-  );
+  --tree-step: 24px;
+  --tree-pad: 16px;
+  /* Titles start after the 20px logo and 8px gap; logo-less worker titles keep that column. */
+  --worker-pad: calc(var(--tree-pad) + 28px);
 }
 .kids:empty {
   display: none;
 }
 /* Resolve each child junction on its parent container, before the child overrides --depth. */
 .group > .kids {
-  --connector-depth: 0;
+  --connector-origin: calc(var(--tree-pad) / 2);
 }
+/* The trunk drops from the parent's 20px logo, or from the start of a worker parent's title.
+   Rows at the depth cap share one column, so their children sit beside the parent. */
 .node > .kids {
-  --connector-depth: min(calc(var(--depth, 0) + 1), 4);
+  --connector-origin: calc(
+    var(--tree-pad) + 10px + min(var(--depth, 0), 3) * var(--tree-step)
+  );
+}
+.node.worker > .kids {
+  --connector-origin: calc(
+    var(--worker-pad) + 4px + min(var(--depth, 0), 3) * var(--tree-step)
+  );
 }
 .group > .kids::before,
 .node > .kids::before {
@@ -318,14 +327,16 @@ kbd {
   color: var(--fg);
 }
 .row-line > .agent {
-  padding-left: calc(16px + var(--depth, 0) * 8px);
+  --row-pad: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step));
+  padding-left: var(--row-pad);
 }
+/* The branch runs from the parent trunk to just before this row's logo or title. */
 .row-line > .agent::before {
   content: '';
   position: absolute;
   left: var(--connector-origin);
   top: 23px;
-  width: 6px;
+  width: calc(var(--row-pad) - var(--connector-origin) - 2px);
   border-top: 1px solid var(--line);
 }
 .agent:hover:not(:disabled) {
@@ -411,13 +422,19 @@ kbd {
 .worker-caption {
   font-size: 12px;
   color: var(--mut);
-  padding: 6px 8px 10px 16px;
+  padding: 6px 8px 10px;
+  padding-left: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
 }
 .live-worker > .row-line {
   grid-template-columns: minmax(0, 1fr) 64px;
 }
 .worker > .row-line > .agent {
-  padding-left: calc(44px + var(--depth, 0) * 8px);
+  --row-pad: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
+}
+/* Workers have no logo, so their branch points at the title line instead of the row middle. */
+.worker > .row-line > .agent::before {
+  top: 14px;
+  width: calc(var(--row-pad) - var(--connector-origin) - 4px);
 }
 .live-worker > .row-line .context {
   min-height: 20px;
@@ -685,17 +702,9 @@ select {
   .live-worker > .row-line {
     grid-template-columns: minmax(0, 1fr) 56px;
   }
-  .row-line > .agent {
-    padding-left: calc(12px + var(--depth, 0) * 6px);
-  }
-  .row-line > .agent::before {
-    width: 5px;
-  }
   .kids {
-    --connector-step: 6px;
-  }
-  .worker > .row-line > .agent {
-    padding-left: calc(40px + var(--depth, 0) * 6px);
+    --tree-step: 16px;
+    --tree-pad: 12px;
   }
   .live-worker > .row-line .context {
     min-height: 40px;
@@ -703,9 +712,6 @@ select {
   .counts {
     gap: 2px 4px;
     font-size: 11px;
-  }
-  .worker-caption {
-    padding-left: 8px;
   }
   .detail-list {
     grid-template-columns: 95px minmax(0, 1fr);
