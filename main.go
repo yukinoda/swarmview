@@ -33,21 +33,13 @@ func main() {
 }
 
 func runServer(desktop, communication bool) error {
-	// Ctrl-C, SIGTERM and a closed terminal (SIGHUP) all remove the owned socket.
-	// A signal ignored at startup (nohup, a backgrounded script) stays ignored:
-	// watching it would un-ignore it.
-	var signals []os.Signal
-	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP} {
-		if !signal.Ignored(sig) {
-			signals = append(signals, sig)
-		}
+	signals := []os.Signal{os.Interrupt, syscall.SIGTERM}
+	// SIGHUP too, so closing the terminal removes the owned socket like Ctrl-C,
+	// unless it was ignored at startup (nohup): watching it would un-ignore it.
+	if !signal.Ignored(syscall.SIGHUP) {
+		signals = append(signals, syscall.SIGHUP)
 	}
-	ctx := context.Background()
-	stop := context.CancelFunc(func() {})
-	// With no signals, NotifyContext would relay every signal; skip it then.
-	if len(signals) > 0 {
-		ctx, stop = signal.NotifyContext(ctx, signals...)
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), signals...)
 	defer stop()
 	s := newServer(execRun)
 	s.sysU32 = sysctlU32
