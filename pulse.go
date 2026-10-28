@@ -149,6 +149,7 @@ func (b *pulseBridge) close() {
 		if b.ln != nil {
 			b.ln.Close()
 			_ = removePulseSocket(b.path, b.inode)
+			os.Remove(filepath.Join(filepath.Dir(b.path), "live.exe"))
 		}
 		b.mu.Lock()
 		b.closed = true

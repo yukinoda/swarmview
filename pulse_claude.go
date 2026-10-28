@@ -83,6 +83,8 @@ func runClaudeHook(stdin io.Reader) {
 // plugin's launcher runs the build that is listening, wherever it was started from.
 // Best effort: without it the launcher falls back to PATH and the native app.
 func publishHookBinary(dir string) {
+	// Never leave an older bridge's path in front of the launcher's fallbacks.
+	os.Remove(filepath.Join(dir, "live.exe"))
 	exe, err := os.Executable()
 	if err != nil {
 		return
@@ -119,7 +121,7 @@ func decodeClaudePulse(b []byte) (claudePulse, error) {
 }
 
 // claudeHost returns the detected Claude process that pid is, or descends from within
-// four parent hops (Claude runs hooks through a shell), or 0.
+// five parent hops (Claude runs hooks through a shell, the plugin through a launcher), or 0.
 func claudeHost(s *server, sn snap, pid int) int {
 	claude := map[int]bool{}
 	for _, a := range sn.agents {
@@ -146,7 +148,7 @@ func claudeHost(s *server, sn snap, pid int) int {
 			parent[child] = ppid
 		}
 	}
-	for hop := 0; hop < 4; hop++ {
+	for hop := 0; hop < 5; hop++ {
 		pid = parent[pid]
 		if claude[pid] {
 			return pid

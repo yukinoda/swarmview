@@ -53,12 +53,12 @@ func TestClaudeHookBridge(t *testing.T) {
 	pulseHome(t)
 	host := 4242
 	self := strconv.Itoa(os.Getpid())
-	// The hook (this test process) descends from the detected Claude through three shells:
-	// four hops is the deepest accepted chain.
-	fourHops := self + " 4300\n4300 4301\n4301 4302\n4302 4242\n"
+	// The hook (this test process) descends from the detected Claude through four
+	// processes: five hops is the deepest accepted chain.
 	fiveHops := self + " 4299\n4299 4300\n4300 4301\n4301 4302\n4302 4242\n"
+	sixHops := self + " 4298\n4298 4299\n4299 4300\n4300 4301\n4301 4302\n4302 4242\n"
 	var mu sync.Mutex
-	ps := fourHops
+	ps := fiveHops
 	setPs := func(table string) {
 		mu.Lock()
 		ps = table
@@ -103,9 +103,9 @@ func TestClaudeHookBridge(t *testing.T) {
 	}
 
 	// A hook outside any detected Claude, too deep below one, or an unmapped event never pulses.
-	setPs(fiveHops)
+	setPs(sixHops)
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a0123456789abcdef"}`)
-	setPs(fourHops)
+	setPs(fiveHops)
 	setKind("codex")
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a0123456789abcdef"}`)
 	setKind("claude")
@@ -130,6 +130,12 @@ func TestClaudeHookBridge(t *testing.T) {
 	wg.Wait()
 	if len(ch) != 3 {
 		t.Fatalf("parallel starts queued %d of 3 cues", len(ch))
+	}
+
+	// A stopped bridge leaves no path for the launcher to prefer.
+	b.close()
+	if _, err := os.Stat(filepath.Join(filepath.Dir(b.path), "live.exe")); !os.IsNotExist(err) {
+		t.Fatalf("live.exe outlived the bridge: %v", err)
 	}
 }
 
@@ -178,7 +184,8 @@ func TestClaudePluginHooks(t *testing.T) {
 		if !hook.Async {
 			t.Fatalf("%s: hook must be async so Claude never waits", event)
 		}
-		if hook.Command != `"${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
+		// Run through sh, so a lost exec bit on install can't break the hook.
+		if hook.Command != `sh "${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
 			t.Fatalf("%s: hook command %q", event, hook.Command)
 		}
 	}
@@ -199,8 +206,13 @@ func TestClaudePluginLauncher(t *testing.T) {
 	payload := `{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`
 	run := func(home, path string) string {
 		t.Helper()
-		cmd := exec.Command("integrations/claude/hooks/forward.sh")
-		cmd.Env = append(os.Environ(), "PATH="+path+":/usr/bin:/bin", "HOME="+home, "XDG_CACHE_HOME="+filepath.Join(home, ".cache"))
+		cmd := exec.Command("sh", "integrations/claude/hooks/forward.sh")
+		env := []string{
+			"PATH=" + path + ":/usr/bin:/bin",
+			"HOME=" + home,
+			"XDG_CACHE_HOME=" + filepath.Join(home, ".cache"),
+		}
+		cmd.Env = append(os.Environ(), env...)
 		cmd.Stdin = strings.NewReader(payload)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -238,8 +250,19 @@ func TestClaudePluginLauncher(t *testing.T) {
 	if out := run(home, bin); out != "" {
 		t.Fatalf("launcher must be silent, got %q", out)
 	}
+	got, err = os.ReadFile(filepath.Join(home, "running.got"))
+	if err != nil || len(got) != 0 {
+		t.Fatalf("an old binary must fail before reading the event: %q %v", got, err)
+	}
 	got, err = os.ReadFile(filepath.Join(home, "path.got"))
 	if err != nil || string(got) != payload {
 		t.Fatalf("PATH binary did not get the event after the old one failed: %q %v", got, err)
+	}
+
+	// With no binary anywhere, the launcher still succeeds silently.
+	must(t, os.Remove(filepath.Join(cache, "swarmview", "live.exe")))
+	must(t, os.Remove(filepath.Join(bin, "swarmview")))
+	if out := run(home, bin); out != "" {
+		t.Fatalf("launcher must be silent without a binary, got %q", out)
 	}
 }

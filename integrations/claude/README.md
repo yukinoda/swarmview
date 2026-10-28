@@ -52,7 +52,8 @@ Add the same hooks to your **existing** `~/.claude/settings.json` yourself,
 preserving other settings. Use the absolute path of the binary: the extracted
 CLI `swarmview`, or
 `/Applications/Swarmview.app/Contents/MacOS/swarmview-server` for the native
-app. Disable by removing the three entries.
+app, and keep `"async": true` so Claude never waits. If you move the binary or
+app, update the path. Disable by removing the three entries.
 
    ```json
    {
@@ -119,14 +120,14 @@ parent/worker tree doesn't have.
 
 The socket checks the connecting process's kernel PID. A record is accepted
 only if that process is a detected Claude process or descends from one within
-four parent hops (Claude runs hooks through a shell). The cue carries that
-Claude's PID, and the dashboard marks a worker row only if it belongs to the
-same Claude. A hook stays connected while it is checked, which keeps its PID in
-use. If the check outlasts the hook's 5-second limit, the hook exits and the
-record is rejected because its process is gone. Any program Claude runs is also
-its descendant, so it could send cues for that Claude's own workers. It can't
-affect other sessions.
+five parent hops (Claude runs hooks through a shell, the plugin through its
+launcher). The cue carries that Claude's PID, and the dashboard marks a worker
+row only if it belongs to the same Claude. A hook stays connected while it is
+checked, which keeps its PID in use. If the check outlasts the hook's 5-second
+limit, the hook exits and the record is rejected because its process is gone.
+Any program Claude runs is also its descendant, so it could send cues for that
+Claude's own workers. It can't affect other sessions.
 
 Starting `-communication` also writes `live.exe` (mode `0600`) beside the
-socket. It holds only the running binary's path, for the plugin's launcher, and
-no event, PID, or session data.
+socket, and stopping it removes the file. It holds only the running binary's
+path, for the plugin's launcher, and no event, PID, or session data.
