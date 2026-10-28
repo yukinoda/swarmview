@@ -146,10 +146,11 @@ session status or conversation metadata.
 - Native human requests, permissions, completion, and send/reply events are not
   available by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
   observes confirmed sends and foreground result returns for CLI/service 2.1.3–2.1.4
-  with manual TUI opt-in on macOS/Linux. Optional
-  [Claude Code plugin](integrations/claude/README.md) hooks observe subagent
-  start/finish and follow-up messages; other providers remain unsupported for
-  communication. Live relationships do not establish worker process status.
+  with manual TUI opt-in on macOS/Linux. The optional
+  [Claude Code plugin](integrations/claude/README.md) observes subagent
+  start/finish and follow-up messages; its one-step install needs Claude Code
+  2.1.275+, and older versions add the marketplace first. Other providers remain
+  unsupported for communication. Live relationships do not establish worker process status.
   Recently quiet observations and notifications do not confirm that
   someone needs to act. Nesting indicates discovered parentage, not communication.
 - Per-agent RAM is approximate process-tree RSS and remains neutral regardless of

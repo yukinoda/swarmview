@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,9 +85,12 @@ func TestClaudeHookBridge(t *testing.T) {
 	defer b.close()
 	exe, err := os.Executable()
 	must(t, err)
-	published, err := os.ReadFile(filepath.Join(filepath.Dir(b.path), "live.exe"))
-	if err != nil || string(published) != exe+"\n" {
-		t.Fatalf("bridge did not publish its binary for the plugin launcher: %q %v", published, err)
+	published, err := os.ReadFile(liveExePath(filepath.Dir(b.path)))
+	if err != nil {
+		t.Fatalf("bridge did not publish its binary for the plugin launcher: %v", err)
+	}
+	if string(published) != exe+"\n" {
+		t.Fatalf("live.exe names %q, want this binary %q", published, exe)
 	}
 	ch, frame := pulseViewer(t, b)
 	hook := func(payload string) { runClaudeHook(strings.NewReader(payload)) }
@@ -134,7 +138,7 @@ func TestClaudeHookBridge(t *testing.T) {
 
 	// A stopped bridge leaves no path for the launcher to prefer.
 	b.close()
-	if _, err := os.Stat(filepath.Join(filepath.Dir(b.path), "live.exe")); !os.IsNotExist(err) {
+	if _, err := os.Stat(liveExePath(filepath.Dir(b.path))); !os.IsNotExist(err) {
 		t.Fatalf("live.exe outlived the bridge: %v", err)
 	}
 }
@@ -204,7 +208,11 @@ func launcherStub(t *testing.T, path, marker string, old bool) {
 
 func TestClaudePluginLauncher(t *testing.T) {
 	payload := `{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`
-	run := func(home, path string) string {
+	// A short directory: t.TempDir() makes the unix socket path too long on macOS.
+	home, err := os.MkdirTemp("", "s-")
+	must(t, err)
+	t.Cleanup(func() { os.RemoveAll(home) })
+	run := func(path string) string {
 		t.Helper()
 		cmd := exec.Command("sh", "integrations/claude/hooks/forward.sh")
 		env := []string{
@@ -220,49 +228,66 @@ func TestClaudePluginLauncher(t *testing.T) {
 		}
 		return string(out)
 	}
-	home := t.TempDir()
+	received := func(marker string) string {
+		t.Helper()
+		got, err := os.ReadFile(marker)
+		if err != nil {
+			t.Fatalf("%s did not run: %v", filepath.Base(marker), err)
+		}
+		return string(got)
+	}
 	cache := filepath.Join(home, ".cache")
 	if runtime.GOOS == "darwin" {
 		cache = filepath.Join(home, "Library", "Caches")
 	}
-	must(t, os.MkdirAll(filepath.Join(cache, "swarmview"), 0700))
+	dir := filepath.Join(cache, "swarmview")
+	must(t, os.MkdirAll(dir, 0700))
+	ln, err := net.Listen("unix", filepath.Join(dir, "live.sock"))
+	must(t, err)
 	bin := filepath.Join(home, "bin")
 	must(t, os.Mkdir(bin, 0700))
+	running := filepath.Join(home, "running")
+	runningGot := filepath.Join(home, "running.got")
+	pathGot := filepath.Join(home, "path.got")
 
 	// The binary Swarmview recorded beside its socket wins over PATH.
-	running := filepath.Join(home, "running")
-	launcherStub(t, running, filepath.Join(home, "running.got"), false)
-	launcherStub(t, filepath.Join(bin, "swarmview"), filepath.Join(home, "path.got"), false)
-	must(t, os.WriteFile(filepath.Join(cache, "swarmview", "live.exe"), []byte(running+"\n"), 0600))
-	if out := run(home, bin); out != "" {
+	launcherStub(t, running, runningGot, false)
+	launcherStub(t, filepath.Join(bin, "swarmview"), pathGot, false)
+	must(t, os.WriteFile(liveExePath(dir), []byte(running+"\n"), 0600))
+	if out := run(bin); out != "" {
 		t.Fatalf("launcher must be silent, got %q", out)
 	}
-	got, err := os.ReadFile(filepath.Join(home, "running.got"))
-	if err != nil || string(got) != payload {
-		t.Fatalf("recorded binary did not receive the event: %q %v", got, err)
+	if got := received(runningGot); got != payload {
+		t.Fatalf("recorded binary got %q, want the event", got)
 	}
-	if _, err := os.Stat(filepath.Join(home, "path.got")); err == nil {
+	if _, err := os.Stat(pathGot); err == nil {
 		t.Fatal("PATH binary ran although the recorded one succeeded")
 	}
 
-	// A recorded binary too old for -claude-hook fails; the PATH one still gets the event.
-	launcherStub(t, running, filepath.Join(home, "running.got"), true)
-	if out := run(home, bin); out != "" {
+	// A recorded binary too old for -claude-hook fails before reading;
+	// the PATH one still gets the whole event.
+	launcherStub(t, running, runningGot, true)
+	if out := run(bin); out != "" {
 		t.Fatalf("launcher must be silent, got %q", out)
 	}
-	got, err = os.ReadFile(filepath.Join(home, "running.got"))
-	if err != nil || len(got) != 0 {
-		t.Fatalf("an old binary must fail before reading the event: %q %v", got, err)
+	if got := received(runningGot); got != "" {
+		t.Fatalf("an old binary must fail before reading the event, got %q", got)
 	}
-	got, err = os.ReadFile(filepath.Join(home, "path.got"))
-	if err != nil || string(got) != payload {
-		t.Fatalf("PATH binary did not get the event after the old one failed: %q %v", got, err)
+	if got := received(pathGot); got != payload {
+		t.Fatalf("PATH binary got %q after the old one failed, want the event", got)
 	}
 
-	// With no binary anywhere, the launcher still succeeds silently.
-	must(t, os.Remove(filepath.Join(cache, "swarmview", "live.exe")))
-	must(t, os.Remove(filepath.Join(bin, "swarmview")))
-	if out := run(home, bin); out != "" {
-		t.Fatalf("launcher must be silent without a binary, got %q", out)
+	// Without a live socket no Swarmview is listening, so no binary starts.
+	must(t, ln.Close())
+	os.Remove(filepath.Join(dir, "live.sock"))
+	must(t, os.Remove(runningGot))
+	must(t, os.Remove(pathGot))
+	if out := run(bin); out != "" {
+		t.Fatalf("launcher must be silent without a socket, got %q", out)
+	}
+	for _, marker := range []string{runningGot, pathGot} {
+		if _, err := os.Stat(marker); err == nil {
+			t.Fatalf("%s ran with no Swarmview listening", filepath.Base(marker))
+		}
 	}
 }

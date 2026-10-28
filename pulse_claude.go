@@ -84,16 +84,24 @@ func runClaudeHook(stdin io.Reader) {
 // Best effort: without it the launcher falls back to PATH and the native app.
 func publishHookBinary(dir string) {
 	// Never leave an older bridge's path in front of the launcher's fallbacks.
-	os.Remove(filepath.Join(dir, "live.exe"))
+	os.Remove(liveExePath(dir))
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
-	tmp := filepath.Join(dir, "live.exe.tmp")
+	tmp := liveExePath(dir) + ".tmp"
 	if os.WriteFile(tmp, []byte(exe+"\n"), 0600) != nil {
+		os.Remove(tmp)
 		return
 	}
-	os.Rename(tmp, filepath.Join(dir, "live.exe"))
+	if os.Rename(tmp, liveExePath(dir)) != nil {
+		os.Remove(tmp)
+	}
+}
+
+// liveExePath is where the bridge records its binary for the plugin launcher.
+func liveExePath(dir string) string {
+	return filepath.Join(dir, "live.exe")
 }
 
 func pulseSocketPath() (string, error) {
