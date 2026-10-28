@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -85,12 +84,17 @@ func TestClaudeHookBridge(t *testing.T) {
 	defer b.close()
 	exe, err := os.Executable()
 	must(t, err)
-	published, err := os.ReadFile(liveExePath(filepath.Dir(b.path)))
+	own, err := os.Stat(exe)
+	must(t, err)
+	copied, err := os.Stat(liveHookPath(filepath.Dir(b.path)))
 	if err != nil {
-		t.Fatalf("bridge did not publish its binary for the plugin launcher: %v", err)
+		t.Fatalf("bridge did not copy its binary for the plugin launcher: %v", err)
 	}
-	if string(published) != exe+"\n" {
-		t.Fatalf("live.exe names %q, want this binary %q", published, exe)
+	if copied.Size() != own.Size() {
+		t.Fatalf("live-hook is %d bytes, want a copy of this %d-byte binary", copied.Size(), own.Size())
+	}
+	if copied.Mode().Perm() != 0700 {
+		t.Fatalf("live-hook mode %v, want 0700", copied.Mode().Perm())
 	}
 	ch, frame := pulseViewer(t, b)
 	hook := func(payload string) { runClaudeHook(strings.NewReader(payload)) }
@@ -138,8 +142,8 @@ func TestClaudeHookBridge(t *testing.T) {
 
 	// A stopped bridge leaves no path for the launcher to prefer.
 	b.close()
-	if _, err := os.Stat(liveExePath(filepath.Dir(b.path))); !os.IsNotExist(err) {
-		t.Fatalf("live.exe outlived the bridge: %v", err)
+	if _, err := os.Stat(liveHookPath(filepath.Dir(b.path))); !os.IsNotExist(err) {
+		t.Fatalf("live-hook outlived the bridge: %v", err)
 	}
 }
 
@@ -147,27 +151,24 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	_, socket := pulseHome(t)
 	dir := filepath.Dir(socket)
 
-	// Publishing replaces a planted symlink instead of writing through it.
+	// Publishing replaces planted symlinks instead of writing through them.
 	victim := filepath.Join(t.TempDir(), "victim")
 	must(t, os.WriteFile(victim, []byte("keep\n"), 0600))
-	must(t, os.Symlink(victim, liveExePath(dir)))
+	must(t, os.Symlink(victim, liveHookPath(dir)))
+	must(t, os.Symlink(victim, liveHookPath(dir)+".tmp"))
 	publishHookBinary(dir)
 	kept, err := os.ReadFile(victim)
 	must(t, err)
 	if string(kept) != "keep\n" {
 		t.Fatalf("publishing wrote through a symlink: %q", kept)
 	}
-	fi, err := os.Lstat(liveExePath(dir))
+	fi, err := os.Lstat(liveHookPath(dir))
 	must(t, err)
 	if !fi.Mode().IsRegular() {
-		t.Fatalf("live.exe is %v, want a regular file", fi.Mode())
-	}
-	if fi.Mode().Perm() != 0600 {
-		t.Fatalf("live.exe mode %v, want 0600", fi.Mode().Perm())
+		t.Fatalf("live-hook is %v, want a regular file", fi.Mode())
 	}
 
-	// A bridge whose socket was replaced leaves the replacement's live.exe alone.
-	must(t, os.Remove(liveExePath(dir)))
+	// A bridge whose socket was replaced leaves the replacement's live-hook alone.
 	s := &server{snap: pulseSnap("claude")}
 	b := newPulseBridge()
 	must(t, b.start(s))
@@ -176,15 +177,15 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	replacement, err := net.Listen("unix", socket)
 	must(t, err)
 	defer replacement.Close()
-	other := []byte("/elsewhere/swarmview\n")
-	must(t, os.WriteFile(liveExePath(dir), other, 0600))
+	other := []byte("replacement bridge\n")
+	must(t, os.WriteFile(liveHookPath(dir), other, 0700))
 	b.close()
-	kept, err = os.ReadFile(liveExePath(dir))
+	kept, err = os.ReadFile(liveHookPath(dir))
 	if err != nil {
-		t.Fatalf("shutdown removed the replacement bridge's live.exe: %v", err)
+		t.Fatalf("shutdown removed the replacement bridge's live-hook: %v", err)
 	}
 	if string(kept) != string(other) {
-		t.Fatalf("live.exe changed to %q", kept)
+		t.Fatalf("live-hook changed to %q", kept)
 	}
 }
 
@@ -278,104 +279,81 @@ func TestClaudePluginLauncher(t *testing.T) {
 		}
 		return string(got)
 	}
+	ran := func(marker string) bool {
+		_, err := os.Stat(marker)
+		return err == nil
+	}
+	bin := filepath.Join(home, "bin")
+	must(t, os.Mkdir(bin, 0700))
+	hookGot := filepath.Join(home, "hook.got")
+	pathGot := filepath.Join(home, "path.got")
+	// reset clears both markers and installs fresh stubs for the next step.
+	reset := func(oldHook bool) {
+		t.Helper()
+		os.Remove(hookGot)
+		os.Remove(pathGot)
+		os.Remove(liveHookPath(dir))
+		launcherStub(t, liveHookPath(dir), hookGot, oldHook)
+		launcherStub(t, filepath.Join(bin, "swarmview"), pathGot, false)
+	}
 	ln, err := net.Listen("unix", socket)
 	must(t, err)
 	t.Cleanup(func() { ln.Close() })
-	bin := filepath.Join(home, "bin")
-	must(t, os.Mkdir(bin, 0700))
-	running := filepath.Join(home, "running")
-	runningGot := filepath.Join(home, "running.got")
-	pathGot := filepath.Join(home, "path.got")
 
-	// The binary Swarmview recorded beside its socket wins over PATH.
-	launcherStub(t, running, runningGot, false)
-	launcherStub(t, filepath.Join(bin, "swarmview"), pathGot, false)
-	must(t, os.WriteFile(liveExePath(dir), []byte(running+"\n"), 0600))
+	// The private copy of the listening build wins over PATH.
+	reset(false)
 	run(bin)
-	if got := received(runningGot); got != payload {
-		t.Fatalf("recorded binary got %q, want the event", got)
+	if got := received(hookGot); got != payload {
+		t.Fatalf("live-hook got %q, want the event", got)
 	}
-	if _, err := os.Stat(pathGot); err == nil {
-		t.Fatal("PATH binary ran although the recorded one succeeded")
+	if ran(pathGot) {
+		t.Fatal("PATH binary ran although live-hook succeeded")
 	}
 
-	// A recorded binary too old for -claude-hook fails before reading;
-	// the PATH one still gets the whole event.
-	launcherStub(t, running, runningGot, true)
+	// A copy too old for -claude-hook fails before reading; PATH gets the event.
+	reset(true)
 	run(bin)
-	if got := received(runningGot); got != "" {
+	if got := received(hookGot); got != "" {
 		t.Fatalf("an old binary must fail before reading the event, got %q", got)
 	}
 	if got := received(pathGot); got != payload {
 		t.Fatalf("PATH binary got %q after the old one failed, want the event", got)
 	}
 
-	// A symlinked live.exe is not trusted; the launcher falls back to PATH.
-	launcherStub(t, running, runningGot, false)
-	must(t, os.Remove(pathGot))
-	must(t, os.Remove(liveExePath(dir)))
+	// A symlinked live-hook is not trusted.
+	reset(false)
 	target := filepath.Join(home, "target")
-	must(t, os.WriteFile(target, []byte(running+"\n"), 0600))
-	must(t, os.Symlink(target, liveExePath(dir)))
-	must(t, os.Remove(runningGot))
+	must(t, os.Rename(liveHookPath(dir), target))
+	must(t, os.Symlink(target, liveHookPath(dir)))
 	run(bin)
-	if _, err := os.Stat(runningGot); err == nil {
-		t.Fatal("launcher trusted a symlinked live.exe")
+	if ran(hookGot) {
+		t.Fatal("launcher ran a symlinked live-hook")
 	}
 	if got := received(pathGot); got != payload {
 		t.Fatalf("PATH binary got %q, want the event", got)
 	}
 
-	// A root-owned recorded binary (a system install outside PATH) is trusted:
-	// `true` runs and succeeds, so the PATH binary must not. A binary owned by
-	// another regular user is refused, but that needs root to set up here.
-	trueBin, err := exec.LookPath("true")
-	must(t, err)
-	info, err := os.Stat(trueBin)
-	must(t, err)
-	rootOwned := info.Sys().(*syscall.Stat_t).Uid == 0
-	if rootOwned {
-		must(t, os.Remove(pathGot))
-		must(t, os.Remove(liveExePath(dir)))
-		// Recorded through a symlink you own, as os.Executable can report on macOS.
-		link := filepath.Join(home, "true-link")
-		must(t, os.Symlink(trueBin, link))
-		must(t, os.WriteFile(liveExePath(dir), []byte(link+"\n"), 0600))
-		run(bin)
-		if _, err := os.Stat(pathGot); err == nil {
-			t.Fatal("launcher skipped a root-owned recorded binary")
-		}
-		must(t, os.WriteFile(pathGot, nil, 0600))
-	}
-
-	// A recorded binary in a folder others can write is refused: someone could
-	// refill a stale path there. The PATH binary gets the event instead.
-	shared := filepath.Join(home, "shared")
-	must(t, os.Mkdir(shared, 0700))
-	must(t, os.Chmod(shared, 0770))
-	sharedBin := filepath.Join(shared, "swarmview")
-	sharedGot := filepath.Join(home, "shared.got")
-	launcherStub(t, sharedBin, sharedGot, false)
-	must(t, os.Remove(pathGot))
-	must(t, os.Remove(liveExePath(dir)))
-	must(t, os.WriteFile(liveExePath(dir), []byte(sharedBin+"\n"), 0600))
+	// A directory others can enter or write is not private, so live-hook is ignored.
+	reset(false)
+	must(t, os.Chmod(dir, 0770))
 	run(bin)
-	if _, err := os.Stat(sharedGot); err == nil {
-		t.Fatal("launcher ran a binary from a group-writable folder")
+	must(t, os.Chmod(dir, 0700))
+	if ran(hookGot) {
+		t.Fatal("launcher ran live-hook from a group-accessible directory")
 	}
 	if got := received(pathGot); got != payload {
 		t.Fatalf("PATH binary got %q, want the event", got)
 	}
 
 	// Without a live socket no Swarmview is listening, so no binary starts.
+	reset(false)
 	must(t, ln.Close())
 	os.Remove(socket)
-	// The symlink step above left only the PATH marker.
-	must(t, os.Remove(pathGot))
 	run(bin)
-	for _, marker := range []string{runningGot, pathGot} {
-		if _, err := os.Stat(marker); err == nil {
-			t.Fatalf("%s ran with no Swarmview listening", filepath.Base(marker))
-		}
+	if ran(hookGot) {
+		t.Fatal("live-hook ran with no Swarmview listening")
+	}
+	if ran(pathGot) {
+		t.Fatal("PATH binary ran with no Swarmview listening")
 	}
 }

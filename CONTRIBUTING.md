@@ -59,11 +59,11 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `integrations/opencode/`: manually configured TUI-only metadata observer; uses
   the existing provider connection and forwards identifiers to local IPC.
 - `integrations/claude/`: opt-in Claude Code plugin (async hooks plus a
-  launcher) that runs the binary's `-claude-hook` mode, preferring the path the
-  running bridge records in `live.exe`; the repository-root
-  `.claude-plugin/marketplace.json` lists it for `/plugin install`. Bump
-  `version` in its `.claude-plugin/plugin.json` whenever `hooks/` changes, so
-  installed copies update.
+  launcher) that runs the binary's `-claude-hook` mode, preferring the
+  `live-hook` copy the running bridge keeps in its private directory; the
+  repository-root `.claude-plugin/marketplace.json` lists it for
+  `/plugin install`. Bump `version` in its `.claude-plugin/plugin.json`
+  whenever `hooks/` changes, so installed copies update.
 - `assets/`: shared branding and documentation images.
 
 The data flow is `web/app.js` → `GET /agents` → `server.snapshot` → process and

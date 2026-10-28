@@ -79,34 +79,45 @@ func runClaudeHook(stdin io.Reader) {
 	io.Copy(io.Discard, c)
 }
 
-// publishHookBinary records this binary's path beside the socket, so the Claude
-// plugin's launcher runs the build that is listening, wherever it was started from.
-// Best effort: without it the launcher falls back to PATH and the native app.
+// publishHookBinary copies this binary into the owner-only directory as
+// live-hook, so the Claude plugin's launcher runs the build that is listening
+// without trusting any path outside that directory. Best effort: without it the
+// launcher falls back to PATH and the native app.
 func publishHookBinary(dir string) {
-	// Never leave an older bridge's path in front of the launcher's fallbacks.
+	hook := liveHookPath(dir)
+	tmp := hook + ".tmp"
 	// The owner lock excludes other writers, so delete-then-exclusive-create
 	// can't follow a planted symlink or race another bridge.
-	os.Remove(liveExePath(dir))
+	os.Remove(tmp)
 	exe, err := os.Executable()
 	if err != nil {
 		return
 	}
-	f, err := os.OpenFile(liveExePath(dir), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	src, err := os.Open(exe)
 	if err != nil {
 		return
 	}
-	_, err = f.WriteString(exe + "\n")
-	if closeErr := f.Close(); err == nil {
+	defer src.Close()
+	dst, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
+	if err != nil {
+		return
+	}
+	_, err = io.Copy(dst, src)
+	if closeErr := dst.Close(); err == nil {
 		err = closeErr
 	}
+	// Rename last, so the launcher never runs a partly written copy.
+	if err == nil {
+		err = os.Rename(tmp, hook)
+	}
 	if err != nil {
-		os.Remove(liveExePath(dir))
+		os.Remove(tmp)
 	}
 }
 
-// liveExePath is where the bridge records its binary for the plugin launcher.
-func liveExePath(dir string) string {
-	return filepath.Join(dir, "live.exe")
+// liveHookPath is the bridge's own binary, copied for the plugin launcher.
+func liveHookPath(dir string) string {
+	return filepath.Join(dir, "live-hook")
 }
 
 func pulseSocketPath() (string, error) {

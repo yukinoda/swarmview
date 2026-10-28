@@ -119,6 +119,8 @@ func (b *pulseBridge) start(s *server) error {
 	if err != nil {
 		return err
 	}
+	// A crashed bridge's copy must not answer hooks for the one starting now.
+	os.Remove(liveHookPath(dir))
 	ln, inode, err := listenPulseSocket(path)
 	if err != nil {
 		lock.Close()
@@ -148,9 +150,9 @@ func (b *pulseBridge) close() {
 	b.once.Do(func() {
 		if b.ln != nil {
 			b.ln.Close()
-			// live.exe is ours only while the socket was: a replacement bridge keeps its own.
+			// live-hook is ours only while the socket was: a replacement bridge keeps its own.
 			if removePulseSocket(b.path, b.inode) == nil {
-				os.Remove(liveExePath(filepath.Dir(b.path)))
+				os.Remove(liveHookPath(filepath.Dir(b.path)))
 			}
 		}
 		b.mu.Lock()

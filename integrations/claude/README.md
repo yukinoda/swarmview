@@ -1,9 +1,10 @@
 # Optional live communication (Claude Code plugin)
 
-Claude Code runs `swarmview -claude-hook` for a few hook events. Each run reads
-the hook's JSON from stdin, keeps only the event name and a subagent ID, sends
-one record to a running opted-in Swarmview, and exits. Prompts, messages, and
-results are discarded in that process and never reach Swarmview.
+The plugin's async hooks run a small launcher, which runs
+`swarmview -claude-hook` for a few hook events. Each run reads the hook's JSON
+from stdin, keeps only the event name and a subagent ID, sends one record to a
+running opted-in Swarmview, and exits. Prompts, messages, and results are discarded in
+that process and never reach Swarmview.
 
 Tested with Claude Code 2.1.312 on macOS. Linux uses the same code paths but
 has not been run by hand.
@@ -27,15 +28,16 @@ has not been run by hand.
    /plugin install swarmview@swarmview
    ```
 
-   Review [`hooks/hooks.json`][hooks] and [`hooks/forward.sh`][launcher]
-   first; they are the whole plugin. It registers async `SubagentStart`,
+   Review [`hooks/hooks.json`][hooks] and [`hooks/forward.sh`][launcher] first;
+   they are the whole plugin. It registers async `SubagentStart`,
    `SubagentStop`, and `PreToolUse` (`SendMessage`) hooks, so Claude never
-   waits for them. The launcher runs the binary Swarmview recorded beside its
-   socket (`live.exe`, written when `-communication` starts), so it finds a CLI
-   started from any folder. Otherwise it tries `swarmview` on your `PATH`, then
-   the native app in `/Applications` or `~/Applications`, skipping any binary
-   too old to know `-claude-hook`. It does nothing when none is found and never
-   fails a hook. New Claude sessions pick up the plugin.
+   waits for them. When `-communication` starts, Swarmview copies its own
+   binary into its private cache directory as `live-hook`, and the launcher
+   runs that copy, so the CLI is found wherever you started it and always
+   matches the running build. Otherwise it tries `swarmview` on your `PATH`,
+   then the native app in `/Applications` or `~/Applications`, skipping any
+   binary too old to know `-claude-hook`. It does nothing when none is found
+   and never fails a hook. New Claude sessions pick up the plugin.
 
    If you added these hooks to `~/.claude/settings.json` by hand, remove those
    entries when you install the plugin; otherwise every event shows twice.
@@ -47,12 +49,11 @@ Disable with `/plugin disable swarmview`, or remove it with
 `/plugin uninstall swarmview`. When no Swarmview has opted in, the launcher
 finds no socket and exits without starting a binary. After a crash leaves a
 stale socket, the binary starts, finds nothing listening, and exits at once.
-The launcher trusts `live.exe` only in a directory you own, as a regular file
-you own. It runs the binary it names only if that binary and its folder are
-owned by you or root and writable by neither group nor others, so a stale path
-in a shared place such as `/tmp` can't be refilled by another user. A hook
-gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
-exchange). It never fails or delays a Claude tool call.
+The launcher runs `live-hook` only while the cache directory is yours with mode
+`0700` and no ACL, and the copy is your own file, not a symlink. Nothing
+outside that private directory is trusted. A hook gives up after at most 5.5
+seconds (a 0.5-second connect plus a 5-second exchange). It never fails or
+delays a Claude tool call.
 
 ### Without the plugin
 
@@ -136,6 +137,7 @@ limit, the hook exits and the record is rejected because its process is gone.
 Any program Claude runs is also its descendant, so it could send cues for that
 Claude's own workers. It can't affect other sessions.
 
-Starting `-communication` also writes `live.exe` (mode `0600`) beside the
-socket, and stopping it removes the file. It holds only the running binary's
-path, for the plugin's launcher, and no event, PID, or session data.
+Starting `-communication` also copies the running binary into the same
+directory as `live-hook` (mode `0700`, about the binary's size on disk), and
+stopping it removes the copy. It is the same program, used only by the plugin's
+launcher, and holds no event, PID, or session data.
