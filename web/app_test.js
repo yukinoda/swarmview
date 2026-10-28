@@ -2757,11 +2757,8 @@ const {
             'a working node dot takes its branch color: ' + detail,
           );
         } else {
-          const muted = document.createElement('span');
-          muted.style.color = 'var(--mut)';
-          row.btn.append(muted);
-          const restColor = getComputedStyle(muted).color;
-          muted.remove();
+          // The row's context line is drawn in --mut.
+          const restColor = getComputedStyle(row.context).color;
           assert(
             dot.borderTopColor === restColor,
             'a resting node dot uses the muted color: ' + detail,
@@ -2803,8 +2800,30 @@ const {
         stubLeft,
         stubWidth,
         delta: stubLeft - trunkRight,
+        titleLeft: row.name.getBoundingClientRect().left,
       });
     }
+    // Workers keep the title column of logo rows at the same depth.
+    const titleColumns = connectorJunctions.filter((junction) =>
+      connectorJunctions.some(
+        (other) =>
+          other.depth === junction.depth &&
+          (other.source === 'process') !== (junction.source === 'process'),
+      ),
+    );
+    assert(
+      titleColumns.length > 0 &&
+        titleColumns.every(
+          (junction) =>
+            Math.abs(
+              junction.titleLeft -
+                titleColumns.find((other) => other.depth === junction.depth)
+                  .titleLeft,
+            ) <= 1,
+        ),
+      'worker titles start in the same column as logo-row titles at the same depth: ' +
+        JSON.stringify(titleColumns),
+    );
     assert(
       connectorJunctions.every((junction) => Math.abs(junction.delta) <= 0.25),
       'horizontal stubs join the actual parent trunk right edge without crossing left at roots or capped depths: ' +
