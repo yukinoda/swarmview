@@ -286,8 +286,15 @@ func TestClaudePluginReadmeHooks(t *testing.T) {
 		if docs[0].Matcher != groups[0].Matcher {
 			t.Fatalf("%s: README matcher %q, hooks.json %q", event, docs[0].Matcher, groups[0].Matcher)
 		}
-		if !docs[0].Hooks[0].Async {
+		example := docs[0].Hooks[0]
+		if !example.Async {
 			t.Fatalf("%s: README example must be async", event)
+		}
+		if example.Type != "command" {
+			t.Fatalf("%s: README example type %q, want command", event, example.Type)
+		}
+		if !strings.HasSuffix(example.Command, " -claude-hook") {
+			t.Fatalf("%s: README example must run -claude-hook, got %q", event, example.Command)
 		}
 	}
 }

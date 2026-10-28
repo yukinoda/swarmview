@@ -262,10 +262,11 @@ func startPulseChild(t *testing.T, home, port string, enabled bool) *pulseChild 
 func startPulseChildIgnoring(t *testing.T, home, port string, enabled, ignoreHup bool) *pulseChild {
 	t.Helper()
 	p := &pulseChild{exit: make(chan struct{}), ready: make(chan string, 1)}
-	p.cmd = exec.Command(os.Args[0], "-test.run=^TestPulseCLIHelper$")
+	argv := []string{os.Args[0], "-test.run=^TestPulseCLIHelper$"}
 	if ignoreHup {
-		p.cmd = exec.Command("/bin/sh", "-c", `trap "" HUP; exec "$0" "$@"`, os.Args[0], "-test.run=^TestPulseCLIHelper$")
+		argv = append([]string{"/bin/sh", "-c", `trap "" HUP; exec "$0" "$@"`}, argv...)
 	}
+	p.cmd = exec.Command(argv[0], argv[1:]...)
 	flag := "0"
 	if enabled {
 		flag = "1"
