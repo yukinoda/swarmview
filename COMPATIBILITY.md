@@ -150,7 +150,8 @@ session status or conversation metadata.
   [Claude Code plugin](integrations/claude/README.md) observes subagent
   start/finish and follow-up messages; its one-step install needs Claude Code
   2.1.275+, and older versions add the marketplace first. Other providers remain
-  unsupported for communication. Live relationships do not establish worker process status.
+  unsupported for communication. Live relationships do not establish worker
+  process status.
   Recently quiet observations and notifications do not confirm that
   someone needs to act. Nesting indicates discovered parentage, not communication.
 - Per-agent RAM is approximate process-tree RSS and remains neutral regardless of

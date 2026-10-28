@@ -25,7 +25,7 @@ if [ -S "$dir/live.sock" ]; then
   # placed at a stale path (say a deleted /tmp build) belongs to them.
   if [ -n "$running" ]; then
     if [ ! -O "$running" ]; then
-      owner="$(ls -ln "$running" 2>/dev/null | awk '{print $3}')"
+      owner="$(ls -lnL "$running" 2>/dev/null | awk '{print $3}')"
       if [ "$owner" != 0 ]; then
         running=""
       fi

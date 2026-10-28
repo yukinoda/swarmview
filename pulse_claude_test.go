@@ -171,6 +171,7 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	s := &server{snap: pulseSnap("claude")}
 	b := newPulseBridge()
 	must(t, b.start(s))
+	defer b.close()
 	must(t, os.Remove(socket))
 	replacement, err := net.Listen("unix", socket)
 	must(t, err)
@@ -336,7 +337,10 @@ func TestClaudePluginLauncher(t *testing.T) {
 	if rootOwned {
 		must(t, os.Remove(pathGot))
 		must(t, os.Remove(liveExePath(dir)))
-		must(t, os.WriteFile(liveExePath(dir), []byte(trueBin+"\n"), 0600))
+		// Recorded through a symlink you own, as os.Executable can report on macOS.
+		link := filepath.Join(home, "true-link")
+		must(t, os.Symlink(trueBin, link))
+		must(t, os.WriteFile(liveExePath(dir), []byte(link+"\n"), 0600))
 		run(bin)
 		if _, err := os.Stat(pathGot); err == nil {
 			t.Fatal("launcher skipped a root-owned recorded binary")
