@@ -58,10 +58,8 @@ the copy is your own file, not a symlink. No recorded path is ever trusted:
 besides that copy, the launcher only runs `swarmview` from absolute `PATH`
 entries and the native app, as your shell would, and the launcher looks up its
 own helper commands in `/usr/bin` and `/bin` first, then only in the absolute
-entries of your `PATH`. Closing the terminal running Swarmview cleans up like
-Ctrl-C, unless you started it with `nohup`, which keeps it running. A hook
-gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
-exchange). It never fails or delays a Claude tool call.
+entries of your `PATH`. A hook gives up after at most 5.5 seconds (a 0.5-second
+connect plus a 5-second exchange). It never fails or delays a Claude tool call.
 
 ### Without the plugin
 

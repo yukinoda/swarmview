@@ -33,13 +33,7 @@ func main() {
 }
 
 func runServer(desktop, communication bool) error {
-	signals := []os.Signal{os.Interrupt, syscall.SIGTERM}
-	// SIGHUP too, so closing the terminal removes the owned socket and hook copy,
-	// unless it was ignored (nohup): watching it would un-ignore it.
-	if !signal.Ignored(syscall.SIGHUP) {
-		signals = append(signals, syscall.SIGHUP)
-	}
-	ctx, stop := signal.NotifyContext(context.Background(), signals...)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	s := newServer(execRun)
 	s.sysU32 = sysctlU32

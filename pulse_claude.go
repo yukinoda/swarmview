@@ -105,7 +105,11 @@ func stageHookBinary(dir string) string {
 		log.Printf("claude plugin: cannot copy this binary: %v", err)
 		return ""
 	}
-	_, err = io.Copy(dst, src)
+	// The umask may have stripped the exec bit; the launcher needs it.
+	err = dst.Chmod(0700)
+	if err == nil {
+		_, err = io.Copy(dst, src)
+	}
 	if closeErr := dst.Close(); err == nil {
 		err = closeErr
 	}

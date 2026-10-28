@@ -36,18 +36,19 @@ case "$dir" in
     ;;
 esac
 
-# run_hook runs $1 in hook mode when it is an executable regular file, and
-# succeeds only if it delivered (hook mode exits 0 unless the binary itself
-# fails; a binary too old for the flag fails before reading stdin, so the next
-# candidate still gets the event).
-run_hook() {
+# deliver runs $1 in hook mode when it is an executable regular file and, if
+# it exits 0, ends the launcher. Hook mode exits 0 unless the binary itself
+# fails (it may still have found nothing listening); a binary too old for the
+# flag fails before reading stdin, so the next candidate still gets the event.
+deliver() {
   if [ -f "$1" ]; then
     if [ -x "$1" ]; then
-      "$1" -claude-hook 2>/dev/null
-      return
+      if "$1" -claude-hook 2>/dev/null; then
+        cat >/dev/null
+        exit 0
+      fi
     fi
   fi
-  return 1
 }
 
 # No live socket means no opted-in Swarmview: skip starting a binary at all.
@@ -79,32 +80,18 @@ if [ -S "$dir/live.sock" ]; then
   # Candidates in order: the private copy, every swarmview in an absolute PATH
   # entry, then the native app. Only the PATH entries are split on colons;
   # other paths, built from $HOME, may contain one.
-  delivered=""
-  if run_hook "$running"; then
-    delivered=1
-  fi
-  if [ -z "$delivered" ]; then
-    IFS=:
-    set -f
-    for entry in $absolute; do
-      if [ -n "$entry" ]; then
-        if run_hook "$entry/swarmview"; then
-          delivered=1
-          break
-        fi
-      fi
-    done
-    set +f
-    IFS="$saved_ifs"
-  fi
-  if [ -z "$delivered" ]; then
-    if run_hook /Applications/Swarmview.app/Contents/MacOS/swarmview-server; then
-      delivered=1
+  deliver "$running"
+  IFS=:
+  set -f
+  for entry in $absolute; do
+    if [ -n "$entry" ]; then
+      deliver "$entry/swarmview"
     fi
-  fi
-  if [ -z "$delivered" ]; then
-    run_hook "$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
-  fi
+  done
+  set +f
+  IFS="$saved_ifs"
+  deliver /Applications/Swarmview.app/Contents/MacOS/swarmview-server
+  deliver "$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
 fi
 # Drain anything left unread so Claude never writes into a closed pipe.
 cat >/dev/null

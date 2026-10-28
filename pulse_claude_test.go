@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -158,7 +159,10 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	must(t, os.WriteFile(victim, []byte("keep\n"), 0600))
 	must(t, os.Symlink(victim, liveHookPath(dir)))
 	must(t, os.Symlink(victim, liveHookPath(dir)+".tmp"))
+	// A restrictive umask must not strip the copy's exec bit.
+	oldMask := syscall.Umask(0177)
 	publishHookBinary(dir, stageHookBinary(dir))
+	syscall.Umask(oldMask)
 	kept, err := os.ReadFile(victim)
 	must(t, err)
 	if string(kept) != "keep\n" {
@@ -168,6 +172,9 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	must(t, err)
 	if !fi.Mode().IsRegular() {
 		t.Fatalf("live-hook is %v, want a regular file", fi.Mode())
+	}
+	if fi.Mode().Perm() != 0700 {
+		t.Fatalf("live-hook mode %v under umask 0177, want 0700", fi.Mode().Perm())
 	}
 
 	// A bridge whose socket was replaced leaves the replacement's live-hook alone.
