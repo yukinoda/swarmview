@@ -2751,11 +2751,22 @@ const {
           stubWidth >= 4 && Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
           'worker branches run into their node dot: ' + detail,
         );
-        if (row.node.classList.contains('s-working'))
+        if (row.node.classList.contains('s-working')) {
           assert(
             dot.borderTopColor === stub.borderTopColor,
             'a working node dot takes its branch color: ' + detail,
           );
+        } else {
+          const muted = document.createElement('span');
+          muted.style.color = 'var(--mut)';
+          row.btn.append(muted);
+          const restColor = getComputedStyle(muted).color;
+          muted.remove();
+          assert(
+            dot.borderTopColor === restColor,
+            'a resting node dot uses the muted color: ' + detail,
+          );
+        }
       } else {
         const contentLeft =
             row.btn.firstElementChild.getBoundingClientRect().left,
