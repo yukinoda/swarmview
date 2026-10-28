@@ -119,15 +119,18 @@ func (b *pulseBridge) start(s *server) error {
 	if err != nil {
 		return err
 	}
-	// A crashed bridge's copy must not answer hooks for the one starting now.
-	os.Remove(liveHookPath(dir))
+	// Copy before listening and rename right after, so the socket never pairs
+	// with a missing or crashed bridge's copy, and a failed start leaves a live
+	// bridge's copy alone.
+	staged := stageHookBinary(dir)
 	ln, inode, err := listenPulseSocket(path)
 	if err != nil {
+		os.Remove(staged)
 		lock.Close()
 		return err
 	}
 	b.path, b.ln, b.inode, b.lock = path, ln, inode, lock
-	publishHookBinary(dir)
+	publishHookBinary(dir, staged)
 	go func() {
 		slots := make(chan bool, pulsePeers)
 		for {

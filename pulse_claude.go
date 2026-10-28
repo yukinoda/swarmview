@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -79,39 +80,55 @@ func runClaudeHook(stdin io.Reader) {
 	io.Copy(io.Discard, c)
 }
 
-// publishHookBinary copies this binary into the owner-only directory as
-// live-hook, so the Claude plugin's launcher runs the build that is listening
-// without trusting any path outside that directory. Best effort: without it the
-// launcher falls back to PATH and the native app.
-func publishHookBinary(dir string) {
-	hook := liveHookPath(dir)
-	tmp := hook + ".tmp"
+// stageHookBinary copies this binary beside the socket for the Claude plugin's
+// launcher, which then runs the build that is listening without trusting any
+// path outside the owner-only directory. It returns the staged file, or "" if
+// copying failed; publishHookBinary moves it into place.
+func stageHookBinary(dir string) string {
+	tmp := liveHookPath(dir) + ".tmp"
 	// The owner lock excludes other writers, so delete-then-exclusive-create
 	// can't follow a planted symlink or race another bridge.
 	os.Remove(tmp)
 	exe, err := os.Executable()
 	if err != nil {
-		return
+		log.Printf("claude plugin: cannot find this binary to copy: %v", err)
+		return ""
 	}
 	src, err := os.Open(exe)
 	if err != nil {
-		return
+		log.Printf("claude plugin: cannot copy this binary: %v", err)
+		return ""
 	}
 	defer src.Close()
 	dst, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
 	if err != nil {
-		return
+		log.Printf("claude plugin: cannot copy this binary: %v", err)
+		return ""
 	}
 	_, err = io.Copy(dst, src)
 	if closeErr := dst.Close(); err == nil {
 		err = closeErr
 	}
-	// Rename last, so the launcher never runs a partly written copy.
-	if err == nil {
-		err = os.Rename(tmp, hook)
-	}
 	if err != nil {
+		log.Printf("claude plugin: cannot copy this binary: %v", err)
 		os.Remove(tmp)
+		return ""
+	}
+	return tmp
+}
+
+// publishHookBinary moves a staged copy into place as live-hook. Without one,
+// it removes any older copy, so the launcher falls back to PATH and the app
+// instead of running a crashed bridge's build.
+func publishHookBinary(dir, staged string) {
+	if staged == "" {
+		os.Remove(liveHookPath(dir))
+		return
+	}
+	if err := os.Rename(staged, liveHookPath(dir)); err != nil {
+		log.Printf("claude plugin: cannot publish this binary: %v", err)
+		os.Remove(staged)
+		os.Remove(liveHookPath(dir))
 	}
 }
 

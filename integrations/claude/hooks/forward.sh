@@ -3,8 +3,10 @@
 # of its own binary that Swarmview keeps in its private cache directory, then
 # the CLI on PATH, then the native app. Never fails the hook.
 cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+darwin=""
 if [ "$(uname)" = Darwin ]; then
   cache="$HOME/Library/Caches"
+  darwin=1
 fi
 dir="$cache/swarmview"
 
@@ -12,9 +14,16 @@ dir="$cache/swarmview"
 if [ -S "$dir/live.sock" ]; then
   running=""
   # Run the private copy only while the directory is yours alone (the 0700
-  # mode Swarmview requires; a trailing + would mean an ACL) and the copy is
-  # your own file. The 11th column is a space, @ (macOS xattrs) or . (SELinux).
+  # mode Swarmview requires, with no ACL) and the copy is your own file. The
+  # 11th column is a space, @ (macOS xattrs) or . (SELinux); + is a Linux ACL.
   mode="$(ls -ld "$dir" 2>/dev/null | cut -c1-11)"
+  # macOS shows @ rather than + when xattrs and an ACL coexist, but ls -le
+  # lists each ACL entry on its own line.
+  if [ -n "$darwin" ]; then
+    if [ "$(ls -lde "$dir" 2>/dev/null | wc -l)" -ne 1 ]; then
+      mode=""
+    fi
+  fi
   case "$mode" in
     "drwx------ " | drwx------@ | drwx------.)
       if [ -O "$dir" ]; then
@@ -26,9 +35,25 @@ if [ -S "$dir/live.sock" ]; then
       fi
       ;;
   esac
+  # swarmview from PATH, skipping relative entries: sh would resolve them in
+  # the project Claude has open.
+  onpath=""
+  saved_ifs="$IFS"
+  IFS=:
+  for entry in $PATH; do
+    case "$entry" in
+      /*)
+        if [ -x "$entry/swarmview" ]; then
+          onpath="$entry/swarmview"
+          break
+        fi
+        ;;
+    esac
+  done
+  IFS="$saved_ifs"
   for bin in \
     "$running" \
-    "$(command -v swarmview)" \
+    "$onpath" \
     /Applications/Swarmview.app/Contents/MacOS/swarmview-server \
     "$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
   do

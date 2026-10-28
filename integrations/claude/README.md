@@ -34,10 +34,12 @@ has not been run by hand.
    waits for them. When `-communication` starts, Swarmview copies its own
    binary into its private cache directory as `live-hook`, and the launcher
    runs that copy, so the CLI is found wherever you started it and always
-   matches the running build. Otherwise it tries `swarmview` on your `PATH`,
-   then the native app in `/Applications` or `~/Applications`, skipping any
-   binary too old to know `-claude-hook`. It does nothing when none is found
-   and never fails a hook. New Claude sessions pick up the plugin.
+   matches the running build. Otherwise it tries `swarmview` in the absolute
+   directories on your `PATH` (never a relative entry, which would resolve
+   inside the project), then the native app in `/Applications` or
+   `~/Applications`, skipping any binary too old to know `-claude-hook`. It
+   does nothing when none is found and never fails a hook. New Claude sessions
+   pick up the plugin.
 
    If you added these hooks to `~/.claude/settings.json` by hand, remove those
    entries when you install the plugin; otherwise every event shows twice.
@@ -50,10 +52,11 @@ Disable with `/plugin disable swarmview`, or remove it with
 finds no socket and exits without starting a binary. After a crash leaves a
 stale socket, the binary starts, finds nothing listening, and exits at once.
 The launcher runs `live-hook` only while the cache directory is yours with mode
-`0700` and no ACL, and the copy is your own file, not a symlink. Nothing
-outside that private directory is trusted. A hook gives up after at most 5.5
-seconds (a 0.5-second connect plus a 5-second exchange). It never fails or
-delays a Claude tool call.
+`0700` and no ACL (on macOS checked with `ls -le`, since an ACL can hide behind
+the `@` column), and the copy is your own file, not a symlink. Nothing outside
+that private directory is trusted. A hook gives up after at most 5.5 seconds (a
+0.5-second connect plus a 5-second exchange). It never fails or delays a Claude
+tool call.
 
 ### Without the plugin
 

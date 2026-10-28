@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -156,7 +158,7 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	must(t, os.WriteFile(victim, []byte("keep\n"), 0600))
 	must(t, os.Symlink(victim, liveHookPath(dir)))
 	must(t, os.Symlink(victim, liveHookPath(dir)+".tmp"))
-	publishHookBinary(dir)
+	publishHookBinary(dir, stageHookBinary(dir))
 	kept, err := os.ReadFile(victim)
 	must(t, err)
 	if string(kept) != "keep\n" {
@@ -241,6 +243,46 @@ func TestClaudePluginHooks(t *testing.T) {
 	}
 }
 
+// The README's manual settings.json example must register the same hooks.
+func TestClaudePluginReadmeHooks(t *testing.T) {
+	readme, err := os.ReadFile("integrations/claude/README.md")
+	must(t, err)
+	start := bytes.Index(readme, []byte("```json\n"))
+	if start < 0 {
+		t.Fatal("README has no manual hooks example")
+	}
+	block := readme[start+len("```json\n"):]
+	block = block[:bytes.Index(block, []byte("```"))]
+	type hooks map[string][]struct {
+		Matcher string `json:"matcher"`
+		Hooks   []struct {
+			Async bool `json:"async"`
+		} `json:"hooks"`
+	}
+	var manual, plugin struct {
+		Hooks hooks `json:"hooks"`
+	}
+	must(t, json.Unmarshal(block, &manual))
+	b, err := os.ReadFile("integrations/claude/hooks/hooks.json")
+	must(t, err)
+	must(t, json.Unmarshal(b, &plugin))
+	if len(manual.Hooks) != len(plugin.Hooks) {
+		t.Fatalf("README registers %d events, hooks.json %d", len(manual.Hooks), len(plugin.Hooks))
+	}
+	for event, groups := range plugin.Hooks {
+		docs := manual.Hooks[event]
+		if len(docs) != len(groups) {
+			t.Fatalf("%s: README has %d groups, hooks.json %d", event, len(docs), len(groups))
+		}
+		if docs[0].Matcher != groups[0].Matcher {
+			t.Fatalf("%s: README matcher %q, hooks.json %q", event, docs[0].Matcher, groups[0].Matcher)
+		}
+		if !docs[0].Hooks[0].Async {
+			t.Fatalf("%s: README example must be async", event)
+		}
+	}
+}
+
 // launcherStub writes an executable that records its stdin to marker. An old stub
 // instead rejects -claude-hook before reading stdin, like a pre-hook swarmview.
 func launcherStub(t *testing.T, path, marker string, old bool) {
@@ -257,10 +299,13 @@ func TestClaudePluginLauncher(t *testing.T) {
 	// pulseHome sets HOME and XDG_CACHE_HOME, which the launcher inherits.
 	home, socket := pulseHome(t)
 	dir := filepath.Dir(socket)
-	// run invokes the launcher, which must always exit 0 without output.
-	run := func(path string) {
+	launcher, err := filepath.Abs("integrations/claude/hooks/forward.sh")
+	must(t, err)
+	// runIn invokes the launcher from cwd; it must always exit 0 without output.
+	runIn := func(cwd, path string) {
 		t.Helper()
-		cmd := exec.Command("sh", "integrations/claude/hooks/forward.sh")
+		cmd := exec.Command("sh", launcher)
+		cmd.Dir = cwd
 		cmd.Env = append(os.Environ(), "PATH="+path+":/usr/bin:/bin")
 		cmd.Stdin = strings.NewReader(payload)
 		out, err := cmd.CombinedOutput()
@@ -270,6 +315,10 @@ func TestClaudePluginLauncher(t *testing.T) {
 		if len(out) != 0 {
 			t.Fatalf("launcher must be silent, got %q", out)
 		}
+	}
+	run := func(path string) {
+		t.Helper()
+		runIn(home, path)
 	}
 	received := func(marker string) string {
 		t.Helper()
@@ -343,6 +392,32 @@ func TestClaudePluginLauncher(t *testing.T) {
 	}
 	if got := received(pathGot); got != payload {
 		t.Fatalf("PATH binary got %q, want the event", got)
+	}
+
+	// On macOS an ACL can hide behind the @ column; it still makes the directory shared.
+	if runtime.GOOS == "darwin" {
+		reset(false)
+		acl := exec.Command("chmod", "+a", "everyone allow add_file,delete_child", dir)
+		if out, err := acl.CombinedOutput(); err != nil {
+			t.Fatalf("chmod +a: %v %s", err, out)
+		}
+		run(bin)
+		must(t, exec.Command("chmod", "-N", dir).Run())
+		if ran(hookGot) {
+			t.Fatal("launcher ran live-hook from a directory with an ACL")
+		}
+	}
+
+	// A relative PATH entry resolves in the project; a planted ./swarmview never runs.
+	reset(false)
+	must(t, os.Remove(liveHookPath(dir)))
+	project := filepath.Join(home, "project")
+	must(t, os.Mkdir(project, 0700))
+	plantedGot := filepath.Join(home, "planted.got")
+	launcherStub(t, filepath.Join(project, "swarmview"), plantedGot, false)
+	runIn(project, ".")
+	if ran(plantedGot) {
+		t.Fatal("launcher ran a swarmview found through a relative PATH entry")
 	}
 
 	// Without a live socket no Swarmview is listening, so no binary starts.
