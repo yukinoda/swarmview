@@ -33,6 +33,7 @@ type pulseFrame struct {
 	Direction string       `json:"direction,omitempty"`
 	Lost      bool         `json:"lost,omitempty"`
 	Ambiguous bool         `json:"ambiguous,omitempty"`
+	Pid       int          `json:"pid,omitempty"` // Claude cue: the host that must own the worker row
 }
 
 type pulseMessage struct {
@@ -101,11 +102,11 @@ func (b *pulseBridge) start(s *server) error {
 	if b.ln != nil || b.closed {
 		return errors.New("communication bridge already started or closed")
 	}
-	cache, err := os.UserCacheDir()
+	path, err := pulseSocketPath()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(cache, "swarmview")
+	dir := filepath.Dir(path)
 	if err = os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
@@ -117,7 +118,6 @@ func (b *pulseBridge) start(s *server) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, "live.sock")
 	ln, inode, err := listenPulseSocket(path)
 	if err != nil {
 		lock.Close()
@@ -172,13 +172,14 @@ func (b *pulseBridge) accept(s *server, c net.Conn) {
 	if err != nil {
 		return
 	}
-	valid := false
+	opencode := false
 	for _, a := range sn.agents {
 		if a.Pid == pid && a.Kind == "opencode" {
-			valid = true
+			opencode = true
 		}
 	}
-	if !valid {
+	if !opencode {
+		b.acceptClaude(s, c, sn, pid)
 		return
 	}
 	p := &pulsePeer{pid: pid, workers: map[string]string{}}
@@ -353,12 +354,8 @@ func (b *pulseBridge) broadcastLocked(key, direction string, lost bool) {
 	if len(b.viewers) == 0 {
 		return
 	}
-	f := pulseFrame{Workers: b.workersLocked(), Key: key, Direction: direction, Lost: lost}
-	for p := range b.peers {
-		if b.ambiguousLocked(p) {
-			f.Ambiguous = true
-		}
-	}
+	f := b.frameLocked()
+	f.Key, f.Direction, f.Lost = key, direction, lost
 	// Ambiguous viewers must not emit a pulse with a guessed owner.
 	if key != "" {
 		found := false
@@ -371,6 +368,21 @@ func (b *pulseBridge) broadcastLocked(key, direction string, lost bool) {
 			f.Key, f.Direction = "", ""
 		}
 	}
+	b.sendLocked(f)
+}
+
+// frameLocked is the current live worker state without a cue.
+func (b *pulseBridge) frameLocked() pulseFrame {
+	f := pulseFrame{Workers: b.workersLocked()}
+	for p := range b.peers {
+		if b.ambiguousLocked(p) {
+			f.Ambiguous = true
+		}
+	}
+	return f
+}
+
+func (b *pulseBridge) sendLocked(f pulseFrame) {
 	for ch := range b.viewers {
 		select {
 		case ch <- f:
@@ -397,13 +409,7 @@ func (b *pulseBridge) stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.viewers[ch] = true
-	initial := pulseFrame{Workers: b.workersLocked()}
-	for p := range b.peers {
-		if b.ambiguousLocked(p) {
-			initial.Ambiguous = true
-		}
-	}
-	ch <- initial
+	ch <- b.frameLocked()
 	b.mu.Unlock()
 	defer func() { b.mu.Lock(); delete(b.viewers, ch); b.mu.Unlock() }()
 	w.Header().Set("Content-Type", "text/event-stream")

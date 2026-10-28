@@ -293,11 +293,12 @@ func TestPulseSocketBoundary(t *testing.T) {
 	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
 	kind = "claude"
 	c = pulseDial(t, s, b, kind)
+	io.WriteString(c, pulseLine("presence", 1))
 	c.SetReadDeadline(time.Now().Add(time.Second))
 	_, err = c.Read(make([]byte, 1))
 	c.Close()
 	if err != io.EOF {
-		t.Fatalf("non-OpenCode peer accepted: %v", err)
+		t.Fatalf("OpenCode protocol accepted from a Claude peer: %v", err)
 	}
 }
 

@@ -80,6 +80,7 @@ func TestOptionalBridgeReleaseArchive(t *testing.T) {
 	for _, file := range bridgeFiles {
 		required = append(required, "integrations/opencode/"+file)
 	}
+	required = append(required, "integrations/claude/README.md")
 	for _, name := range required {
 		source, err := os.ReadFile(filepath.FromSlash(name))
 		must(t, err)
@@ -111,5 +112,8 @@ func TestOptionalBridgeReleaseArchive(t *testing.T) {
 	}
 	if !bytes.Contains(files["README.md"], []byte("integrations/opencode/README.md")) {
 		t.Fatal("CLI bridge README link missing")
+	}
+	if !bytes.Contains(files["README.md"], []byte("integrations/claude/README.md")) {
+		t.Fatal("Claude hook README link missing")
 	}
 }

@@ -2028,6 +2028,65 @@ const {
         communicationFeedback.textContent === '',
       'feedback expiry removes badges, highlight, timers, and announcement without retaining an event',
     );
+
+    // Claude hook cues mark existing metadata rows, only for the host that owns them.
+    const claudeHost = agent(46000, '/claude-test', { kind: 'claude' }),
+      claudeWorker = {
+        id: 'a1234567',
+        parentPid: 46000,
+        cwd: '/claude-test',
+        description: 'Claude hook worker',
+        working: true,
+      };
+    const claudeSnapshot = {
+      agents: [claudeHost],
+      subagents: [claudeWorker],
+      communication: true,
+      at: Date.now(),
+    };
+    render({ ...claudeSnapshot, subagents: [] });
+    window.scrollTo(0, 0);
+    showFeedback('sub:a1234567', 'sent', 46000);
+    assert(
+      communication.pendingFeedback.size === 1 && activeFeedback.size === 0,
+      'a Claude cue waits briefly for the row the next poll renders',
+    );
+    render(claudeSnapshot);
+    assert(
+      activeFeedback.size === 1 &&
+        document.querySelector('.communication-note').textContent ===
+          'Sent from parent' &&
+        communication.pendingFeedback.size === 0,
+      'pending Claude cue shows once its worker row renders',
+    );
+    clearPulses();
+    showFeedback('sub:a1234567', 'returned', 46001);
+    assert(
+      activeFeedback.size === 0 && communication.pendingFeedback.size === 0,
+      'a cue from another Claude process never marks this worker',
+    );
+    showFeedback('sub:a1234567', 'sent');
+    assert(
+      activeFeedback.size === 0,
+      'an OpenCode cue never marks a Claude metadata row',
+    );
+    showFeedback('sub:a1234567', 'message', 46000);
+    assert(
+      document.querySelector('.communication-note').textContent ===
+        'Message sent to worker' &&
+        communicationFeedback.textContent.startsWith(
+          'Message sent to worker: Claude hook worker',
+        ),
+      'a follow-up message names only its recipient',
+    );
+    showFeedback('sub:a1234567', 'sent', 46000);
+    assert(
+      document.querySelector('.communication-note').textContent ===
+        'Message sent to worker',
+      'the worker restart a follow-up message causes keeps the message cue',
+    );
+    clearPulses();
+    render(liveSnapshot);
     const previousEventSource = window.EventSource;
     let stream = null,
       opens = 0;

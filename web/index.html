@@ -222,7 +222,7 @@
       <h3>Communication observations</h3>
       <p id="communication-capability">Waiting for server capability</p>
       <p>
-        OpenCode TUI only. Brief colored text clears after 2.5 seconds. At most
+        OpenCode TUI and Claude Code hooks only. Brief colored text clears after 2.5 seconds. At most
         four cues; no content, queue, history, or replay.
       </p>
       <details>
@@ -236,8 +236,10 @@
           directory to your existing OpenCode <code>cli.json</code> plugins. The
           native copy is under
           <code>Contents/Resources/integrations/opencode</code>. No restart of
-          the OpenCode service is needed. This preference does not install or
-          enable anything. Other providers' communication is unavailable;
+          the OpenCode service is needed. For Claude Code, add the hooks in
+          <code>integrations/claude/README.md</code> to your settings. This
+          preference does not install or enable anything. Other providers'
+          communication is unavailable;
           detected process activity remains independent.
         </p>
       </details>

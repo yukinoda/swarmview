@@ -93,7 +93,8 @@ communication events are unavailable by default: no CPU- or nesting-derived
 message pulses. An optional [OpenCode V2 live bridge](integrations/opencode/README.md)
 adds explicit send/foreground-return observations with user-reviewed TUI setup
 and an explicit communication launch flag (native app or CLI); it never
-records event history or enables itself.
+records event history or enables itself. Optional [Claude Code hooks](integrations/claude/README.md)
+add subagent start/finish and follow-up message cues through the same flag.
 CLI archives include `integrations/opencode` beside the binary; native apps
 include the same review-first files in
 `Contents/Resources/integrations/opencode`. Packaging them does not enable the
