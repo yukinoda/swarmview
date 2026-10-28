@@ -2051,6 +2051,11 @@ const {
       communication.pendingFeedback.size === 1 && activeFeedback.size === 0,
       'a Claude cue waits briefly for the row the next poll renders',
     );
+    dispatchEvent(new Event('scroll'));
+    assert(
+      communication.pendingFeedback.size === 1,
+      'scrolling keeps a waiting cue, which has no on-screen position yet',
+    );
     render(claudeSnapshot);
     assert(
       activeFeedback.size === 1 &&

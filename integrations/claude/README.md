@@ -24,27 +24,52 @@ has not been run by hand.
    {
      "hooks": {
        "SubagentStart": [
-         { "hooks": [{ "type": "command", "command": "/path/to/swarmview -claude-hook" }] }
+         {
+           "hooks": [
+             {
+               "type": "command",
+               "command": "/path/to/swarmview -claude-hook",
+               "async": true
+             }
+           ]
+         }
        ],
        "SubagentStop": [
-         { "hooks": [{ "type": "command", "command": "/path/to/swarmview -claude-hook" }] }
+         {
+           "hooks": [
+             {
+               "type": "command",
+               "command": "/path/to/swarmview -claude-hook",
+               "async": true
+             }
+           ]
+         }
        ],
        "PreToolUse": [
          {
            "matcher": "SendMessage",
-           "hooks": [{ "type": "command", "command": "/path/to/swarmview -claude-hook" }]
+           "hooks": [
+             {
+               "type": "command",
+               "command": "/path/to/swarmview -claude-hook",
+               "async": true
+             }
+           ]
          }
        ]
      }
    }
    ```
 
-   New Claude sessions pick up the hooks. If you move the binary or app,
+   `"async": true` runs the hook in the background, so Claude never waits for
+   it. New Claude sessions pick up the hooks. If you move the binary or app,
    update the path.
 
 Disable by removing the three entries. When Swarmview isn't running with
 communication enabled, the hook finds no socket and exits at once. Otherwise it
-waits at most about two seconds for Swarmview, and never fails a Claude tool call.
+gives up after at most 2.5 seconds (a 0.5-second connect plus a 2-second
+exchange). It never fails a Claude tool call, and with `"async": true` it
+never delays one.
 
 ## What the UI means
 
@@ -72,6 +97,8 @@ The socket checks the connecting process's kernel PID. A record is accepted
 only if that process is a detected Claude process or descends from one within
 four parent hops (Claude runs hooks through a shell). The cue carries that
 Claude's PID, and the dashboard marks a worker row only if it belongs to the
-same Claude. A hook is connected while it is checked, so its PID can't be
-reused mid-check. Any program Claude runs is also its descendant, so it could
-send cues for that Claude's own workers. It can't affect other sessions.
+same Claude. A hook stays connected while it is checked, which keeps its PID in
+use. If the check outlasts the hook's 2-second limit, the hook exits and the
+record is rejected because its process is gone. Any program Claude runs is also
+its descendant, so it could send cues for that Claude's own workers. It can't
+affect other sessions.

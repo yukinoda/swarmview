@@ -22,6 +22,11 @@ document.body.append(communicationFeedback);
 
 export function clearPulses() {
   for (const entry of activeFeedback.values()) entry.clear();
+}
+
+// A waiting cue has no on-screen position, so only losing the stream drops it.
+function dropPending() {
+  clearPulses();
   pendingFeedback.clear();
 }
 
@@ -177,7 +182,7 @@ export function communicationStream() {
   if (!data?.communication || document.hidden) {
     communicationSource?.close();
     communicationSource = null;
-    clearPulses();
+    dropPending();
     return;
   }
   if (communicationSource) return;
@@ -203,7 +208,7 @@ export function communicationStream() {
     } // a stream frame is not a new poll
     else refreshSnapshot();
     if (frame.lost) {
-      clearPulses();
+      dropPending();
       communicationGap = true;
       txt(
         communicationStatus,
@@ -235,7 +240,7 @@ export function communicationStream() {
     // Non-200 replies (e.g. viewer limit) close without retry; let the next poll reconnect.
     if (source.readyState === 2) communicationSource = null; // EventSource.CLOSED
     communicationGap = true;
-    clearPulses();
+    dropPending();
     txt(
       communicationStatus,
       'Communication disconnected · observations may be missing; no replay',

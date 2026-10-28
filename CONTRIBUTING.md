@@ -34,7 +34,8 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `claude.go`: Claude session titles and worker metadata.
 - `pulse*.go`: opt-in local metadata IPC, bounded live relationship/feedback delivery,
   peer authentication, and socket lifecycle; no conversation/event history.
-  `pulse_claude.go` is both the `-claude-hook` client and its one-record server path.
+  `pulse_claude.go` is both the `-claude-hook` client and its one-record
+  server path.
 - `tmux.go`, `sys_*.go`: terminal navigation and platform-specific integration.
 - `system.go`: machine-wide memory measurements.
 - `web/`: build-free browser interface; `index.html` loads `app.css` and the
@@ -66,7 +67,8 @@ worker discovery → JSON → the dashboard, search, and notification modules. T
 `POST /focus` request. The macOS app hosts the same interface in WebKit. Feature
 modules do not import `app.js`; it coordinates them without a shared global store.
 The optional TUI observer → private socket → `GET /communication` stream supplies
-live relationships; Claude hooks send one-shot cues for existing `sub:` rows over the same socket; `app.js` retains snapshot/render ownership. Unchanged ordered
+live relationships; Claude hooks send one-shot cues for existing `sub:` rows
+over the same socket; `app.js` retains snapshot/render ownership. Unchanged ordered
 worker key/parent/PID frames refresh feedback/freshness without rebuilding the tree.
 
 Keep this map current in the same change when adding, moving, or changing the

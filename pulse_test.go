@@ -291,6 +291,8 @@ func TestPulseSocketBoundary(t *testing.T) {
 		t.Fatalf("missing-heartbeat identity was not expired: %v", err)
 	}
 	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
+	// With a viewer watching, a Claude peer reaches its record check and is still refused.
+	ch, _ := pulseViewer(t, b)
 	kind = "claude"
 	c = pulseDial(t, s, b, kind)
 	io.WriteString(c, pulseLine("presence", 1))
@@ -299,6 +301,9 @@ func TestPulseSocketBoundary(t *testing.T) {
 	c.Close()
 	if err != io.EOF {
 		t.Fatalf("OpenCode protocol accepted from a Claude peer: %v", err)
+	}
+	if len(ch) != 0 {
+		t.Fatal("OpenCode protocol from a Claude peer produced a cue")
 	}
 }
 
