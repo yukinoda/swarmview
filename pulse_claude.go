@@ -83,8 +83,13 @@ func runClaudeHook(stdin io.Reader) {
 // plugin's launcher runs the build that is listening, wherever it was started from.
 // Best effort: without it the launcher falls back to PATH and the native app.
 func publishHookBinary(dir string) {
-	// Never leave an older bridge's path in front of the launcher's fallbacks.
+	// Never leave an older bridge's path in front of the launcher's fallbacks,
+	// nor temp files a crash left mid-publish; the owner lock excludes writers.
 	os.Remove(liveExePath(dir))
+	leftovers, _ := filepath.Glob(liveExePath(dir) + ".*")
+	for _, leftover := range leftovers {
+		os.Remove(leftover)
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return

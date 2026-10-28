@@ -10,9 +10,19 @@ dir="$cache/swarmview"
 # No live socket means no opted-in Swarmview: skip starting a binary at all.
 if [ -S "$dir/live.sock" ]; then
   running=""
-  # Trust the recorded path only from your own directory and a regular file.
-  if [ -O "$dir" ] && [ -O "$dir/live.exe" ] && [ ! -h "$dir/live.exe" ]; then
-    running="$(cat "$dir/live.exe")"
+  # Trust the recorded path only from your own directory, as your own regular
+  # file, naming a binary you own.
+  if [ -O "$dir" ]; then
+    if [ -O "$dir/live.exe" ]; then
+      if [ ! -h "$dir/live.exe" ]; then
+        running="$(cat "$dir/live.exe")"
+      fi
+    fi
+  fi
+  if [ -n "$running" ]; then
+    if [ ! -O "$running" ]; then
+      running=""
+    fi
   fi
   for bin in \
     "$running" \
@@ -21,8 +31,8 @@ if [ -S "$dir/live.sock" ]; then
     "$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
   do
     if [ -x "$bin" ]; then
-      # Hook mode always exits 0; a binary too old for the flag fails before
-      # reading stdin, so the next candidate still gets the event.
+      # Hook mode exits 0 unless the binary itself fails; a binary too old for
+      # the flag fails before reading stdin, so the next one gets the event.
       if "$bin" -claude-hook 2>/dev/null; then
         break
       fi

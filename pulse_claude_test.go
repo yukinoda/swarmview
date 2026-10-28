@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -150,7 +151,12 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	victim := filepath.Join(t.TempDir(), "victim")
 	must(t, os.WriteFile(victim, []byte("keep\n"), 0600))
 	must(t, os.Symlink(victim, liveExePath(dir)))
+	leftover := liveExePath(dir) + ".crashed"
+	must(t, os.WriteFile(leftover, []byte("old\n"), 0600))
 	publishHookBinary(dir)
+	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+		t.Fatalf("a temp file left by a crash survived publishing: %v", err)
+	}
 	kept, err := os.ReadFile(victim)
 	must(t, err)
 	if string(kept) != "keep\n" {
@@ -325,6 +331,25 @@ func TestClaudePluginLauncher(t *testing.T) {
 	}
 	if got := received(pathGot); got != payload {
 		t.Fatalf("PATH binary got %q, want the event", got)
+	}
+
+	// A recorded binary you don't own is skipped. `true` is root-owned and would
+	// succeed, swallowing the event, if the launcher trusted it.
+	trueBin, err := exec.LookPath("true")
+	must(t, err)
+	info, err := os.Stat(trueBin)
+	must(t, err)
+	foreign := info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid())
+	if foreign {
+		must(t, os.Remove(pathGot))
+		must(t, os.Remove(liveExePath(dir)))
+		must(t, os.WriteFile(liveExePath(dir), []byte(trueBin+"\n"), 0600))
+		if out := run(bin); out != "" {
+			t.Fatalf("launcher must be silent, got %q", out)
+		}
+		if got := received(pathGot); got != payload {
+			t.Fatalf("PATH binary got %q, want the event", got)
+		}
 	}
 
 	// Without a live socket no Swarmview is listening, so no binary starts.
