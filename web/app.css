@@ -325,7 +325,8 @@ kbd {
   --row-pad: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step));
   padding-left: var(--row-pad);
 }
-/* The branch runs from the parent trunk to just before this row's logo or title. */
+/* The branch runs from the parent trunk to just before this row's logo; a worker's
+   branch instead runs into its node dot (below). */
 .row-line > .agent::before {
   content: '';
   position: absolute;
@@ -445,12 +446,10 @@ kbd {
   height: 6px;
   border: 3px solid var(--mut);
   border-radius: 50%;
-  opacity: 0.5;
   pointer-events: none;
 }
 .worker.s-working > .row-line > .agent::after {
   border-color: var(--working);
-  opacity: 1;
 }
 .live-worker > .row-line .context {
   min-height: 20px;

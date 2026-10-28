@@ -2712,14 +2712,16 @@ const {
       const btnRect = row.btn.getBoundingClientRect();
       const stubLeft = btnRect.left + parseFloat(stub.left),
         stubWidth = parseFloat(stub.width);
-      const isWorker = row.item.sub || row.item.live;
+      const isWorker = row.node.classList.contains('worker');
       if (isWorker) {
         const slotLeft =
           btnRect.left + parseFloat(getComputedStyle(row.btn).paddingLeft) - 28;
         const dot = getComputedStyle(row.btn, '::after'),
           dotLeft = btnRect.left + parseFloat(dot.left),
           dotCenterY = btnRect.top + parseFloat(dot.top) + 3,
-          stubY = btnRect.top + parseFloat(stub.top);
+          stubY = btnRect.top + parseFloat(stub.top),
+          titleLine = row.name.getClientRects()[0],
+          titleCenterY = titleLine.top + titleLine.height / 2;
         const detail = JSON.stringify({
           key,
           dotLeft,
@@ -2727,6 +2729,7 @@ const {
           slotLeft,
           stubY,
           stubWidth,
+          titleCenterY,
         });
         assert(
           dot.content !== 'none' && parseFloat(dot.width) === 6,
@@ -2738,8 +2741,11 @@ const {
         );
         assert(
           Math.abs(dotCenterY - stubY - 0.5) <= 1,
-          'the node dot is centered on the branch, on the title line: ' +
-            detail,
+          'the node dot is centered on its branch: ' + detail,
+        );
+        assert(
+          Math.abs(dotCenterY - titleCenterY) <= 2,
+          'the node dot sits on the title line: ' + detail,
         );
         assert(
           stubWidth >= 4 && Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
@@ -2763,7 +2769,7 @@ const {
       const parentRow = rows.get(row.item.parent),
         parentDepth = parentRow ? +parentRow.node.style.getPropertyValue('--depth') : 0;
       if (parentRow && parentDepth < 4) {
-        const isParentWorker = parentRow.item.sub || parentRow.item.live,
+        const isParentWorker = parentRow.node.classList.contains('worker'),
           parentPad = parseFloat(getComputedStyle(parentRow.btn).paddingLeft),
           parentSlotLeft =
             parentRow.btn.getBoundingClientRect().left +
