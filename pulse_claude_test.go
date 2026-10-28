@@ -348,6 +348,25 @@ func TestClaudePluginLauncher(t *testing.T) {
 		must(t, os.WriteFile(pathGot, nil, 0600))
 	}
 
+	// A recorded binary in a folder others can write is refused: someone could
+	// refill a stale path there. The PATH binary gets the event instead.
+	shared := filepath.Join(home, "shared")
+	must(t, os.Mkdir(shared, 0700))
+	must(t, os.Chmod(shared, 0770))
+	sharedBin := filepath.Join(shared, "swarmview")
+	sharedGot := filepath.Join(home, "shared.got")
+	launcherStub(t, sharedBin, sharedGot, false)
+	must(t, os.Remove(pathGot))
+	must(t, os.Remove(liveExePath(dir)))
+	must(t, os.WriteFile(liveExePath(dir), []byte(sharedBin+"\n"), 0600))
+	run(bin)
+	if _, err := os.Stat(sharedGot); err == nil {
+		t.Fatal("launcher ran a binary from a group-writable folder")
+	}
+	if got := received(pathGot); got != payload {
+		t.Fatalf("PATH binary got %q, want the event", got)
+	}
+
 	// Without a live socket no Swarmview is listening, so no binary starts.
 	must(t, ln.Close())
 	os.Remove(socket)

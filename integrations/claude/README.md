@@ -48,9 +48,11 @@ Disable with `/plugin disable swarmview`, or remove it with
 finds no socket and exits without starting a binary. After a crash leaves a
 stale socket, the binary starts, finds nothing listening, and exits at once.
 The launcher trusts `live.exe` only in a directory you own, as a regular file
-you own, and runs the binary it names only if you or root own it. A hook gives
-up after at most 5.5 seconds (a 0.5-second connect plus a 5-second exchange).
-It never fails or delays a Claude tool call.
+you own. It runs the binary it names only if that binary and its folder are
+owned by you or root and writable by neither group nor others, so a stale path
+in a shared place such as `/tmp` can't be refilled by another user. A hook
+gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
+exchange). It never fails or delays a Claude tool call.
 
 ### Without the plugin
 
