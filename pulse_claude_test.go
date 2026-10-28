@@ -252,7 +252,11 @@ func TestClaudePluginReadmeHooks(t *testing.T) {
 		t.Fatal("README has no manual hooks example")
 	}
 	block := readme[start+len("```json\n"):]
-	block = block[:bytes.Index(block, []byte("```"))]
+	end := bytes.Index(block, []byte("```"))
+	if end < 0 {
+		t.Fatal("README's manual hooks example has no closing fence")
+	}
+	block = block[:end]
 	type hooks map[string][]struct {
 		Matcher string `json:"matcher"`
 		Hooks   []struct {
@@ -270,9 +274,15 @@ func TestClaudePluginReadmeHooks(t *testing.T) {
 		t.Fatalf("README registers %d events, hooks.json %d", len(manual.Hooks), len(plugin.Hooks))
 	}
 	for event, groups := range plugin.Hooks {
+		if len(groups) == 0 {
+			t.Fatalf("%s: hooks.json has no hook group", event)
+		}
 		docs := manual.Hooks[event]
 		if len(docs) != len(groups) {
 			t.Fatalf("%s: README has %d groups, hooks.json %d", event, len(docs), len(groups))
+		}
+		if len(docs[0].Hooks) == 0 {
+			t.Fatalf("%s: README example has no hook command", event)
 		}
 		if docs[0].Matcher != groups[0].Matcher {
 			t.Fatalf("%s: README matcher %q, hooks.json %q", event, docs[0].Matcher, groups[0].Matcher)
@@ -408,16 +418,34 @@ func TestClaudePluginLauncher(t *testing.T) {
 		}
 	}
 
-	// A relative PATH entry resolves in the project; a planted ./swarmview never runs.
-	reset(false)
-	must(t, os.Remove(liveHookPath(dir)))
+	// A relative PATH entry resolves in the project: a planted ./swarmview never
+	// runs, and the absolute entry after it still gets the event.
+	reset(true)
 	project := filepath.Join(home, "project")
 	must(t, os.Mkdir(project, 0700))
 	plantedGot := filepath.Join(home, "planted.got")
 	launcherStub(t, filepath.Join(project, "swarmview"), plantedGot, false)
-	runIn(project, ".")
+	// The launcher's own helpers come from the system, never from the project.
+	helperGot := filepath.Join(home, "helper.got")
+	launcherStub(t, filepath.Join(project, "uname"), helperGot, false)
+	runIn(project, ".:"+bin)
 	if ran(plantedGot) {
 		t.Fatal("launcher ran a swarmview found through a relative PATH entry")
+	}
+	if ran(helperGot) {
+		t.Fatal("launcher ran a helper planted in the project")
+	}
+	if got := received(pathGot); got != payload {
+		t.Fatalf("absolute PATH entry got %q, want the event", got)
+	}
+
+	// An inherited setgid bit grants no access, so the copy still runs.
+	reset(false)
+	must(t, os.Chmod(dir, 0700|os.ModeSetgid))
+	run(bin)
+	must(t, os.Chmod(dir, 0700))
+	if got := received(hookGot); got != payload {
+		t.Fatalf("live-hook in a setgid directory got %q, want the event", got)
 	}
 
 	// Without a live socket no Swarmview is listening, so no binary starts.

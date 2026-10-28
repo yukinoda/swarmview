@@ -2,6 +2,10 @@
 # Forwards one Claude Code hook event to a running Swarmview. Prefers the copy
 # of its own binary that Swarmview keeps in its private cache directory, then
 # the CLI on PATH, then the native app. Never fails the hook.
+
+# Helpers come from the system only; your PATH is searched just for swarmview.
+search_path="$PATH"
+PATH=/usr/bin:/bin
 cache="${XDG_CACHE_HOME:-$HOME/.cache}"
 darwin=""
 if [ "$(uname)" = Darwin ]; then
@@ -24,8 +28,9 @@ if [ -S "$dir/live.sock" ]; then
       mode=""
     fi
   fi
+  # setgid (S) may be inherited from the parent; it grants no access.
   case "$mode" in
-    "drwx------ " | drwx------@ | drwx------.)
+    drwx--[-S]---[\ @.])
       if [ -O "$dir" ]; then
         if [ -O "$dir/live-hook" ]; then
           if [ ! -h "$dir/live-hook" ]; then
@@ -40,7 +45,8 @@ if [ -S "$dir/live.sock" ]; then
   onpath=""
   saved_ifs="$IFS"
   IFS=:
-  for entry in $PATH; do
+  set -f
+  for entry in $search_path; do
     case "$entry" in
       /*)
         if [ -x "$entry/swarmview" ]; then
@@ -50,6 +56,7 @@ if [ -S "$dir/live.sock" ]; then
         ;;
     esac
   done
+  set +f
   IFS="$saved_ifs"
   for bin in \
     "$running" \
