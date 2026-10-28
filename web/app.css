@@ -285,16 +285,11 @@ kbd {
 .group > .kids {
   --connector-origin: calc(var(--tree-pad) / 2);
 }
-/* The trunk drops from the parent's 20px logo, or from the start of a worker parent's title.
+/* The trunk drops from the parent's 20px logo, or from the node dot in a worker's logo slot.
    Rows at the depth cap share one column, so their children sit beside the parent. */
 .node > .kids {
   --connector-origin: calc(
     var(--tree-pad) + 10px + min(var(--depth, 0), 3) * var(--tree-step)
-  );
-}
-.node.worker > .kids {
-  --connector-origin: calc(
-    var(--worker-pad) + 4px + min(var(--depth, 0), 3) * var(--tree-step)
   );
 }
 .group > .kids::before,
@@ -430,11 +425,25 @@ kbd {
 }
 .worker > .row-line > .agent {
   --row-pad: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
+  --slot-pad: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step));
 }
-/* Workers have no logo, so their branch points at the title line instead of the row middle. */
+/* Workers have no logo: the branch ends at the empty logo slot, like a process
+   child's, and a node dot sits in that slot on the title line. */
 .worker > .row-line > .agent::before {
   top: 14px;
-  width: calc(var(--row-pad) - var(--connector-origin) - 4px);
+  width: calc(var(--slot-pad) - var(--connector-origin) - 2px);
+}
+.worker > .row-line > .agent::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--slot-pad) + 7px);
+  top: 11px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mut);
+  opacity: 0.5;
+  pointer-events: none;
 }
 .live-worker > .row-line .context {
   min-height: 20px;

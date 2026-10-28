@@ -2712,23 +2712,49 @@ const {
       const stubLeft =
           row.btn.getBoundingClientRect().left + parseFloat(stub.left),
         stubWidth = parseFloat(stub.width);
-      const contentLeft = row.btn.firstElementChild.getBoundingClientRect().left,
+      const isWorker = row.item.sub || row.item.live,
+        slotLeft =
+          row.btn.getBoundingClientRect().left +
+          parseFloat(getComputedStyle(row.btn).paddingLeft) -
+          28,
+        contentLeft = isWorker
+          ? slotLeft
+          : row.btn.firstElementChild.getBoundingClientRect().left,
         stubGap = contentLeft - (stubLeft + stubWidth);
       assert(
         stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
-        'horizontal branches reach just short of the row logo or title: ' +
+        'horizontal branches reach just short of the row logo or worker logo slot: ' +
           JSON.stringify({ key, stubWidth, stubGap }),
       );
+      if (isWorker) {
+        const dot = getComputedStyle(row.btn, '::after'),
+          dotTop = row.btn.getBoundingClientRect().top + parseFloat(dot.top),
+          dotCenterY = dotTop + parseFloat(dot.height) / 2,
+          stubY = row.btn.getBoundingClientRect().top + parseFloat(stub.top),
+          dotLeft = row.btn.getBoundingClientRect().left + parseFloat(dot.left);
+        assert(
+          dot.content !== 'none' &&
+            parseFloat(dot.width) === 6 &&
+            Math.abs(dotCenterY - stubY - 0.5) <= 1 &&
+            dotLeft >= slotLeft &&
+            dotLeft + 6 <= slotLeft + 20,
+          'worker branches end in a node dot inside the logo slot on the title line: ' +
+            JSON.stringify({ key, dotCenterY, stubY, dotLeft, slotLeft }),
+        );
+      }
       const parentRow = rows.get(row.item.parent),
         parentDepth = parentRow ? +parentRow.node.style.getPropertyValue('--depth') : 0;
       if (parentRow && parentDepth < 4) {
-        const parentContentLeft =
-            parentRow.btn.firstElementChild.getBoundingClientRect().left,
-          trunkOffset = trunkRight - 1 - parentContentLeft,
-          maxOffset = parentRow.item.sub ? 8 : 20;
+        const isParentWorker = parentRow.item.sub || parentRow.item.live,
+          parentPad = parseFloat(getComputedStyle(parentRow.btn).paddingLeft),
+          parentSlotLeft =
+            parentRow.btn.getBoundingClientRect().left +
+            parentPad -
+            (isParentWorker ? 28 : 0),
+          trunkOffset = trunkRight - 1 - parentSlotLeft;
         assert(
-          trunkOffset >= 0 && trunkOffset <= maxOffset,
-          'child trunks drop from the parent logo, or the start of a worker parent title: ' +
+          trunkOffset >= 0 && trunkOffset <= 20,
+          'child trunks drop from the parent logo, or the node dot of a worker parent: ' +
             JSON.stringify({ key, parentDepth, trunkOffset }),
         );
       }
