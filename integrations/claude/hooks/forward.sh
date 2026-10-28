@@ -3,9 +3,22 @@
 # of its own binary that Swarmview keeps in its private cache directory, then
 # the CLI on PATH, then the native app. Never fails the hook.
 
-# Helpers come from the system only; your PATH is searched just for swarmview.
+# Helpers come from the system directories first, then only the absolute
+# entries of your PATH (for systems like NixOS); a relative entry would resolve
+# inside the project Claude has open. Your PATH is also searched for swarmview.
 search_path="$PATH"
-PATH=/usr/bin:/bin
+absolute=""
+saved_ifs="$IFS"
+IFS=:
+set -f
+for entry in $search_path; do
+  case "$entry" in
+    /*) absolute="$absolute:$entry" ;;
+  esac
+done
+set +f
+IFS="$saved_ifs"
+PATH="/usr/bin:/bin$absolute"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}"
 darwin=""
 if [ "$(uname)" = Darwin ]; then
@@ -40,21 +53,17 @@ if [ -S "$dir/live.sock" ]; then
       fi
       ;;
   esac
-  # swarmview from PATH, skipping relative entries: sh would resolve them in
-  # the project Claude has open.
+  # swarmview from the absolute PATH entries only.
   onpath=""
-  saved_ifs="$IFS"
   IFS=:
   set -f
-  for entry in $search_path; do
-    case "$entry" in
-      /*)
-        if [ -x "$entry/swarmview" ]; then
-          onpath="$entry/swarmview"
-          break
-        fi
-        ;;
-    esac
+  for entry in $absolute; do
+    if [ -n "$entry" ]; then
+      if [ -x "$entry/swarmview" ]; then
+        onpath="$entry/swarmview"
+        break
+      fi
+    fi
   done
   set +f
   IFS="$saved_ifs"

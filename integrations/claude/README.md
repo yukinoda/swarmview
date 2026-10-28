@@ -54,10 +54,11 @@ stale socket, the binary starts, finds nothing listening, and exits at once.
 The launcher runs `live-hook` only while the cache directory is yours with mode
 `0700` and no ACL (on macOS checked with `ls -le`, since an ACL can hide behind
 the `@` column), and the copy is your own file, not a symlink. Nothing outside
-that private directory is trusted, and the launcher runs its own helper
-commands from `/usr/bin` and `/bin` only. A hook gives up after at most 5.5
-seconds (a 0.5-second connect plus a 5-second exchange). It never fails or
-delays a Claude tool call.
+that private directory is trusted, and the launcher looks up its own helper
+commands in `/usr/bin` and `/bin` first, then only in the absolute entries of
+your `PATH`. Closing the terminal running Swarmview cleans up like Ctrl-C. A
+hook gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
+exchange). It never fails or delays a Claude tool call.
 
 ### Without the plugin
 

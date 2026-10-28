@@ -313,7 +313,8 @@ func (p *pulseChild) stop(t *testing.T, sig os.Signal) {
 }
 
 func TestPulseCLILifecycle(t *testing.T) {
-	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM} {
+	// SIGHUP is a closed terminal; it must clean up like Ctrl-C and SIGTERM.
+	for _, sig := range []os.Signal{os.Interrupt, syscall.SIGTERM, syscall.SIGHUP} {
 		t.Run(sig.String(), func(t *testing.T) {
 			home, path := pulseHome(t)
 			for i := 0; i < 2; i++ {
@@ -325,6 +326,9 @@ func TestPulseCLILifecycle(t *testing.T) {
 				p.stop(t, sig)
 				if _, err := os.Lstat(path); !os.IsNotExist(err) {
 					t.Fatal("graceful shutdown left socket", err)
+				}
+				if _, err := os.Lstat(liveHookPath(filepath.Dir(path))); !os.IsNotExist(err) {
+					t.Fatal("graceful shutdown left the hook copy", err)
 				}
 			}
 		})

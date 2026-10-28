@@ -33,7 +33,8 @@ func main() {
 }
 
 func runServer(desktop, communication bool) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// SIGHUP too: closing the terminal must still remove the owned socket and hook copy.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer stop()
 	s := newServer(execRun)
 	s.sysU32 = sysctlU32

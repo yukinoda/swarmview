@@ -191,21 +191,30 @@ func TestClaudeHookBinaryFile(t *testing.T) {
 	}
 }
 
-// The plugin registers async hooks for events claudeHookRecord maps, through the launcher.
-func TestClaudePluginHooks(t *testing.T) {
-	var cfg struct {
-		Hooks map[string][]struct {
-			Matcher string `json:"matcher"`
-			Hooks   []struct {
-				Type    string `json:"type"`
-				Command string `json:"command"`
-				Async   bool   `json:"async"`
-			} `json:"hooks"`
+// hookConfig is the shape of hooks.json and of the README's manual example.
+type hookConfig struct {
+	Hooks map[string][]struct {
+		Matcher string `json:"matcher"`
+		Hooks   []struct {
+			Type    string `json:"type"`
+			Command string `json:"command"`
+			Async   bool   `json:"async"`
 		} `json:"hooks"`
-	}
+	} `json:"hooks"`
+}
+
+func pluginHookConfig(t *testing.T) hookConfig {
+	t.Helper()
+	var cfg hookConfig
 	b, err := os.ReadFile("integrations/claude/hooks/hooks.json")
 	must(t, err)
 	must(t, json.Unmarshal(b, &cfg))
+	return cfg
+}
+
+// The plugin registers async hooks for events claudeHookRecord maps, through the launcher.
+func TestClaudePluginHooks(t *testing.T) {
+	cfg := pluginHookConfig(t)
 	// One payload per registered event; each must map to a cue.
 	samples := map[string]string{
 		"SubagentStart": `{"hook_event_name":"SubagentStart","agent_id":"a1234567"}`,
@@ -237,7 +246,7 @@ func TestClaudePluginHooks(t *testing.T) {
 			t.Fatalf("%s: hook must be async so Claude never waits", event)
 		}
 		// Run through sh, so a lost exec bit on install can't break the hook.
-		if hook.Command != `sh "${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
+		if hook.Command != `/bin/sh "${CLAUDE_PLUGIN_ROOT}/hooks/forward.sh"` {
 			t.Fatalf("%s: hook command %q", event, hook.Command)
 		}
 	}
@@ -257,19 +266,9 @@ func TestClaudePluginReadmeHooks(t *testing.T) {
 		t.Fatal("README's manual hooks example has no closing fence")
 	}
 	block = block[:end]
-	type hooks map[string][]struct {
-		Matcher string `json:"matcher"`
-		Hooks   []struct {
-			Async bool `json:"async"`
-		} `json:"hooks"`
-	}
-	var manual, plugin struct {
-		Hooks hooks `json:"hooks"`
-	}
+	var manual hookConfig
 	must(t, json.Unmarshal(block, &manual))
-	b, err := os.ReadFile("integrations/claude/hooks/hooks.json")
-	must(t, err)
-	must(t, json.Unmarshal(b, &plugin))
+	plugin := pluginHookConfig(t)
 	if len(manual.Hooks) != len(plugin.Hooks) {
 		t.Fatalf("README registers %d events, hooks.json %d", len(manual.Hooks), len(plugin.Hooks))
 	}
