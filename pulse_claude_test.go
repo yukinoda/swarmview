@@ -455,6 +455,31 @@ func TestClaudePluginLauncher(t *testing.T) {
 		t.Fatalf("current PATH binary got %q after an old one, want the event", got)
 	}
 
+	// A relative cache directory would resolve inside the project, so a socket
+	// and live-hook planted there never run.
+	// Short names: the socket path must fit the platform's limit.
+	planted := filepath.Join(home, "p")
+	plantedDir := filepath.Join(planted, "r", ".cache", "swarmview")
+	if runtime.GOOS == "darwin" {
+		plantedDir = filepath.Join(planted, "r", "Library", "Caches", "swarmview")
+	}
+	must(t, os.MkdirAll(plantedDir, 0700))
+	plantedLn, err := net.Listen("unix", filepath.Join(plantedDir, "live.sock"))
+	must(t, err)
+	defer plantedLn.Close()
+	plantedHookGot := filepath.Join(home, "planted-hook.got")
+	launcherStub(t, liveHookPath(plantedDir), plantedHookGot, false)
+	relative := exec.Command("sh", launcher)
+	relative.Dir = planted
+	relative.Env = append(os.Environ(), "HOME=r", "XDG_CACHE_HOME=r/.cache", "PATH=/usr/bin:/bin")
+	relative.Stdin = strings.NewReader(payload)
+	if out, err := relative.CombinedOutput(); err != nil {
+		t.Fatalf("launcher must exit 0 with a relative cache dir: %v %s", err, out)
+	}
+	if ran(plantedHookGot) {
+		t.Fatal("launcher ran a live-hook from a relative cache directory")
+	}
+
 	// An inherited setgid bit grants no access, so the copy still runs.
 	reset(false)
 	must(t, os.Chmod(dir, 0700|os.ModeSetgid))

@@ -26,6 +26,29 @@ if [ "$(uname)" = Darwin ]; then
   darwin=1
 fi
 dir="$cache/swarmview"
+# Like Go's os.UserCacheDir, accept only an absolute cache directory: a
+# relative one would resolve inside the project Claude has open.
+case "$dir" in
+  /*) ;;
+  *)
+    cat >/dev/null
+    exit 0
+    ;;
+esac
+
+# run_hook runs $1 in hook mode when it is an executable regular file, and
+# succeeds only if it delivered (hook mode exits 0 unless the binary itself
+# fails; a binary too old for the flag fails before reading stdin, so the next
+# candidate still gets the event).
+run_hook() {
+  if [ -f "$1" ]; then
+    if [ -x "$1" ]; then
+      "$1" -claude-hook 2>/dev/null
+      return
+    fi
+  fi
+  return 1
+}
 
 # No live socket means no opted-in Swarmview: skip starting a binary at all.
 if [ -S "$dir/live.sock" ]; then
@@ -54,30 +77,34 @@ if [ -S "$dir/live.sock" ]; then
       ;;
   esac
   # Candidates in order: the private copy, every swarmview in an absolute PATH
-  # entry, then the native app. None of these paths can contain a colon.
-  candidates="$running"
-  IFS=:
-  set -f
-  for entry in $absolute; do
-    if [ -n "$entry" ]; then
-      candidates="$candidates:$entry/swarmview"
-    fi
-  done
-  candidates="$candidates:/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
-  candidates="$candidates:$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
-  for bin in $candidates; do
-    if [ -f "$bin" ]; then
-      if [ -x "$bin" ]; then
-        # Hook mode exits 0 unless the binary itself fails; a binary too old
-        # for the flag fails before reading stdin, so the next one gets the event.
-        if "$bin" -claude-hook 2>/dev/null; then
+  # entry, then the native app. Only the PATH entries are split on colons;
+  # other paths, built from $HOME, may contain one.
+  delivered=""
+  if run_hook "$running"; then
+    delivered=1
+  fi
+  if [ -z "$delivered" ]; then
+    IFS=:
+    set -f
+    for entry in $absolute; do
+      if [ -n "$entry" ]; then
+        if run_hook "$entry/swarmview"; then
+          delivered=1
           break
         fi
       fi
+    done
+    set +f
+    IFS="$saved_ifs"
+  fi
+  if [ -z "$delivered" ]; then
+    if run_hook /Applications/Swarmview.app/Contents/MacOS/swarmview-server; then
+      delivered=1
     fi
-  done
-  set +f
-  IFS="$saved_ifs"
+  fi
+  if [ -z "$delivered" ]; then
+    run_hook "$HOME/Applications/Swarmview.app/Contents/MacOS/swarmview-server"
+  fi
 fi
 # Drain anything left unread so Claude never writes into a closed pipe.
 cat >/dev/null
