@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -196,6 +197,40 @@ func TestTwoClaudeInCwdParentPidNull(t *testing.T) {
 	mk(t, root, "/w/a", "s1", "a1", map[string]any{"description": "R", "model": "m"}, 3, now)
 	if got := subs(root, now, claude(100, "/w/a"), claude(101, "/w/a")); got[0].ParentPid != nil {
 		t.Error("parentPid should be nil")
+	}
+}
+
+func TestTwoClaudeInCwdAttachBySessionMetadata(t *testing.T) {
+	root, now := filepath.Join(t.TempDir(), "projects"), nowMs()
+	s100, s101 := "10000000-0000-0000-0000-000000000000", "10100000-0000-0000-0000-000000000000"
+	mk(t, root, "/w/a", s100, "a1", map[string]any{"description": "R", "model": "m"}, 3, now)
+	mk(t, root, "/w/a", s101, "a2", map[string]any{"description": "R", "model": "m"}, 3, now)
+	mk(t, root, "/w/a", "unclaimed", "a3", map[string]any{"description": "R", "model": "m"}, 3, now)
+	sessions := filepath.Join(filepath.Dir(root), "sessions")
+	must(t, os.MkdirAll(sessions, 0o755))
+	for pid, id := range map[int]string{100: s100, 101: s101} {
+		meta := marshal(map[string]any{"pid": pid, "sessionId": id, "cwd": "/w/a"})
+		must(t, os.WriteFile(filepath.Join(sessions, strconv.Itoa(pid)+".json"), meta, 0o644))
+	}
+	parents := map[string]*int{}
+	for _, s := range subs(root, now, claude(100, "/w/a"), claude(101, "/w/a")) {
+		parents[s.Id] = s.ParentPid
+	}
+	if parents["a1"] == nil || *parents["a1"] != 100 || parents["a2"] == nil || *parents["a2"] != 101 {
+		t.Errorf("workers should attach to the session owner: a1=%v a2=%v", parents["a1"], parents["a2"])
+	}
+	if parents["a3"] != nil {
+		t.Error("a session no running process claims keeps a nil parentPid")
+	}
+
+	// a second live process resuming s101 makes its owner ambiguous
+	resumed := marshal(map[string]any{"pid": 102, "sessionId": s101, "cwd": "/w/a"})
+	must(t, os.WriteFile(filepath.Join(sessions, "102.json"), resumed, 0o644))
+	for _, s := range subs(root, now, claude(100, "/w/a"), claude(101, "/w/a"), claude(102, "/w/a")) {
+		parents[s.Id] = s.ParentPid
+	}
+	if parents["a1"] == nil || *parents["a1"] != 100 || parents["a2"] != nil {
+		t.Errorf("a doubly claimed session should stay unattributed: a1=%v a2=%v", parents["a1"], parents["a2"])
 	}
 }
 
