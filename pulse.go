@@ -148,8 +148,10 @@ func (b *pulseBridge) close() {
 	b.once.Do(func() {
 		if b.ln != nil {
 			b.ln.Close()
-			_ = removePulseSocket(b.path, b.inode)
-			unpublishHookBinary(filepath.Dir(b.path))
+			// live.exe is ours only while the socket was: a replacement bridge keeps its own.
+			if removePulseSocket(b.path, b.inode) == nil {
+				os.Remove(liveExePath(filepath.Dir(b.path)))
+			}
 		}
 		b.mu.Lock()
 		b.closed = true

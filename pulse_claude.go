@@ -89,29 +89,20 @@ func publishHookBinary(dir string) {
 	if err != nil {
 		return
 	}
-	tmp := liveExePath(dir) + ".tmp"
-	if os.WriteFile(tmp, []byte(exe+"\n"), 0600) != nil {
-		os.Remove(tmp)
-		return
-	}
-	if os.Rename(tmp, liveExePath(dir)) != nil {
-		os.Remove(tmp)
-	}
-}
-
-// unpublishHookBinary removes live.exe only while it still names this binary,
-// so a bridge that replaced it keeps its own.
-func unpublishHookBinary(dir string) {
-	exe, err := os.Executable()
+	// A fresh, exclusively created temp file: never follow a planted name.
+	tmp, err := os.CreateTemp(dir, "live.exe.*")
 	if err != nil {
 		return
 	}
-	recorded, err := os.ReadFile(liveExePath(dir))
-	if err != nil {
-		return
+	_, err = tmp.WriteString(exe + "\n")
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
 	}
-	if string(recorded) == exe+"\n" {
-		os.Remove(liveExePath(dir))
+	if err == nil {
+		err = os.Rename(tmp.Name(), liveExePath(dir))
+	}
+	if err != nil {
+		os.Remove(tmp.Name())
 	}
 }
 

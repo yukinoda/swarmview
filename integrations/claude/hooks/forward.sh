@@ -6,9 +6,14 @@ cache="${XDG_CACHE_HOME:-$HOME/.cache}"
 if [ "$(uname)" = Darwin ]; then
   cache="$HOME/Library/Caches"
 fi
+dir="$cache/swarmview"
 # No live socket means no opted-in Swarmview: skip starting a binary at all.
-if [ -S "$cache/swarmview/live.sock" ]; then
-  running="$(cat "$cache/swarmview/live.exe" 2>/dev/null)"
+if [ -S "$dir/live.sock" ]; then
+  running=""
+  # Trust the recorded path only from your own directory and a regular file.
+  if [ -O "$dir" ] && [ -O "$dir/live.exe" ] && [ ! -h "$dir/live.exe" ]; then
+    running="$(cat "$dir/live.exe")"
+  fi
   for bin in \
     "$running" \
     "$(command -v swarmview)" \

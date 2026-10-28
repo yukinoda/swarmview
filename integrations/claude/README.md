@@ -44,10 +44,12 @@ has not been run by hand.
    [launcher]: https://github.com/yukinoda/swarmview/blob/main/integrations/claude/hooks/forward.sh
 
 Disable with `/plugin disable swarmview`, or remove it with
-`/plugin uninstall swarmview`. When Swarmview isn't running with communication
-enabled, the hook finds no socket and exits at once. Otherwise it gives up
-after at most 5.5 seconds (a 0.5-second connect plus a 5-second exchange). It
-never fails or delays a Claude tool call.
+`/plugin uninstall swarmview`. When no Swarmview has opted in, the launcher
+finds no socket and exits without starting a binary. After a crash leaves a
+stale socket, the binary starts, finds nothing listening, and exits at once.
+The launcher trusts `live.exe` only in a directory you own, as a regular file
+you own. A hook gives up after at most 5.5 seconds (a 0.5-second connect plus a
+5-second exchange). It never fails or delays a Claude tool call.
 
 ### Without the plugin
 
@@ -58,46 +60,46 @@ CLI `swarmview`, or
 app, and keep `"async": true` so Claude never waits. If you move the binary or
 app, update the path. Disable by removing the three entries.
 
-   ```json
-   {
-     "hooks": {
-       "SubagentStart": [
-         {
-           "hooks": [
-             {
-               "type": "command",
-               "command": "/path/to/swarmview -claude-hook",
-               "async": true
-             }
-           ]
-         }
-       ],
-       "SubagentStop": [
-         {
-           "hooks": [
-             {
-               "type": "command",
-               "command": "/path/to/swarmview -claude-hook",
-               "async": true
-             }
-           ]
-         }
-       ],
-       "PreToolUse": [
-         {
-           "matcher": "SendMessage",
-           "hooks": [
-             {
-               "type": "command",
-               "command": "/path/to/swarmview -claude-hook",
-               "async": true
-             }
-           ]
-         }
-       ]
-     }
-   }
-   ```
+```json
+{
+  "hooks": {
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/swarmview -claude-hook",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/swarmview -claude-hook",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "SendMessage",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/path/to/swarmview -claude-hook",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## What the UI means
 
