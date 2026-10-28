@@ -52,14 +52,15 @@ Disable with `/plugin disable swarmview`, or remove it with
 finds no socket and exits without starting a binary. After a crash leaves a
 stale socket, the binary starts, finds nothing listening, and exits at once.
 The launcher uses only an absolute cache directory, as Swarmview does, and runs
-`live-hook` only while that directory is yours with mode `0700` and no ACL (on
-macOS checked with `ls -le`, since an ACL can hide behind the `@` column), and
-the copy is your own file, not a symlink. No recorded path is ever trusted:
-besides that copy, the launcher only runs `swarmview` from absolute `PATH`
-entries and the native app, as your shell would, and the launcher looks up its
-own helper commands in `/usr/bin` and `/bin` first, then only in the absolute
-entries of your `PATH`. A hook gives up after at most 5.5 seconds (a 0.5-second
-connect plus a 5-second exchange). It never fails or delays a Claude tool call.
+`live-hook` only while that directory is yours with mode `0700` and no ACL as
+`ls` reports it (on macOS checked with `ls -le`, since an ACL can hide behind
+the `@` column; BusyBox `ls` doesn't report ACLs), and the copy is your own
+file, not a symlink. No recorded path is ever trusted: besides that copy, the
+launcher only runs `swarmview` from absolute `PATH` entries and the native app,
+as your shell would, and the launcher looks up its own helper commands in
+`/usr/bin` and `/bin` first, then only in the absolute entries of your `PATH`.
+A hook gives up after at most 5.5 seconds (a 0.5-second connect plus a 5-second
+exchange). It never fails or delays a Claude tool call.
 
 ### Without the plugin
 

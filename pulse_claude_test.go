@@ -494,6 +494,22 @@ func TestClaudePluginLauncher(t *testing.T) {
 		t.Fatal("launcher ran a live-hook from a relative cache directory")
 	}
 
+	// With no HOME there is no cache directory, as for Go: nothing runs.
+	reset(false)
+	noHome := exec.Command("sh", launcher)
+	noHome.Dir = home
+	noHome.Env = append(os.Environ(), "HOME=", "XDG_CACHE_HOME=", "PATH="+bin+":/usr/bin:/bin")
+	noHome.Stdin = strings.NewReader(payload)
+	if out, err := noHome.CombinedOutput(); err != nil {
+		t.Fatalf("launcher must exit 0 without HOME: %v %s", err, out)
+	}
+	if ran(hookGot) {
+		t.Fatal("launcher ran live-hook without a HOME")
+	}
+	if ran(pathGot) {
+		t.Fatal("launcher ran a PATH binary without a HOME")
+	}
+
 	// An inherited setgid bit grants no access, so the copy still runs.
 	reset(false)
 	must(t, os.Chmod(dir, 0700|os.ModeSetgid))

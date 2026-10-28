@@ -6,12 +6,11 @@
 # Helpers come from the system directories first, then only the absolute
 # entries of your PATH (for systems like NixOS); a relative entry would resolve
 # inside the project Claude has open. Your PATH is also searched for swarmview.
-search_path="$PATH"
 absolute=""
 saved_ifs="$IFS"
 IFS=:
 set -f
-for entry in $search_path; do
+for entry in $PATH; do
   case "$entry" in
     /*) absolute="$absolute:$entry" ;;
   esac
@@ -19,6 +18,11 @@ done
 set +f
 IFS="$saved_ifs"
 PATH="/usr/bin:/bin$absolute"
+# Like Go's os.UserCacheDir, an empty HOME means there is no cache directory.
+if [ -z "$HOME" ]; then
+  cat >/dev/null
+  exit 0
+fi
 cache="${XDG_CACHE_HOME:-$HOME/.cache}"
 darwin=""
 if [ "$(uname)" = Darwin ]; then
