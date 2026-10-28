@@ -2112,6 +2112,19 @@ const {
         activeFeedback.size === 0,
         'initial/reconnected state never replays feedback',
       );
+      render(claudeSnapshot);
+      showFeedback('sub:a1234567', 'sent', 46000);
+      stream.onmessage({
+        data: JSON.stringify({ workers: [], ambiguous: true }),
+      });
+      assert(
+        activeFeedback.size === 1,
+        'OpenCode ambiguity keeps a Claude cue, which names its own host',
+      );
+      clearPulses();
+      // Two renders: removed rows stay one poll as exiting before they go.
+      render(liveSnapshot);
+      render(liveSnapshot);
       const stableWorkers = liveWorkers.slice(0, 20),
         routeHost = agent(45100, '/live-route', { kind: 'opencode' });
       render({

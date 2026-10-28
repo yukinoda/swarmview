@@ -105,6 +105,7 @@ function showFeedback(key, direction, pid, until = Date.now() + 5000) {
       line,
       parent: item.parent,
       pid: item.pid,
+      claude: Boolean(pid),
       timer: null,
       summary: '',
     };
@@ -217,7 +218,9 @@ export function communicationStream() {
       return;
     }
     // OpenCode ambiguity never affects a Claude cue, which names its own host.
-    if (frame.ambiguous && !frame.pid) clearPulses();
+    if (frame.ambiguous)
+      for (const entry of activeFeedback.values())
+        if (!entry.claude) entry.clear();
     txt(
       communicationStatus,
       (frame.ambiguous
