@@ -153,18 +153,19 @@ cannot inherit a mapping. The source is a user-reviewed local plugin, not an
 audit/security attestation of a remote OpenCode server.
 
 Ctrl-C, SIGTERM, and closing the terminal (SIGHUP) unwind owned listener
-cleanup; a server started with `nohup` keeps ignoring SIGHUP and keeps running.
-SIGKILL cannot run defers, so the
-next opted-in start acquires the exclusive lock and reclaims only an owned,
-single-link `0600` socket whose connection probe reports `ECONNREFUSED` and
-whose inode still matches. Symlinks, regular files, lax modes, unexpected lock
-files, live listeners, timeouts, and other probe errors are refused rather than
-unlinked. Cleanup also checks inode identity and disables Go's unconditional
-Unix unlink-on-close so an old closer leaves a replacement path untouched.
-The empty lock file deliberately remains: deleting/recreating that inode while
-an instance is active would split the ownership lock. It stores no event/PID/
-session data. This serializes cooperating Swarmview instances; it is not a
-guarantee against a same-account program deliberately replacing private paths.
+cleanup; a signal ignored when Swarmview started (for example SIGHUP under
+`nohup`) stays ignored, so that server keeps running. SIGKILL cannot run defers,
+so the next opted-in start acquires the exclusive lock and reclaims only an
+owned, single-link `0600` socket whose connection probe reports `ECONNREFUSED`
+and whose inode still matches. Symlinks, regular files, lax modes, unexpected
+lock files, live listeners, timeouts, and other probe errors are refused rather
+than unlinked. Cleanup also checks inode identity and disables Go's
+unconditional Unix unlink-on-close so an old closer leaves a replacement path
+untouched. The empty lock file deliberately remains: deleting/recreating that
+inode while an instance is active would split the ownership lock. It stores no
+event/PID/ session data. This serializes cooperating Swarmview instances; it is
+not a guarantee against a same-account program deliberately replacing private
+paths.
 
 A normal shutdown of a TUI with a selected session sends a final `bye` record
 and then closes the socket. `bye` ends the stream (later records are never

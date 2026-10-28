@@ -255,18 +255,18 @@ func pulseChildPort(t *testing.T) string {
 
 func startPulseChild(t *testing.T, home, port string, enabled bool) *pulseChild {
 	t.Helper()
-	return startPulseChildIgnoring(t, home, port, enabled, false)
+	return startPulseChildVia(t, home, port, enabled)
 }
 
-// startPulseChildIgnoring can start the child with SIGHUP ignored, as nohup does,
-// through a shell, so this test process's own signal handling never changes.
-func startPulseChildIgnoring(t *testing.T, home, port string, enabled, ignoreHup bool) *pulseChild {
+// nohupShell starts the child with SIGHUP ignored, as nohup does, without
+// changing this test process's own signal handling.
+var nohupShell = []string{"/bin/sh", "-c", `trap "" HUP; exec "$0" "$@"`}
+
+// startPulseChildVia starts the helper child, optionally through a launcher prefix.
+func startPulseChildVia(t *testing.T, home, port string, enabled bool, prefix ...string) *pulseChild {
 	t.Helper()
 	p := &pulseChild{exit: make(chan struct{}), ready: make(chan string, 1)}
-	argv := []string{os.Args[0], "-test.run=^TestPulseCLIHelper$"}
-	if ignoreHup {
-		argv = append([]string{"/bin/sh", "-c", `trap "" HUP; exec "$0" "$@"`}, argv...)
-	}
+	argv := append(append([]string{}, prefix...), os.Args[0], "-test.run=^TestPulseCLIHelper$")
 	p.cmd = exec.Command(argv[0], argv[1:]...)
 	flag := "0"
 	if enabled {
@@ -352,7 +352,7 @@ func TestPulseCLILifecycle(t *testing.T) {
 	t.Run("nohup-keeps-running", func(t *testing.T) {
 		// A child started with SIGHUP ignored (nohup) inherits that and must keep it.
 		home, path := pulseHome(t)
-		p := startPulseChildIgnoring(t, home, pulseChildPort(t), true, true)
+		p := startPulseChildVia(t, home, pulseChildPort(t), true, nohupShell...)
 		p.awaitReady(t)
 		must(t, p.cmd.Process.Signal(syscall.SIGHUP))
 		select {
