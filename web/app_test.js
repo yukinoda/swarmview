@@ -2709,15 +2709,48 @@ const {
         kids.getBoundingClientRect().left +
         parseFloat(trunk.left) +
         parseFloat(trunk.borderLeftWidth);
-      const stubLeft =
-          row.btn.getBoundingClientRect().left + parseFloat(stub.left),
+      const btnRect = row.btn.getBoundingClientRect();
+      const stubLeft = btnRect.left + parseFloat(stub.left),
         stubWidth = parseFloat(stub.width);
-      const isWorker = row.item.sub || row.item.live,
-        slotLeft =
-          row.btn.getBoundingClientRect().left +
-          parseFloat(getComputedStyle(row.btn).paddingLeft) -
-          28;
-      if (!isWorker) {
+      const isWorker = row.item.sub || row.item.live;
+      if (isWorker) {
+        const slotLeft =
+          btnRect.left + parseFloat(getComputedStyle(row.btn).paddingLeft) - 28;
+        const dot = getComputedStyle(row.btn, '::after'),
+          dotLeft = btnRect.left + parseFloat(dot.left),
+          dotCenterY = btnRect.top + parseFloat(dot.top) + 3,
+          stubY = btnRect.top + parseFloat(stub.top);
+        const detail = JSON.stringify({
+          key,
+          dotLeft,
+          dotCenterY,
+          slotLeft,
+          stubY,
+          stubWidth,
+        });
+        assert(
+          dot.content !== 'none' && parseFloat(dot.width) === 6,
+          'worker rows draw a 6px node dot: ' + detail,
+        );
+        assert(
+          dotLeft >= slotLeft && dotLeft + 6 <= slotLeft + 20,
+          'the node dot sits inside the empty logo slot: ' + detail,
+        );
+        assert(
+          Math.abs(dotCenterY - stubY - 0.5) <= 1,
+          'the node dot is centered on the branch, on the title line: ' +
+            detail,
+        );
+        assert(
+          stubWidth >= 4 && Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
+          'worker branches run into their node dot: ' + detail,
+        );
+        if (row.node.classList.contains('s-working'))
+          assert(
+            dot.borderTopColor === stub.borderTopColor,
+            'a working node dot takes its branch color: ' + detail,
+          );
+      } else {
         const contentLeft =
             row.btn.firstElementChild.getBoundingClientRect().left,
           stubGap = contentLeft - (stubLeft + stubWidth);
@@ -2725,31 +2758,6 @@ const {
           stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
           'horizontal branches reach just short of the row logo: ' +
             JSON.stringify({ key, stubWidth, stubGap }),
-        );
-      }
-      if (isWorker) {
-        const dot = getComputedStyle(row.btn, '::after'),
-          dotTop = row.btn.getBoundingClientRect().top + parseFloat(dot.top),
-          dotCenterY = dotTop + parseFloat(dot.height) / 2,
-          stubY = row.btn.getBoundingClientRect().top + parseFloat(stub.top),
-          dotLeft = row.btn.getBoundingClientRect().left + parseFloat(dot.left);
-        assert(
-          dot.content !== 'none' &&
-            parseFloat(dot.width) === 6 &&
-            Math.abs(dotCenterY - stubY - 0.5) <= 1 &&
-            dotLeft >= slotLeft &&
-            dotLeft + 6 <= slotLeft + 20 &&
-            stubWidth >= 4 &&
-            Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
-          'worker branches run into a node dot inside the logo slot on the title line: ' +
-            JSON.stringify({
-              key,
-              dotCenterY,
-              stubY,
-              dotLeft,
-              slotLeft,
-              stubWidth,
-            }),
         );
       }
       const parentRow = rows.get(row.item.parent),
@@ -2762,8 +2770,10 @@ const {
             parentPad -
             (isParentWorker ? 28 : 0),
           trunkOffset = trunkRight - 1 - parentSlotLeft;
+        // A worker's dot spans slot +7..+13, so its children's trunk must drop through it.
+        const [low, high] = isParentWorker ? [8, 11] : [0, 20];
         assert(
-          trunkOffset >= 0 && trunkOffset <= 20,
+          trunkOffset >= low && trunkOffset <= high,
           'child trunks drop from the parent logo, or the node dot of a worker parent: ' +
             JSON.stringify({ key, parentDepth, trunkOffset }),
         );

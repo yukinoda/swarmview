@@ -425,25 +425,32 @@ kbd {
 }
 .worker > .row-line > .agent {
   --row-pad: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
-  --slot-pad: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step));
+  /* The dot's left edge, centered in the empty 20px logo slot. */
+  --dot-left: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step) + 7px);
 }
 /* Workers have no logo: the branch runs into a node dot in the empty logo slot,
    on the title line. */
 .worker > .row-line > .agent::before {
   top: 14px;
-  width: calc(var(--slot-pad) + 7px - var(--connector-origin));
+  width: calc(var(--dot-left) - var(--connector-origin));
 }
+/* A border, not a background, so the dot survives forced-colors mode. */
 .worker > .row-line > .agent::after {
   content: '';
   position: absolute;
-  left: calc(var(--slot-pad) + 7px);
+  left: var(--dot-left);
   top: 11px;
+  box-sizing: border-box;
   width: 6px;
   height: 6px;
+  border: 3px solid var(--mut);
   border-radius: 50%;
-  background: var(--mut);
   opacity: 0.5;
   pointer-events: none;
+}
+.worker.s-working > .row-line > .agent::after {
+  border-color: var(--working);
+  opacity: 1;
 }
 .live-worker > .row-line .context {
   min-height: 20px;
