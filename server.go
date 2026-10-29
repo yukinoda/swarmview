@@ -25,7 +25,8 @@ type server struct {
 	cache     map[int]*cacheEntry
 	metaCache map[string]metaEntry
 	sessions  map[string]sessionScan
-	root      string // ~/.claude/projects
+	hosts     map[string]workerHost // Claude worker ID -> host reported by its SubagentStart hook
+	root      string                // ~/.claude/projects
 	port      int
 	sysU32    func(name string) (uint32, bool) // nil disables system memory (tests, non-darwin)
 	sys       system
@@ -40,7 +41,17 @@ type server struct {
 
 func newServer(run Runner) *server {
 	home, _ := os.UserHomeDir()
-	return &server{port: 4777, run: run, cache: map[int]*cacheEntry{}, metaCache: map[string]metaEntry{}, sessions: map[string]sessionScan{}, noCwd: map[int]int64{}, root: path.Join(home, ".claude/projects"), ghostty: ghosttyInstalled()}
+	return &server{
+		port:      4777,
+		run:       run,
+		cache:     map[int]*cacheEntry{},
+		metaCache: map[string]metaEntry{},
+		sessions:  map[string]sessionScan{},
+		hosts:     map[string]workerHost{},
+		noCwd:     map[int]int64{},
+		root:      path.Join(home, ".claude/projects"),
+		ghostty:   ghosttyInstalled(),
+	}
 }
 
 type snap struct {
@@ -80,7 +91,7 @@ func (s *server) snapshot(now int64) (snap, error) {
 			return snap{}, err
 		}
 		s.refreshSystem(now)
-		s.snap = &snap{agents, listClaudeSubagents(agents, s.root, now, s.metaCache, s.sessions), now, s.sys}
+		s.snap = &snap{agents, listClaudeSubagents(agents, s.root, now, s.metaCache, s.sessions, s.hosts), now, s.sys}
 	}
 	return *s.snap, nil
 }

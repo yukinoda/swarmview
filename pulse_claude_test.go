@@ -67,20 +67,24 @@ func TestClaudeHookBridge(t *testing.T) {
 		ps = table
 		mu.Unlock()
 	}
-	s := &server{run: func(cmd string, args ...string) (string, error) {
+	fakePs := func(cmd string, args ...string) (string, error) {
 		if cmd != "ps" {
 			return "", errors.New("unexpected command")
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		return ps, nil
-	}}
-	setKind := func(kind string) {
+	}
+	s := &server{run: fakePs}
+	setHost := func(kind, etime string) {
 		s.mu.Lock()
 		// Dated an hour ahead so a slow run never refreshes it through the fake ps.
 		at := time.Now().Add(time.Hour).UnixMilli()
-		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind}}}
+		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind, Etime: etime}}}
 		s.mu.Unlock()
+	}
+	setKind := func(kind string) {
+		setHost(kind, "10:00")
 	}
 	b := newPulseBridge()
 	must(t, b.start(s))
@@ -99,10 +103,64 @@ func TestClaudeHookBridge(t *testing.T) {
 	if copied.Mode().Perm() != 0700 {
 		t.Fatalf("live-hook mode %v, want 0700", copied.Mode().Perm())
 	}
-	ch, frame := pulseViewer(t, b)
 	hook := func(payload string) { runClaudeHook(strings.NewReader(payload)) }
+	hostOf := func(agent string) (workerHost, bool) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		h, ok := s.hosts[agent]
+		return h, ok
+	}
 
+	// With no viewer, only SubagentStart is recorded: which Claude started the worker.
 	setKind("claude")
+	hook(`{"hook_event_name":"SubagentStop","agent_id":"a7777777"}`)
+	hook(`{"hook_event_name":"PreToolUse","tool_name":"SendMessage","tool_input":{"to":"a8888888"}}`)
+	if _, ok := hostOf("a7777777"); ok {
+		t.Fatal("SubagentStop must not record a host")
+	}
+	if _, ok := hostOf("a8888888"); ok {
+		t.Fatal("SendMessage must not record a host")
+	}
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a9999999"}`)
+	h, ok := hostOf("a9999999")
+	if !ok {
+		t.Fatal("SubagentStart with no viewer should record a host")
+	}
+	if h.pid != host {
+		t.Fatalf("recorded host %d, want %d", h.pid, host)
+	}
+	s.mu.Lock()
+	wantStart := processStart(s.snap.agents[0], s.snap.at)
+	s.mu.Unlock()
+	if h.start != wantStart {
+		t.Fatalf("recorded start %v, want the host's %v", h.start, wantStart)
+	}
+	// A host whose start time ps didn't report records nothing, and leaves the
+	// worker free for a later SubagentStart once the time is readable.
+	setHost("claude", "")
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a3333330"}`)
+	if _, ok := hostOf("a3333330"); ok {
+		t.Fatal("a host without a start time must not be recorded")
+	}
+	setKind("claude")
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a3333330"}`)
+	if _, ok := hostOf("a3333330"); !ok {
+		t.Fatal("a later SubagentStart with a known start time should record")
+	}
+	setKind("codex")
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a6666666"}`)
+	setKind("claude")
+	if _, ok := hostOf("a6666666"); ok {
+		t.Fatal("a hook outside any Claude must not record a host")
+	}
+	setPs(sixHops)
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a5555555"}`)
+	setPs(fiveHops)
+	if _, ok := hostOf("a5555555"); ok {
+		t.Fatal("a hook too deep below a Claude must not record a host")
+	}
+
+	ch, frame := pulseViewer(t, b)
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a0123456789abcdef"}`)
 	f := frame("subagent start")
 	if f.Key != "sub:a0123456789abcdef" || f.Direction != "sent" || f.Pid != host || f.Workers == nil {
@@ -128,6 +186,9 @@ func TestClaudeHookBridge(t *testing.T) {
 	if len(ch) != 0 {
 		t.Fatal("unexpected extra cue")
 	}
+	if _, ok := hostOf("a1234567"); ok {
+		t.Fatal("a watched SendMessage must not record a host")
+	}
 
 	// Parallel subagent starts all reach a viewer that has not read yet.
 	var wg sync.WaitGroup
@@ -143,8 +204,21 @@ func TestClaudeHookBridge(t *testing.T) {
 		t.Fatalf("parallel starts queued %d of 3 cues", len(ch))
 	}
 
-	// A stopped bridge leaves no path for the launcher to prefer.
+	// A stopped bridge leaves no path for the launcher to prefer, and no records.
+	if _, ok := hostOf("a9999999"); !ok {
+		t.Fatal("the record should last while the bridge runs")
+	}
 	b.close()
+	s.mu.Lock()
+	left := len(s.hosts)
+	s.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("%d records outlived the bridge", left)
+	}
+	b.record(s, "a4444444", workerHost{pid: host, at: 1})
+	if _, ok := hostOf("a4444444"); ok {
+		t.Fatal("a closed bridge must not record")
+	}
 	if _, err := os.Stat(liveHookPath(filepath.Dir(b.path))); !os.IsNotExist(err) {
 		t.Fatalf("live-hook outlived the bridge: %v", err)
 	}

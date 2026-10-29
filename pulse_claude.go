@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -202,19 +203,80 @@ func claudeHost(s *server, sn snap, pid int) int {
 	return 0
 }
 
-// acceptClaude reads one record from a hook connected while its process is still alive.
-// The cue names the host PID so the viewer only marks a worker row owned by that Claude.
-func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
-	b.mu.Lock()
-	watched := len(b.viewers) > 0
-	b.mu.Unlock()
-	if !watched {
-		return // nobody would see the cue: skip the ancestry walk
+// maxWorkerHosts bounds the SubagentStart records kept for nesting doubly claimed sessions.
+const maxWorkerHosts = 256
+
+// recordWorkerHost remembers which Claude started a worker. The first record wins,
+// and when full the oldest record is dropped. The next snapshot refresh uses it.
+func (s *server) recordWorkerHost(agent string, host workerHost) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.hosts == nil {
+		s.hosts = map[string]workerHost{}
 	}
-	host := claudeHost(s, sn, pid)
-	if host == 0 {
+	if _, ok := s.hosts[agent]; ok {
 		return
 	}
+	if len(s.hosts) >= maxWorkerHosts {
+		oldestID := ""
+		oldestAt := int64(math.MaxInt64)
+		for id, h := range s.hosts {
+			if h.at < oldestAt {
+				oldestID = id
+				oldestAt = h.at
+			}
+		}
+		delete(s.hosts, oldestID)
+	}
+	s.hosts[agent] = host
+}
+
+// record stores a SubagentStart record unless the bridge is closing. It never
+// holds b.mu and s.mu together: close marks the bridge closed before clearing,
+// so a record that lands after that clear sees closed and removes itself.
+func (b *pulseBridge) record(s *server, agent string, host workerHost) {
+	s.recordWorkerHost(agent, host)
+	b.mu.Lock()
+	closed := b.closed
+	b.mu.Unlock()
+	if closed {
+		s.forgetWorkerHost(agent)
+	}
+}
+
+// forgetWorkerHost drops one SubagentStart record.
+func (s *server) forgetWorkerHost(agent string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.hosts, agent)
+}
+
+// clearWorkerHosts forgets every SubagentStart record.
+func (s *server) clearWorkerHosts() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clear(s.hosts)
+}
+
+// hostRecord is the record for a SubagentStart reported by Claude process pid
+// in sn. ok is false when its start time is unknown: such a record could never
+// prove a parent, yet as the first record it would block a later, usable one.
+func hostRecord(sn snap, pid int, now int64) (workerHost, bool) {
+	a, found := findClaude(sn.agents, pid)
+	if !found {
+		return workerHost{}, false
+	}
+	start := processStart(a, sn.at)
+	if math.IsNaN(start) {
+		return workerHost{}, false
+	}
+	return workerHost{pid: pid, start: start, at: now}, true
+}
+
+// acceptClaude reads one record from a hook connected while its process is still alive.
+// The cue names the host PID so the viewer only marks a worker row owned by that Claude.
+// A SubagentStart record is kept even with no viewer, to nest a resumed session's workers.
+func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 	c.SetReadDeadline(time.Now().Add(time.Second))
 	scan := bufio.NewScanner(c)
 	scan.Buffer(make([]byte, 129), 128)
@@ -224,6 +286,22 @@ func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 	m, err := decodeClaudePulse(scan.Bytes())
 	if err != nil {
 		return
+	}
+	b.mu.Lock()
+	watched := len(b.viewers) > 0
+	b.mu.Unlock()
+	if !watched && m.Type != "sent" {
+		return // nobody would see the cue and nothing to record: skip the ancestry walk
+	}
+	host := claudeHost(s, sn, pid)
+	if host == 0 {
+		return
+	}
+	if m.Type == "sent" {
+		rec, ok := hostRecord(sn, host, time.Now().UnixMilli())
+		if ok {
+			b.record(s, m.Agent, rec)
+		}
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
