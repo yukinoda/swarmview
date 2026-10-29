@@ -32,10 +32,15 @@ func TestClaudeGeneratedTitle(t *testing.T) {
 	record := func(title, session string) string {
 		return `{"type":"ai-title","aiTitle":"` + title + `","sessionId":"` + session + `"}` + "\n"
 	}
+	reply := func(model, session string) string {
+		return `{"parentUuid":"p","message":{"model":"` + model + `","role":"assistant"},"type":"assistant","sessionId":"` + session + `"}` + "\n"
+	}
 	write(metadata, meta(100, id, cwd))
-	write(transcript, strings.Repeat("x", 70<<10)+"\n"+record("Old title", id)+record("Generated task", id)+record("Wrong session", "other")+`{"type":"ai-title",`)
-	if got := claudeSessionTitle(root, 100, cwd, nowMs(), &sessionTitle{}); got != "Generated task" {
-		t.Fatalf("generated title = %q", got)
+	write(transcript, strings.Repeat("x", 70<<10)+"\n"+record("Old title", id)+reply("claude-sonnet-5-5", id)+record("Generated task", id)+
+		reply("claude-opus-5-5", id)+reply("<synthetic>", id)+reply("claude-haiku-5-5", "other")+record("Wrong session", "other")+`{"type":"ai-title",`)
+	c := &sessionTitle{}
+	if got := claudeSessionTitle(root, 100, cwd, nowMs(), c); got != "Generated task" || c.model != "claude-opus-5-5" {
+		t.Fatalf("generated title = %q, model = %q", got, c.model)
 	}
 	paneTitle := "✳ Claude Code"
 	s := srvWith(func(cmd string, args ...string) (string, error) {
@@ -53,8 +58,8 @@ func TestClaudeGeneratedTitle(t *testing.T) {
 		t.Fatalf("generic pane must use generated title: %+v", a)
 	}
 	paneTitle = "✳ Renamed task"
-	if a := mustList(t, s, 2000)[0]; a.Title == nil || *a.Title != "Renamed task" {
-		t.Fatalf("rename must take precedence: %+v", a)
+	if a := mustList(t, s, 2000)[0]; a.Title == nil || *a.Title != "Renamed task" || a.Model != "claude-opus-5-5" {
+		t.Fatalf("rename must take precedence and keep the model: %+v", a)
 	}
 	for _, data := range []string{meta(200, id, cwd), meta(100, id, "/other"), meta(100, "../invalid", cwd), "{"} {
 		write(metadata, data)
@@ -93,9 +98,13 @@ func TestClaudeTitleCachedByFileKey(t *testing.T) {
 	if got := title(); got != "Title A" {
 		t.Errorf("unchanged key re-read: %q", got)
 	}
-	write(log(id), record("Title A", id)+record("Title B", id), 10e3) // appended
-	if got := title(); got != "Title B" {
-		t.Errorf("after append = %q", got)
+	write(log(id), record("Title A", id)+`{"type":"assistant","sessionId":"`+id+`","message":{"model":"claude-opus-5-5"}}`+"\n", 10e3)
+	if title(); c.model != "claude-opus-5-5" {
+		t.Errorf("model = %q", c.model)
+	}
+	write(log(id), record("Title A", id)+record("Title B", id), 10e3) // no assistant record left in the tail
+	if got := title(); got != "Title B" || c.model != "claude-opus-5-5" {
+		t.Errorf("after append = %q, model must be kept: %q", got, c.model)
 	}
 	write(log(id), record("Title C", id)+record("Title B", id), 0) // same size, mtime in this tick
 	if got := title(); got != "Title B" {

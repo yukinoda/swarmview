@@ -269,6 +269,7 @@ type Agent struct {
 	TmuxTarget   string   `json:"tmuxTarget,omitempty"`
 	TmuxAttached bool     `json:"tmuxAttached"`
 	MemBytes     int64    `json:"memBytes"` // ~ sum of RSS over the process tree; shared pages count per process
+	Model        string   `json:"model,omitempty"`
 	pane         string
 }
 
@@ -394,10 +395,12 @@ func (s *server) listAgents(now int64) ([]Agent, error) {
 				a.Title = &p.title
 			}
 		}
-		if r.Kind == "claude" && c != nil && (a.Title == nil || *a.Title == "Claude Code") {
-			if title := claudeSessionTitle(s.root, r.Pid, c.cwd, now, &c.title); title != "" {
+		if r.Kind == "claude" && c != nil {
+			title := claudeSessionTitle(s.root, r.Pid, c.cwd, now, &c.title)
+			if title != "" && (a.Title == nil || *a.Title == "Claude Code") {
 				a.Title = &title
 			}
+			a.Model = c.title.model
 		}
 		agents = append(agents, a)
 	}

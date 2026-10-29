@@ -13,8 +13,8 @@ import (
 
 // sessionTitle caches claudeSessionTitle by the size and mtime of the files it read.
 type sessionTitle struct {
-	metaKey, logKey [2]int64 // zero until the file has been stable for a full mtime tick
-	id, title       string
+	metaKey, logKey  [2]int64 // zero until the file has been stable for a full mtime tick
+	id, title, model string
 }
 
 type metaEntry struct {
@@ -77,6 +77,7 @@ func fileKey(fi os.FileInfo, now int64) [2]int64 {
 }
 
 // claudeSessionTitle re-reads only files whose size or mtime changed since the cached read.
+// The session's latest model is left in c.model.
 func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionTitle) string {
 	metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
 	fi, err := os.Stat(metaPath)
@@ -96,15 +97,19 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 	}
 	logPath := path.Join(root, claudeSlug(cwd), c.id+".jsonl")
 	if fi, err = os.Stat(logPath); err != nil {
-		c.logKey, c.title = [2]int64{}, ""
+		c.logKey, c.title, c.model = [2]int64{}, "", ""
 		return ""
 	}
 	if k := fileKey(fi, now); k == [2]int64{} || k != c.logKey {
-		title, ok := readSessionTitle(logPath, c.id)
+		title, model, ok := readSessionTitle(logPath, c.id)
 		if !ok {
 			k = [2]int64{}
 		}
 		c.logKey, c.title = k, title
+		// a long tool result can push every assistant record out of the tail; keep the last model seen
+		if model != "" {
+			c.model = model
+		}
 	}
 	return c.title
 }
@@ -131,28 +136,35 @@ func readSessionID(metaPath string, pid int, cwd string) (string, bool) {
 	return session.SessionID, true
 }
 
-func readSessionTitle(logPath, sessionID string) (string, bool) {
+// readSessionTitle also returns the model of the session's last assistant record in the tail.
+func readSessionTitle(logPath, sessionID string) (string, string, bool) {
 	f, err := os.Open(logPath)
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	// Inspect only the last 64 KiB; fall back to the pane label if title records are older.
 	start := max(int64(0), info.Size()-(64<<10))
 	b, err := io.ReadAll(io.NewSectionReader(f, start, 64<<10))
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	lines := bytes.Split(b, []byte{'\n'})
 	if start > 0 {
 		lines = lines[1:] // the first record may be partial
 	}
-	var title string
+	var title, model string
 	for _, line := range lines {
+		if bytes.Contains(line, []byte(`"type":"assistant"`)) {
+			if m := assistantModel(line, sessionID); m != "" {
+				model = m
+			}
+			continue
+		}
 		if !bytes.HasPrefix(line, []byte(`{"type":"ai-title",`)) {
 			continue
 		}
@@ -164,7 +176,28 @@ func readSessionTitle(logPath, sessionID string) (string, bool) {
 			title = strings.TrimSpace(record.Title)
 		}
 	}
-	return title, true
+	return title, model, true
+}
+
+func assistantModel(line []byte, sessionID string) string {
+	var record struct {
+		Type      string `json:"type"`
+		SessionID string `json:"sessionId"`
+		Message   struct {
+			Model string `json:"model"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(line, &record) != nil {
+		return ""
+	}
+	if record.Type != "assistant" || record.SessionID != sessionID {
+		return ""
+	}
+	// Claude Code writes locally generated notices as "<synthetic>"
+	if strings.HasPrefix(record.Message.Model, "<") {
+		return ""
+	}
+	return record.Message.Model
 }
 
 // Claude Code subagents live in <root>/<slug>/<session>/subagents/agent-<id>.{jsonl,meta.json}.

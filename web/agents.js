@@ -32,6 +32,16 @@ const statusOf = (a) =>
         : a.idleSec != null && a.idleSec < 1800
           ? 'waiting'
           : 'idle';
+// Claude model ids and aliases read as names: claude-opus-5-5 → Opus 5.5, sonnet → Sonnet.
+// Anything else (older digit-first ids, other providers) is shown as given.
+const CLAUDE_MODEL = /^(?:claude-)?([a-z]+)((?:-\d{1,2})*)(?:-\d{8})?$/;
+function modelLabel(id) {
+  const match = CLAUDE_MODEL.exec(id);
+  if (!match) return id;
+  const family = match[1][0].toUpperCase() + match[1].slice(1);
+  const version = match[2].slice(1).replaceAll('-', '.');
+  return version ? family + ' ' + version : family;
+}
 const terminalTarget = (a) =>
   a.tmuxTarget
     ? a.tmuxTarget + (a.tmuxAttached ? '' : a.canFocus ? ' · open Ghostty' : ' · attach client')
@@ -85,6 +95,7 @@ function agentItem(a) {
     cpu: Number.isFinite(a.recentCpu)
       ? 'CPU ' + Math.round(a.recentCpu * 100) + '%'
       : 'CPU: unavailable',
+    model: a.model ? modelLabel(a.model) : null,
     ord: a.pid
   };
 }
@@ -117,7 +128,7 @@ function subItem(s, i, host) {
     stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
     up: 'Process age: unavailable',
     cpu: 'CPU: unavailable',
-    model: 'Model: ' + (s.model || 'unavailable'),
+    model: s.model ? modelLabel(s.model) : null,
     ord: 1e9 + i,
     sub: true
   };
@@ -140,7 +151,6 @@ function liveItem(worker, index, host) {
     idleSec: null,
     up: 'Process age: unavailable',
     cpu: 'CPU: unavailable',
-    model: 'Model: unavailable',
     ord: 2e9 + index,
     tip:
       'Live session relationship, not process activity or task completion. ' +
