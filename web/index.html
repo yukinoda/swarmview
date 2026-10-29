@@ -185,8 +185,9 @@
         </dd>
         <dt>Hierarchy and communication</dt>
         <dd>
-          Lines show detected parentage, not messages. Communication is off by
-          default. The optional OpenCode bridge shows static attempts and
+          Lines show detected parentage, not messages. Communication is unavailable until a bridge is installed; the native
+          app listens for one by default, the CLI only with
+          <code>-communication</code>. The optional OpenCode bridge shows static attempts and
           confirmed background sends or foreground replies observed live; it
           collects no conversation contents or message history. Blue Sent from
           parent is not completion; teal Reply received by parent is not
@@ -230,9 +231,9 @@
         <summary>Connection and provider limits</summary>
         <p>
           Manual setup requires OpenCode CLI and service 2.1.3 or 2.1.4.
-          Quit/relaunch the native app with
-          <code>Swarmview --communication</code>, or start the separate CLI with
-          <code>./swarmview -communication</code>. Review the packaged
+          The native app listens by default (launch it with
+          <code>Swarmview --no-communication</code> to turn that off); start the
+          separate CLI with <code>./swarmview -communication</code>. Review the packaged
           <code>integrations/opencode/README.md</code> before adding its
           directory to your existing OpenCode <code>cli.json</code> plugins. The
           native copy is under

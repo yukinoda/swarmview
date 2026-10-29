@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var quitting = false
     private var lock: Int32 = -1
     private let smoke = CommandLine.arguments.contains("--smoke-test")
+    private let communicationDisabled = CommandLine.arguments.contains("--no-communication")
     private var checkedInstaller = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -116,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     private func startBackend() throws {
         backend.executableURL = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/swarmview-server")
-        backend.arguments = ["--desktop"] + (CommandLine.arguments.contains("--communication") ? ["--communication"] : [])
+        backend.arguments = ["--desktop"] + (communicationDisabled ? ["--no-communication"] : [])
         var environment = ProcessInfo.processInfo.environment
         environment["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         environment.removeValue(forKey: "TMUX")
@@ -247,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             await new Promise(resolve => setTimeout(resolve, 100));
             assert(location.href === 'http://127.0.0.1:4778/', 'external navigation blocked');
             return {passed:true, notifications:typeof Notification !== 'undefined'};
-            """, arguments: ["communication": CommandLine.arguments.contains("--communication")], in: nil, in: .page) { [weak self] result in
+            """, arguments: ["communication": !communicationDisabled], in: nil, in: .page) { [weak self] result in
                 switch result {
                 case .success:
                     self?.checkEscape()

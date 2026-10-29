@@ -13,8 +13,8 @@ has not been run by hand.
 
 1. Start Swarmview with communication enabled, as described in the
    [OpenCode bridge setup](../opencode/README.md#manual-opt-in--nothing-is-installed-automatically):
-   `./swarmview -communication`, or the native app launched with
-   `--communication`. Both bridges share the same owner-only socket.
+   `./swarmview -communication`, or the native app (on by default; not launched
+   with `--no-communication`). Both bridges share the same owner-only socket.
 2. Install the Swarmview plugin from inside Claude Code (2.1.275 or later):
 
    ```
