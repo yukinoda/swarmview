@@ -1684,6 +1684,48 @@ const {
       'Claude read-only lifecycle/model information is retained without claiming process measurements',
     );
     closeDetails();
+    render({
+      agents: [
+        agent(44100, '/model-cases', {
+          kind: 'claude',
+          model: 'claude-opus-5-5',
+        }),
+        agent(44101, '/model-cases', {
+          kind: 'codex',
+          model: 'gpt-sol6.1',
+        }),
+      ],
+      subagents: [
+        {
+          id: 'alias-model',
+          parentPid: 44100,
+          cwd: '/model-cases',
+          working: true,
+          model: 'sonnet',
+        },
+        {
+          id: 'inherited-model',
+          parentPid: 44100,
+          cwd: '/model-cases',
+          working: true,
+          model: 'inherit',
+        },
+      ],
+      at: Date.now(),
+    });
+    const modelShown = (key, label) => {
+      showDetails(rows.get(key));
+      const shown = $('detail-body').textContent.includes(label);
+      closeDetails();
+      return shown;
+    };
+    assert(
+      modelShown('a:44100', 'Opus 5.5') &&
+        modelShown('a:44101', 'gpt-sol6.1') &&
+        modelShown('sub:alias-model', 'Sonnet') &&
+        modelShown('sub:inherited-model', 'Opus 5.5'),
+      'Details names Claude models and aliases, resolves inherited subagent models, and shows other model ids as given',
+    );
 
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.
     const liveHost = agent(45000, '/live-test', {
