@@ -226,7 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             assert(response.ok, 'same-origin agent request');
             const data = await response.json();
             assert(Array.isArray(data.agents), 'agent response');
-            assert(Boolean(data.communication) === communication, 'native opt-in reached owned backend');
+            assert(Boolean(data.communication) === communication, 'native communication setting reached owned backend');
             localStorage.setItem('swarmview.smoke', 'ok');
             assert(localStorage.getItem('swarmview.smoke') === 'ok', 'persistent storage');
             localStorage.removeItem('swarmview.smoke');

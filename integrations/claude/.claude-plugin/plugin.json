@@ -1,7 +1,7 @@
 {
   "name": "swarmview",
   "version": "0.1.0",
-  "description": "Forwards Claude Code subagent start, stop and follow-up message events (IDs only) to an opted-in Swarmview",
+  "description": "Forwards Claude Code subagent start, stop and follow-up message events (IDs only) to a Swarmview",
   "author": {
     "name": "Yuki Noda"
   },

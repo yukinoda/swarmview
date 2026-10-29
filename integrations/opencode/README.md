@@ -5,7 +5,7 @@ metadata locally, and sends live relationships and confirmed communication to
 Swarmview. It never reads message history, retains prompts/results, creates a
 session, changes model state, or starts/restarts the OpenCode service.
 
-## Manual opt-in — nothing is installed automatically
+## Manual setup — nothing is installed automatically
 
 Updated CLI archives include this directory beside `swarmview`; native app
 downloads include it under `Contents/Resources/integrations/opencode`.
@@ -42,15 +42,18 @@ mapped by guessing ancestry; they retain normal monitoring only.
    For the separate CLI/browser workflow, extract the matching CLI archive
    (or build from source) and run `./swarmview -communication` (normally port
    4777). Keep the extracted `integrations` directory beside the binary.
-   Both use the same
-   owner-only Unix socket; do not run two opted-in viewer instances at once.
+   The app and
+   `swarmview -communication` compete for one owner-only Unix socket:
+   whichever starts first owns it. The app then still runs, without
+   communication, and a later `-communication` CLI exits with "already owned".
+   Quit one before starting the other.
    This opens an owner-only Unix socket at
    `~/Library/Caches/swarmview/live.sock` on macOS, or
    `${XDG_CACHE_HOME:-~/.cache}/swarmview/live.sock` on Linux. The directory must
    be owned by you with mode `0700`; the socket and empty `live.lock` file are
-   `0600`. Only one opted-in Swarmview instance can own the socket. A live
+   `0600`. Only one Swarmview instance can own the socket. A live
    listener is never replaced. A crashed owner's private socket can be safely
-   recovered on the next opt-in start while holding the owner lock.
+   recovered on the next start while holding the owner lock.
 2. **Review `package.json`, `tui.ts`, and `observer.js` first.** Keep all four
    packaged files together at a stable path. For a CLI archive, use the
    absolute extracted `integrations/opencode` directory. For an installed
@@ -155,7 +158,7 @@ cannot inherit a mapping. The source is a user-reviewed local plugin, not an
 audit/security attestation of a remote OpenCode server.
 
 Ctrl-C/SIGTERM unwind owned listener cleanup. SIGKILL cannot run defers, so the
-next opted-in start acquires the exclusive lock and reclaims only an owned,
+next start acquires the exclusive lock and reclaims only an owned,
 single-link `0600` socket whose connection probe reports `ECONNREFUSED` and
 whose inode still matches. Symlinks, regular files, lax modes, unexpected lock
 files, live listeners, timeouts, and other probe errors are refused rather than
@@ -205,7 +208,7 @@ explicit user setup above and is not claimed by synthetic fixtures.
 The actual TUI entrypoint also runs against a synthetic host and real private
 socket when Node has built-in TypeScript/module hooks (22.15+); older Node
 versions still run the plain-JavaScript event-observer checks.
-Native default-off and enabled forwarding are checked against the genuine
+Native default-on and `--no-communication` forwarding are checked against the genuine
 owned backend, including unchanged singleton mode and socket/pipe cleanup:
 
 ```sh

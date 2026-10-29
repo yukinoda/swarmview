@@ -3,16 +3,16 @@
 The plugin's async hooks run a small launcher, which runs
 `swarmview -claude-hook` for a few hook events. Each run reads the hook's JSON
 from stdin, keeps only the event name and a subagent ID, sends one record to a
-running opted-in Swarmview, and exits. Prompts, messages, and results are discarded in
+running Swarmview with the bridge on, and exits. Prompts, messages, and results are discarded in
 that process and never reach Swarmview.
 
 Tested with Claude Code 2.1.312 on macOS. Linux uses the same code paths but
 has not been run by hand.
 
-## Opt-in setup — nothing is installed automatically
+## Setup — nothing is installed automatically
 
 1. Start Swarmview with communication enabled, as described in the
-   [OpenCode bridge setup](../opencode/README.md#manual-opt-in--nothing-is-installed-automatically):
+   [OpenCode bridge setup](../opencode/README.md#manual-setup--nothing-is-installed-automatically):
    `./swarmview -communication`, or the native app (on by default; not launched
    with `--no-communication`). Both bridges share the same owner-only socket.
 2. Install the Swarmview plugin from inside Claude Code (2.1.275 or later):
@@ -31,7 +31,8 @@ has not been run by hand.
    Review [`hooks/hooks.json`][hooks] and [`hooks/forward.sh`][launcher] first;
    they are the whole plugin. It registers async `SubagentStart`,
    `SubagentStop`, and `PreToolUse` (`SendMessage`) hooks, so Claude never
-   waits for them. When `-communication` starts, Swarmview copies its own
+   waits for them. Whenever the bridge starts (every native-app launch, or the CLI with
+   `-communication`), Swarmview copies its own
    binary into its private cache directory as `live-hook`, and the launcher
    runs that copy, so the CLI is found wherever you started it and always
    matches the running build. Otherwise it tries `swarmview` in the absolute
@@ -48,7 +49,7 @@ has not been run by hand.
    [launcher]: https://github.com/yukinoda/swarmview/blob/main/integrations/claude/hooks/forward.sh
 
 Disable with `/plugin disable swarmview`, or remove it with
-`/plugin uninstall swarmview`. When no Swarmview has opted in, the launcher
+`/plugin uninstall swarmview`. When no Swarmview owns the bridge, the launcher
 finds no socket and exits without starting a binary. After a crash leaves a
 stale socket, the binary starts, finds nothing listening, and exits at once.
 The launcher uses only an absolute cache directory, as Swarmview does, and runs
@@ -144,7 +145,7 @@ limit, the hook exits and the record is rejected because its process is gone.
 Any program Claude runs is also its descendant, so it could send cues for that
 Claude's own workers. It can't affect other sessions.
 
-Starting `-communication` also copies the running binary into the same
+Starting the bridge (every native-app launch, or the CLI with `-communication`) also copies the running binary into the same
 directory as `live-hook` (mode `0700`, about the binary's size on disk), and
 stopping it removes the copy. It is the same program, used only by the plugin's
 launcher, and holds no event, PID, or session data.

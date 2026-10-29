@@ -18,9 +18,13 @@ import (
 func main() {
 	desktop := flag.Bool("desktop", false, "use the desktop app's port and exit when stdin closes")
 	communication := flag.Bool("communication", false, "observe live metadata from the optional OpenCode TUI bridge and Claude hooks")
-	noCommunication := flag.Bool("no-communication", false, "with -desktop, turn off the live communication bridge that the desktop app enables by default")
+	noCommunication := flag.Bool("no-communication", false, "only with -desktop: turn off the live communication bridge that the desktop app enables by default")
 	claudeHook := flag.Bool("claude-hook", false, "forward one Claude Code hook event from stdin to a running -communication instance")
 	flag.Parse()
+	if err := checkCommunicationFlags(*desktop, *communication, *noCommunication); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	if *claudeHook {
 		runClaudeHook(os.Stdin)
 		return
@@ -42,6 +46,36 @@ func communicationWanted(desktop, communication, noCommunication bool) bool {
 	return desktop && !noCommunication
 }
 
+func checkCommunicationFlags(desktop, communication, noCommunication bool) error {
+	if communication && noCommunication {
+		return errors.New("-communication and -no-communication contradict each other")
+	}
+	if noCommunication && !desktop {
+		return errors.New("-no-communication only applies with -desktop; the CLI is already off by default")
+	}
+	return nil
+}
+
+// startCommunication starts the bridge when wanted and returns its cleanup.
+func startCommunication(s *server, desktop, communication, noCommunication bool) (func(), error) {
+	if !communicationWanted(desktop, communication, noCommunication) {
+		return func() {}, nil
+	}
+	bridge := newPulseBridge()
+	err := bridge.start(s)
+	if err == nil {
+		s.pulse = bridge
+		return bridge.close, nil
+	}
+	if communication || !errors.Is(err, errPulseOwned) {
+		return nil, err
+	}
+	// Only the expected conflict is tolerated: the app's default must not
+	// stop it launching while another Swarmview owns the socket.
+	log.Printf("live communication unavailable: %v", err)
+	return func() {}, nil
+}
+
 func runServer(desktop, communication, noCommunication bool) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -60,20 +94,11 @@ func runServer(desktop, communication, noCommunication bool) error {
 	}
 	defer ln.Close()
 	go func() { <-ctx.Done(); ln.Close() }()
-	if communicationWanted(desktop, communication, noCommunication) {
-		bridge := newPulseBridge()
-		err := bridge.start(s)
-		if err == nil {
-			s.pulse = bridge
-			defer bridge.close()
-		} else if communication {
-			return err
-		} else {
-			// The app's default must not stop it launching, for example when a
-			// CLI instance already owns the socket.
-			log.Printf("live communication unavailable: %v", err)
-		}
+	closeBridge, err := startCommunication(s, desktop, communication, noCommunication)
+	if err != nil {
+		return err
 	}
+	defer closeBridge()
 	fmt.Printf("http://127.0.0.1:%d\n", s.port)
 	if err := serve(s, ln, parent); err != nil && !errors.Is(err, net.ErrClosed) {
 		return err
