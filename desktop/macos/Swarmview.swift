@@ -292,6 +292,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 @main
 struct Swarmview {
     static func main() throws {
+        let arguments = CommandLine.arguments
+        if arguments.contains("--communication") && arguments.contains("--no-communication") {
+            FileHandle.standardError.write(Data("-communication and -no-communication contradict each other\n".utf8))
+            exit(2)
+        }
         if CommandLine.arguments.contains("--installer-self-test") {
             try checkInstaller()
             return

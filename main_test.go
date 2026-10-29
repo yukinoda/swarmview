@@ -7,46 +7,26 @@ import (
 	"testing"
 )
 
-func TestCommunicationWanted(t *testing.T) {
+func TestCommunicationMode(t *testing.T) {
 	cases := []struct {
 		name            string
 		desktop         bool
 		communication   bool
 		noCommunication bool
-		want            bool
+		wantWant        bool
+		wantRequired    bool
 	}{
-		{"cli default stays off", false, false, false, false},
-		{"cli opt-in", false, true, false, true},
-		{"desktop default is on", true, false, false, true},
-		{"desktop opt-out", true, false, true, false},
-		{"explicit flag beats desktop opt-out", true, true, true, true},
+		{"cli default stays off", false, false, false, false, false},
+		{"cli opt-in is required", false, true, false, true, true},
+		{"cli -no-communication is a no-op", false, false, true, false, false},
+		{"desktop default is on but optional", true, false, false, true, false},
+		{"desktop opt-out", true, false, true, false, false},
+		{"desktop explicit is required", true, true, false, true, true},
 	}
 	for _, c := range cases {
-		got := communicationWanted(c.desktop, c.communication, c.noCommunication)
-		if got != c.want {
-			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-func TestCheckCommunicationFlags(t *testing.T) {
-	cases := []struct {
-		name            string
-		desktop         bool
-		communication   bool
-		noCommunication bool
-		wantErr         bool
-	}{
-		{"cli default", false, false, false, false},
-		{"cli opt-in", false, true, false, false},
-		{"desktop opt-out", true, false, true, false},
-		{"contradiction", true, true, true, true},
-		{"opt-out without desktop", false, false, true, true},
-	}
-	for _, c := range cases {
-		err := checkCommunicationFlags(c.desktop, c.communication, c.noCommunication)
-		if (err != nil) != c.wantErr {
-			t.Errorf("%s: err = %v, wantErr %v", c.name, err, c.wantErr)
+		want, required := communicationMode(c.desktop, c.communication, c.noCommunication)
+		if want != c.wantWant || required != c.wantRequired {
+			t.Errorf("%s: got want=%v required=%v, expected %v/%v", c.name, want, required, c.wantWant, c.wantRequired)
 		}
 	}
 }
@@ -58,7 +38,7 @@ func newCommunicationServer() *server {
 func TestStartCommunicationDesktopDefaultOpensSocket(t *testing.T) {
 	_, path := pulseHome(t)
 	s := newCommunicationServer()
-	closeBridge, err := startCommunication(s, true, false, false)
+	closeBridge, err := startCommunication(s, true, false)
 	must(t, err)
 	defer closeBridge()
 	if s.pulse == nil {
@@ -72,7 +52,7 @@ func TestStartCommunicationDesktopDefaultOpensSocket(t *testing.T) {
 func TestStartCommunicationCLIStaysOff(t *testing.T) {
 	_, path := pulseHome(t)
 	s := newCommunicationServer()
-	closeBridge, err := startCommunication(s, false, false, false)
+	closeBridge, err := startCommunication(s, false, false)
 	must(t, err)
 	defer closeBridge()
 	if s.pulse != nil {
@@ -90,7 +70,7 @@ func TestStartCommunicationHeldSocket(t *testing.T) {
 	defer holder.close()
 
 	s := newCommunicationServer()
-	closeBridge, err := startCommunication(s, true, false, false)
+	closeBridge, err := startCommunication(s, true, false)
 	if err != nil {
 		t.Fatalf("desktop default must fall back when the socket is owned: %v", err)
 	}
@@ -99,26 +79,31 @@ func TestStartCommunicationHeldSocket(t *testing.T) {
 		t.Fatal("fallback still reports communication on")
 	}
 
-	_, err = startCommunication(newCommunicationServer(), false, true, false)
+	_, err = startCommunication(newCommunicationServer(), true, true)
 	if !errors.Is(err, errPulseOwned) {
 		t.Fatalf("explicit -communication must fail on a held socket, got %v", err)
 	}
-	_, err = startCommunication(newCommunicationServer(), true, true, false)
-	if !errors.Is(err, errPulseOwned) {
-		t.Fatalf("explicit -communication must fail in desktop mode too, got %v", err)
-	}
 }
 
-func TestStartCommunicationRealErrorsStillFail(t *testing.T) {
+func TestStartCommunicationRealErrors(t *testing.T) {
 	pulseHome(t)
 	cache, err := os.UserCacheDir()
 	must(t, err)
 	must(t, os.Chmod(filepath.Join(cache, "swarmview"), 0755))
 
 	s := newCommunicationServer()
-	_, err = startCommunication(s, true, false, false)
+	closeBridge, err := startCommunication(s, true, false)
+	if err != nil {
+		t.Fatalf("a default-on bridge must never stop the app launching: %v", err)
+	}
+	defer closeBridge()
+	if s.pulse != nil {
+		t.Fatal("failed default bridge still reports communication on")
+	}
+
+	_, err = startCommunication(newCommunicationServer(), true, true)
 	if err == nil {
-		t.Fatal("a bad communication directory must abort desktop startup")
+		t.Fatal("explicit -communication must fail on a bad communication directory")
 	}
 	if errors.Is(err, errPulseOwned) {
 		t.Fatalf("directory error misclassified as a conflict: %v", err)
