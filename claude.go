@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -22,6 +23,15 @@ type metaEntry struct {
 	finished                          bool
 	parentAgentId, description, model any
 }
+
+// workerHost is the Claude process whose SubagentStart hook reported a worker, and when.
+type workerHost struct {
+	pid int
+	at  int64
+}
+
+// A record is kept this long even before its worker's metadata appears.
+const workerHostGraceMs = 60e3
 
 // full session rescan interval; a new session file also triggers one via the dir mtime
 const sessionRescanMs = 60e3
@@ -169,7 +179,8 @@ func readSessionTitle(logPath, sessionID string) (string, bool) {
 
 // Claude Code subagents live in <root>/<slug>/<session>/subagents/agent-<id>.{jsonl,meta.json}.
 // meta.finished is rarely set, so liveness is the .jsonl mtime: alive < 30 min, working < 60 s.
-func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan) []Subagent {
+// hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
+func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[string]workerHost) []Subagent {
 	type group struct {
 		cwd  string
 		pids []int
@@ -203,19 +214,14 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 		seenDir[dir] = true
 		// Several claude processes share this cwd: attribute sessions by each process's
 		// sessions/<pid>.json, read only in this ambiguous case. A session claimed by
-		// two processes (e.g. resumed in a second terminal) stays unattributed (0).
-		owner := map[string]int{}
+		// two processes (e.g. resumed in a second terminal) has several claimants.
+		claimants := map[string][]int{}
 		if len(g.pids) > 1 {
 			for _, pid := range g.pids {
 				metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
 				id, _ := readSessionID(metaPath, pid, g.cwd)
-				if id == "" {
-					continue
-				}
-				if _, claimed := owner[id]; claimed {
-					owner[id] = 0
-				} else {
-					owner[id] = pid
+				if id != "" {
+					claimants[id] = append(claimants[id], pid)
 				}
 			}
 		}
@@ -272,12 +278,18 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				if err != nil || now-jt > 30*60e3 {
 					continue
 				}
-				// attach to the sole claude in that cwd, else to the process whose session metadata claims this session
+				// Attach to the sole claude in that cwd, else to the one process whose session
+				// metadata claims this session. Of several claimants, only the one whose
+				// SubagentStart hook reported this worker is its parent.
 				var pp *int
+				owners := claimants[session]
+				host, recorded := hosts[id]
 				if len(g.pids) == 1 {
 					pp = &g.pids[0]
-				} else if pid := owner[session]; pid != 0 {
-					pp = &pid
+				} else if len(owners) == 1 {
+					pp = &owners[0]
+				} else if recorded && slices.Contains(owners, host.pid) {
+					pp = &host.pid
 				}
 				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, c.model, now-jt < 60e3})
 			}
@@ -293,5 +305,35 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 			delete(sessions, k)
 		}
 	}
+	pruneWorkerHosts(hosts, agents, out, now)
 	return out
+}
+
+// pruneWorkerHosts drops records whose Claude process is gone, or whose worker
+// is no longer listed once the grace period for its metadata to appear is over.
+func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, listed []Subagent, now int64) {
+	for id, h := range hosts {
+		alive := false
+		for _, a := range agents {
+			if a.Pid == h.pid && a.Kind == "claude" {
+				alive = true
+			}
+		}
+		if !alive {
+			delete(hosts, id)
+			continue
+		}
+		if now-h.at < workerHostGraceMs {
+			continue
+		}
+		shown := false
+		for _, s := range listed {
+			if s.Id == id {
+				shown = true
+			}
+		}
+		if !shown {
+			delete(hosts, id)
+		}
+	}
 }

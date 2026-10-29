@@ -128,6 +128,16 @@ no history or replay).
 A cue that arrives before the next poll has rendered its worker row waits up
 to 5 seconds for it, then is dropped.
 
+Nesting for resumed sessions: when two Claude processes in the same directory
+both claim one session (it was resumed in a second terminal), the dashboard
+normally can't tell which one started a worker and shows it directly under the
+repository. With the plugin, Swarmview remembers which Claude's
+`SubagentStart` hook reported each worker, even while no dashboard is open,
+and nests the worker under that Claude. Only the event name and the agent ID
+are used. Workers started before Swarmview was listening, or with the plugin
+off, stay unnested rather than guessed. Without `-communication`, nesting is
+unchanged.
+
 Not shown yet: messages between teammates, messages addressed by name, and
 messages to other Claude sessions. Those need a sideways display that the
 parent/worker tree doesn't have.
@@ -143,6 +153,15 @@ checked, which keeps its PID in use. If the check outlasts the hook's 5-second
 limit, the hook exits and the record is rejected because its process is gone.
 Any program Claude runs is also its descendant, so it could send cues for that
 Claude's own workers. It can't affect other sessions.
+
+A `SubagentStart` record can only choose a worker's parent among the Claude
+processes whose `~/.claude/sessions/<pid>.json` already claims the worker's
+session, and never replaces a parent Swarmview already knows. A program
+running under one Claude therefore can't move another session's workers. The
+first record for a worker wins. Swarmview keeps at most 256 of these records in
+memory (worker ID and Claude PID only), drops a record once its Claude exits or,
+after a minute, once its worker is no longer shown, and never writes them to
+disk.
 
 Starting `-communication` also copies the running binary into the same
 directory as `live-hook` (mode `0700`, about the binary's size on disk), and

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -148,7 +149,7 @@ func mk(t *testing.T, root, cwd, session, id string, meta any, ageSec int64, now
 func claude(pid int, cwd string) Agent { return Agent{Pid: pid, Kind: "claude", Cwd: &cwd} }
 
 func subs(root string, now int64, as ...Agent) []Subagent {
-	return listClaudeSubagents(as, root, now, map[string]metaEntry{}, map[string]sessionScan{})
+	return listClaudeSubagents(as, root, now, map[string]metaEntry{}, map[string]sessionScan{}, map[string]workerHost{})
 }
 
 func TestClaudeSlug(t *testing.T) {
@@ -234,6 +235,88 @@ func TestTwoClaudeInCwdAttachBySessionMetadata(t *testing.T) {
 	}
 }
 
+func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
+	root, now := filepath.Join(t.TempDir(), "projects"), nowMs()
+	s100, s101 := "10000000-0000-0000-0000-000000000000", "10100000-0000-0000-0000-000000000000"
+	meta := map[string]any{"description": "R", "model": "m"}
+	mk(t, root, "/w/a", s100, "a1", meta, 3, now)
+	mk(t, root, "/w/a", s101, "a2", meta, 3, now)
+	mk(t, root, "/w/a", s101, "a4", meta, 3, now)
+	mk(t, root, "/w/a", s101, "a5", meta, 3, now)
+	mk(t, root, "/w/a", "unclaimed", "a3", meta, 3, now)
+	sessions := filepath.Join(filepath.Dir(root), "sessions")
+	must(t, os.MkdirAll(sessions, 0o755))
+	// 102 resumed s101 in a second terminal: s101 has two claimants.
+	for pid, id := range map[int]string{100: s100, 101: s101, 102: s101} {
+		b := marshal(map[string]any{"pid": pid, "sessionId": id, "cwd": "/w/a"})
+		must(t, os.WriteFile(filepath.Join(sessions, strconv.Itoa(pid)+".json"), b, 0o644))
+	}
+	hosts := map[string]workerHost{
+		"a1": {101, now}, // must not override the single claimant
+		"a2": {102, now}, // a claimant: proven parent
+		"a3": {100, now}, // nobody claims the session
+		"a4": {100, now}, // a live Claude, but not a claimant of s101
+		"a9": {999, now}, // its Claude has exited
+	}
+	agents := []Agent{claude(100, "/w/a"), claude(101, "/w/a"), claude(102, "/w/a")}
+	parents := map[string]*int{}
+	for _, s := range listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts) {
+		parents[s.Id] = s.ParentPid
+	}
+	if parents["a1"] == nil || *parents["a1"] != 100 {
+		t.Errorf("a single claimant keeps its worker: a1=%v", parents["a1"])
+	}
+	if parents["a2"] == nil || *parents["a2"] != 102 {
+		t.Errorf("a recorded claimant should own its worker: a2=%v", parents["a2"])
+	}
+	for _, id := range []string{"a3", "a4", "a5"} {
+		if parents[id] != nil {
+			t.Errorf("%s: an unproven parent must stay unattributed, got %d", id, *parents[id])
+		}
+	}
+	if _, ok := hosts["a9"]; ok {
+		t.Error("listing should prune a record whose Claude has exited")
+	}
+
+	// The sole Claude in a directory stays the parent whatever a record says.
+	mk(t, root, "/w/b", "s", "a6", meta, 3, now)
+	hosts["a6"] = workerHost{101, now}
+	got := listClaudeSubagents([]Agent{claude(100, "/w/b"), {Pid: 101, Kind: "claude"}}, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	if len(got) != 1 || got[0].ParentPid == nil || *got[0].ParentPid != 100 {
+		t.Errorf("sole Claude should own its worker: %+v", got)
+	}
+}
+
+func TestWorkerHostsPrunedAndBounded(t *testing.T) {
+	now := nowMs()
+	old := now - workerHostGraceMs
+	hosts := map[string]workerHost{
+		"listed": {100, old},
+		"gone":   {100, old},
+		"fresh":  {100, now},
+		"dead":   {999, now},
+	}
+	pruneWorkerHosts(hosts, []Agent{claude(100, "/w/a")}, []Subagent{{Id: "listed"}}, now)
+	if len(hosts) != 2 || hosts["listed"].pid != 100 || hosts["fresh"].pid != 100 {
+		t.Errorf("want listed and fresh kept, got %v", hosts)
+	}
+
+	s := &server{}
+	for i := 0; i <= maxWorkerHosts; i++ {
+		s.recordWorkerHost(fmt.Sprintf("a%07x", i), 100, now+int64(i))
+	}
+	s.recordWorkerHost("a0000001", 200, now+1000)
+	if len(s.hosts) != maxWorkerHosts {
+		t.Fatalf("kept %d records, want %d", len(s.hosts), maxWorkerHosts)
+	}
+	if _, ok := s.hosts["a0000000"]; ok {
+		t.Error("the oldest record should be dropped when full")
+	}
+	if s.hosts["a0000001"].pid != 100 {
+		t.Error("the first record for a worker should win")
+	}
+}
+
 func TestSubagentEdgeCases(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	for _, meta := range []string{"{", "null", "[]", "true", "42", `"text"`, `{"description":"partial","model":}`} {
@@ -270,11 +353,11 @@ func TestMetaCacheKeyedByMtimeAndPruned(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	mk(t, root, "/w/a", "s1", "a1", map[string]any{"description": "R", "model": "m"}, 3, now)
 	cache := map[string]metaEntry{}
-	listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now, cache, map[string]sessionScan{})
+	listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now, cache, map[string]sessionScan{}, nil)
 	if len(cache) != 1 {
 		t.Fatal("not cached")
 	}
-	listClaudeSubagents(nil, root, now, cache, map[string]sessionScan{})
+	listClaudeSubagents(nil, root, now, cache, map[string]sessionScan{}, nil)
 	if len(cache) != 0 {
 		t.Error("not pruned")
 	}
@@ -284,7 +367,7 @@ func TestSessionScanCached(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	sessions := map[string]sessionScan{}
 	list := func(at int64) int {
-		return len(listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, at, map[string]metaEntry{}, sessions))
+		return len(listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, at, map[string]metaEntry{}, sessions, nil))
 	}
 	mk(t, root, "/w/a", "s1", "a1", map[string]any{}, 3, now)
 	mk(t, root, "/w/a", "old", "a2", map[string]any{}, 3, now)
@@ -318,10 +401,10 @@ func TestSessionScanRepeatedWhileDirUnsettled(t *testing.T) {
 	dir := filepath.Join(root, claudeSlug("/w/a"))
 	tm := time.UnixMilli(now)
 	must(t, os.Chtimes(dir, tm, tm)) // dir changed in the same tick as the scan
-	listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now, map[string]metaEntry{}, sessions)
+	listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now, map[string]metaEntry{}, sessions, nil)
 	mk(t, root, "/w/a", "s2", "a2", map[string]any{}, 3, now)
 	must(t, os.Chtimes(dir, tm, tm)) // second create lands in that same tick
-	if got := listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now+1, map[string]metaEntry{}, sessions); len(got) != 2 {
+	if got := listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now+1, map[string]metaEntry{}, sessions, nil); len(got) != 2 {
 		t.Errorf("got %d", len(got))
 	}
 }

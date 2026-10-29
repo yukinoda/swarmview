@@ -99,10 +99,36 @@ func TestClaudeHookBridge(t *testing.T) {
 	if copied.Mode().Perm() != 0700 {
 		t.Fatalf("live-hook mode %v, want 0700", copied.Mode().Perm())
 	}
-	ch, frame := pulseViewer(t, b)
 	hook := func(payload string) { runClaudeHook(strings.NewReader(payload)) }
+	hostOf := func(agent string) (workerHost, bool) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		h, ok := s.hosts[agent]
+		return h, ok
+	}
 
+	// With no viewer, only SubagentStart is recorded: which Claude started the worker.
 	setKind("claude")
+	hook(`{"hook_event_name":"SubagentStop","agent_id":"a7777777"}`)
+	hook(`{"hook_event_name":"PreToolUse","tool_name":"SendMessage","tool_input":{"to":"a8888888"}}`)
+	if _, ok := hostOf("a7777777"); ok {
+		t.Fatal("SubagentStop must not record a host")
+	}
+	if _, ok := hostOf("a8888888"); ok {
+		t.Fatal("SendMessage must not record a host")
+	}
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a9999999"}`)
+	if h, ok := hostOf("a9999999"); !ok || h.pid != host {
+		t.Fatalf("SubagentStart with no viewer should record host %d, got %+v %v", host, h, ok)
+	}
+	setKind("codex")
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a6666666"}`)
+	setKind("claude")
+	if _, ok := hostOf("a6666666"); ok {
+		t.Fatal("a hook outside any Claude must not record a host")
+	}
+
+	ch, frame := pulseViewer(t, b)
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a0123456789abcdef"}`)
 	f := frame("subagent start")
 	if f.Key != "sub:a0123456789abcdef" || f.Direction != "sent" || f.Pid != host || f.Workers == nil {
@@ -127,6 +153,9 @@ func TestClaudeHookBridge(t *testing.T) {
 	}
 	if len(ch) != 0 {
 		t.Fatal("unexpected extra cue")
+	}
+	if _, ok := hostOf("a1234567"); ok {
+		t.Fatal("a watched SendMessage must not record a host")
 	}
 
 	// Parallel subagent starts all reach a viewer that has not read yet.

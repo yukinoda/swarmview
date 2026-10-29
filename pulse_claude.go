@@ -202,19 +202,36 @@ func claudeHost(s *server, sn snap, pid int) int {
 	return 0
 }
 
-// acceptClaude reads one record from a hook connected while its process is still alive.
-// The cue names the host PID so the viewer only marks a worker row owned by that Claude.
-func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
-	b.mu.Lock()
-	watched := len(b.viewers) > 0
-	b.mu.Unlock()
-	if !watched {
-		return // nobody would see the cue: skip the ancestry walk
+// maxWorkerHosts bounds the SubagentStart records kept for nesting doubly claimed sessions.
+const maxWorkerHosts = 256
+
+// recordWorkerHost remembers which Claude started a worker. The first record wins,
+// and when full the oldest record is dropped.
+func (s *server) recordWorkerHost(agent string, host int, now int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.hosts == nil {
+		s.hosts = map[string]workerHost{}
 	}
-	host := claudeHost(s, sn, pid)
-	if host == 0 {
+	if _, ok := s.hosts[agent]; ok {
 		return
 	}
+	if len(s.hosts) >= maxWorkerHosts {
+		oldest := ""
+		for id, h := range s.hosts {
+			if oldest == "" || h.at < s.hosts[oldest].at {
+				oldest = id
+			}
+		}
+		delete(s.hosts, oldest)
+	}
+	s.hosts[agent] = workerHost{host, now}
+}
+
+// acceptClaude reads one record from a hook connected while its process is still alive.
+// The cue names the host PID so the viewer only marks a worker row owned by that Claude.
+// A SubagentStart record is kept even with no viewer, to nest a resumed session's workers.
+func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 	c.SetReadDeadline(time.Now().Add(time.Second))
 	scan := bufio.NewScanner(c)
 	scan.Buffer(make([]byte, 129), 128)
@@ -224,6 +241,19 @@ func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 	m, err := decodeClaudePulse(scan.Bytes())
 	if err != nil {
 		return
+	}
+	b.mu.Lock()
+	watched := len(b.viewers) > 0
+	b.mu.Unlock()
+	if !watched && m.Type != "sent" {
+		return // nobody would see the cue and nothing to record: skip the ancestry walk
+	}
+	host := claudeHost(s, sn, pid)
+	if host == 0 {
+		return
+	}
+	if m.Type == "sent" {
+		s.recordWorkerHost(m.Agent, host, time.Now().UnixMilli())
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
