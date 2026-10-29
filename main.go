@@ -18,11 +18,11 @@ import (
 func main() {
 	desktop := flag.Bool("desktop", false, "use the desktop app's port and exit when stdin closes")
 	communication := flag.Bool("communication", false, "observe live metadata from the optional OpenCode TUI bridge and Claude hooks")
-	noCommunication := flag.Bool("no-communication", false, "only with -desktop: turn off the live communication bridge that the desktop app enables by default")
+	noCommunication := flag.Bool("no-communication", false, "turn off the live communication bridge that the desktop app enables by default (no effect on the CLI, which is already off)")
 	claudeHook := flag.Bool("claude-hook", false, "forward one Claude Code hook event from stdin to a running -communication instance")
 	flag.Parse()
-	if err := checkCommunicationFlags(*desktop, *communication, *noCommunication); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if *communication && *noCommunication {
+		fmt.Fprintln(os.Stderr, communicationConflictMessage)
 		os.Exit(2)
 	}
 	if *claudeHook {
@@ -37,28 +37,22 @@ func main() {
 	}
 }
 
-// communicationWanted is on for an explicit -communication, and by default for
-// the desktop app unless it was launched with -no-communication. The CLI stays opt-in.
-func communicationWanted(desktop, communication, noCommunication bool) bool {
-	if communication {
-		return true
-	}
-	return desktop && !noCommunication
-}
+const communicationConflictMessage = "-communication and -no-communication contradict each other"
 
-func checkCommunicationFlags(desktop, communication, noCommunication bool) error {
-	if communication && noCommunication {
-		return errors.New("-communication and -no-communication contradict each other")
-	}
-	if noCommunication && !desktop {
-		return errors.New("-no-communication only applies with -desktop; the CLI is already off by default")
-	}
-	return nil
+// communicationMode returns whether to start the bridge and whether failing to
+// start it is fatal. -communication is explicit, so required. The desktop app
+// wants it by default (unless -no-communication), but only as an optional
+// feature. -no-communication is a no-op outside -desktop: the CLI is already off.
+func communicationMode(desktop, communication, noCommunication bool) (want, required bool) {
+	required = communication
+	want = communication || (desktop && !noCommunication)
+	return want, required
 }
 
 // startCommunication starts the bridge when wanted and returns its cleanup.
-func startCommunication(s *server, desktop, communication, noCommunication bool) (func(), error) {
-	if !communicationWanted(desktop, communication, noCommunication) {
+// A failure is fatal only when required; otherwise the server runs without it.
+func startCommunication(s *server, want, required bool) (func(), error) {
+	if !want {
 		return func() {}, nil
 	}
 	bridge := newPulseBridge()
@@ -67,11 +61,9 @@ func startCommunication(s *server, desktop, communication, noCommunication bool)
 		s.pulse = bridge
 		return bridge.close, nil
 	}
-	if communication || !errors.Is(err, errPulseOwned) {
+	if required {
 		return nil, err
 	}
-	// Only the expected conflict is tolerated: the app's default must not
-	// stop it launching while another Swarmview owns the socket.
 	log.Printf("live communication unavailable: %v", err)
 	return func() {}, nil
 }
@@ -94,7 +86,8 @@ func runServer(desktop, communication, noCommunication bool) error {
 	}
 	defer ln.Close()
 	go func() { <-ctx.Done(); ln.Close() }()
-	closeBridge, err := startCommunication(s, desktop, communication, noCommunication)
+	want, required := communicationMode(desktop, communication, noCommunication)
+	closeBridge, err := startCommunication(s, want, required)
 	if err != nil {
 		return err
 	}

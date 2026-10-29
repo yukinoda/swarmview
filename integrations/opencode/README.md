@@ -85,7 +85,7 @@ mapped by guessing ancestry; they retain normal monitoring only.
 
 Disable by removing the plugin entry and quitting/relaunching Swarmview
 (the CLI without `-communication`, the native app with `--no-communication`). Plugin
-cleanup closes the socket/listeners/timer. Neither path installs the plugin.
+cleanup closes the socket/listeners/timer. Neither path installs or removes the plugin for you.
 
 ## What the UI means
 

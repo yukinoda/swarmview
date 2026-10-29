@@ -96,7 +96,8 @@ the executable under `dist` for a local build). The Swift app forwards this
 to its own bundled backend on **4778**; no CLI server on 4777 is required.
 The app and `swarmview -communication` compete for one owner-only socket:
 whichever starts first owns it. If the CLI owns it, the app still runs, with
-communication unavailable; if the app owns it, a later `-communication` CLI
+communication unavailable (any other failure to open the bridge is logged
+the same way and never stops the app launching); if the app owns it, a later `-communication` CLI
 exits with "already owned". Quit one before starting the other. A
 second launch activates the existing singleton without changing its mode;
 quit/relaunch to change it.
