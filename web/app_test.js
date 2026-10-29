@@ -2718,8 +2718,8 @@ const {
           btnRect.left + parseFloat(getComputedStyle(row.btn).paddingLeft) - 28;
         const dot = getComputedStyle(row.btn, '::after'),
           dotLeft = btnRect.left + parseFloat(dot.left),
-          dotCenterY = btnRect.top + parseFloat(dot.top) + 3,
-          stubY = btnRect.top + parseFloat(stub.top),
+          dotCenterY = btnRect.top + parseFloat(dot.top) + 3.5,
+          stubY = btnRect.top + parseFloat(stub.top) + 0.5,
           titleLine = row.name.getClientRects()[0],
           titleCenterY = titleLine.top + titleLine.height / 2;
         const detail = JSON.stringify({
@@ -2732,20 +2732,21 @@ const {
           titleCenterY,
         });
         assert(
-          dot.content !== 'none' && parseFloat(dot.width) === 6,
-          'worker rows draw a 6px node dot: ' + detail,
+          dot.content !== 'none' && parseFloat(dot.width) === 7,
+          'worker rows draw a 7px node dot: ' + detail,
         );
         assert(
-          dotLeft >= slotLeft && dotLeft + 6 <= slotLeft + 20,
+          dotLeft >= slotLeft && dotLeft + 7 <= slotLeft + 20,
           'the node dot sits inside the empty logo slot: ' + detail,
         );
         assert(
-          Math.abs(dotCenterY - stubY - 0.5) <= 1,
+          Math.abs(dotCenterY - stubY) <= 0.25,
           'the node dot is centered on its branch: ' + detail,
         );
+        // Text sits half a pixel below its line box center.
         assert(
-          Math.abs(dotCenterY - titleCenterY) <= 2,
-          'the node dot sits on the title line: ' + detail,
+          Math.abs(dotCenterY - (titleCenterY + 0.5)) <= 0.25,
+          'the node dot is centered on the title text: ' + detail,
         );
         assert(
           stubWidth >= 4 && Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
@@ -2772,6 +2773,15 @@ const {
           stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
           'horizontal branches reach just short of the row logo: ' +
             JSON.stringify({ key, stubWidth, stubGap }),
+        );
+        const logoRect = row.btn.firstElementChild.getBoundingClientRect(),
+          logoCenterY = logoRect.top + logoRect.height / 2,
+          branchY = btnRect.top + parseFloat(stub.top) + 0.5;
+        // The glyph's center is half a pixel above its box center.
+        assert(
+          Math.abs(branchY - (logoCenterY - 0.5)) <= 0.25,
+          'the branch meets the logo glyph center: ' +
+            JSON.stringify({ key, branchY, logoCenterY }),
         );
       }
       const parentRow = rows.get(row.item.parent),
