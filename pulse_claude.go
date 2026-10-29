@@ -258,13 +258,19 @@ func (s *server) clearWorkerHosts() {
 	clear(s.hosts)
 }
 
-// hostRecord is the record for a SubagentStart reported by Claude process pid in sn.
-func hostRecord(sn snap, pid int, now int64) workerHost {
-	h := workerHost{pid: pid, start: math.NaN(), at: now}
-	if a, ok := findClaude(sn.agents, pid); ok {
-		h.start = processStart(a, sn.at)
+// hostRecord is the record for a SubagentStart reported by Claude process pid
+// in sn. ok is false when its start time is unknown: such a record could never
+// prove a parent, yet as the first record it would block a later, usable one.
+func hostRecord(sn snap, pid int, now int64) (workerHost, bool) {
+	a, found := findClaude(sn.agents, pid)
+	if !found {
+		return workerHost{}, false
 	}
-	return h
+	start := processStart(a, sn.at)
+	if math.IsNaN(start) {
+		return workerHost{}, false
+	}
+	return workerHost{pid: pid, start: start, at: now}, true
 }
 
 // acceptClaude reads one record from a hook connected while its process is still alive.
@@ -292,7 +298,10 @@ func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 		return
 	}
 	if m.Type == "sent" {
-		b.record(s, m.Agent, hostRecord(sn, host, time.Now().UnixMilli()))
+		rec, ok := hostRecord(sn, host, time.Now().UnixMilli())
+		if ok {
+			b.record(s, m.Agent, rec)
+		}
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

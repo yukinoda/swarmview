@@ -143,8 +143,13 @@ Swarmview leaves a worker unnested rather than guess, so some stay flat:
 - Workers started by a Claude that appeared less than about a second earlier:
   Swarmview's process list hadn't seen that Claude yet, so its hook is
   rejected and nothing is recorded.
+- Workers started while `ps` gave no usable elapsed time for their Claude:
+  that Claude can't be told apart from a later process reusing its PID, so
+  nothing is recorded.
 - Any worker during a poll in which `ps` gave no usable elapsed time for its
-  Claude. The record is kept and the worker nests again on the next good poll.
+  Claude, or one that differs from the recorded start time by more than two
+  seconds. The record is kept and the worker nests again on the next good poll;
+  it is dropped only once the start times are more than 30 seconds apart.
 
 The first record for a worker wins and is never updated, so a forged later
 record can't replace the real one. If a different claimant later drives that
@@ -174,8 +179,9 @@ running under one of those claimants could record a worker of that same
 session before its real hook arrives, since the first record for a worker
 wins. It can't affect other sessions, or sessions no Claude claims. A record
 names the Claude by PID and by its start time, estimated from the elapsed time
-`ps` already reports to within two seconds, so a later process that reuses the
-PID doesn't inherit it. Swarmview keeps at most 256 of these records in memory
+`ps` already reports. A worker is nested only while the running Claude's start
+time matches to within two seconds, so a later process that reuses the PID
+doesn't inherit it. Swarmview keeps at most 256 of these records in memory
 (worker ID, Claude PID, and start time only), dropping the oldest when full and
 a record once its Claude exits. It never writes them to disk and forgets them
 all when `-communication` stops.

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -372,17 +371,36 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 		t.Error("a record for a reused PID should be pruned")
 	}
 
-	// Whole-second elapsed time read later still matches the same process.
+	// 31 seconds apart is already clearly another process.
+	hosts["a2"] = hookRecord(original, now)
+	agents[1] = claudeUp(102, "/w/a", "09:29")
+	subsWithHosts(root, now, hosts, agents...)
+	if _, ok := hosts["a2"]; ok {
+		t.Error("a start 31 s off should prune the record")
+	}
+
+	// 5 seconds apart (a slow poll, say) doesn't prove the parent, but keeps
+	// the record: the hook never resends it.
+	hosts["a2"] = hookRecord(original, now)
+	agents[1] = claudeUp(102, "/w/a", "09:55")
+	list = subsWithHosts(root, now, hosts, agents...)
+	if parentPids(list)["a2"] != nil {
+		t.Errorf("a start 5 s off must not prove the parent: %+v", list)
+	}
+	if _, ok := hosts["a2"]; !ok {
+		t.Fatal("a start 5 s off must not drop the record")
+	}
+
+	// Whole-second elapsed time read later is back within the slack: proven.
 	later := now + 1500
 	agents[1] = claudeUp(102, "/w/a", "10:01")
-	hosts["a2"] = hookRecord(original, now)
 	list = subsWithHosts(root, later, hosts, agents...)
 	if !hasParent(parentPids(list), "a2", 102) {
 		t.Errorf("the same process should keep its worker: %+v", list)
 	}
 
 	// Without a usable elapsed time the process can't be proven the same, but
-	// the record is kept: the hook never resends it.
+	// the record is kept.
 	agents[1] = claudeUp(102, "/w/a", "")
 	list = subsWithHosts(root, later, hosts, agents...)
 	if parentPids(list)["a2"] != nil {
@@ -397,16 +415,6 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 	list = subsWithHosts(root, later, hosts, agents...)
 	if !hasParent(parentPids(list), "a2", 102) {
 		t.Errorf("a readable start time should prove the parent again: %+v", list)
-	}
-
-	// A record made while the start time was unknown proves nothing, but stays.
-	hosts["a2"] = workerHost{pid: 102, start: math.NaN(), at: now}
-	list = subsWithHosts(root, later, hosts, agents...)
-	if parentPids(list)["a2"] != nil {
-		t.Errorf("a record without a start time must not prove the parent: %+v", list)
-	}
-	if _, ok := hosts["a2"]; !ok {
-		t.Error("a record without a start time is kept while its PID runs")
 	}
 }
 

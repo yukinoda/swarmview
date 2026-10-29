@@ -26,7 +26,7 @@ type metaEntry struct {
 }
 
 // workerHost is the Claude process whose SubagentStart hook reported a worker,
-// with its estimated start (Unix seconds, NaN if unknown) and when it was recorded.
+// with its estimated start (Unix seconds) and when it was recorded.
 type workerHost struct {
 	pid   int
 	start float64
@@ -35,7 +35,12 @@ type workerHost struct {
 
 // ps etime has one-second granularity and is read slightly after a snapshot's
 // time, so two estimates of one process's start can differ by about a second.
+// Attribution needs this close a match.
 const startSlackSec = 2
+
+// A record is deleted for a start mismatch only beyond this, when it is
+// clearly another process; a smaller mismatch just doesn't attribute that poll.
+const reusedStartSec = 30
 
 // processStart estimates when a process started, in Unix seconds, from its
 // elapsed time at now. It is NaN when ps gave no usable elapsed time.
@@ -55,30 +60,30 @@ func findClaude(agents []Agent, pid int) (Agent, bool) {
 	return agents[i], true
 }
 
-// compareStart checks a record against the running Claude with its PID: known
-// is whether both start times are known, and same whether they agree, so a
-// reused PID never inherits the record.
-func (h workerHost) compareStart(a Agent, now int64) (known, same bool) {
+// startDrift is how far apart, in seconds, the record's start time and the
+// running Claude's are; known is false when the running one's is unknown.
+// Records are only made with a known start time.
+func (h workerHost) startDrift(a Agent, now int64) (drift float64, known bool) {
 	start := processStart(a, now)
 	if math.IsNaN(start) {
-		return false, false
+		return 0, false
 	}
-	if math.IsNaN(h.start) {
-		return false, false
-	}
-	drift := math.Abs(start - h.start)
-	return true, drift <= startSlackSec
+	return math.Abs(start - h.start), true
 }
 
 // proven reports whether the very Claude process the record was made for is
-// running now. An unknown start time proves nothing.
+// running now: same PID and start time, so a reused PID never inherits the
+// record. An unknown start time proves nothing.
 func (h workerHost) proven(agents []Agent, now int64) bool {
 	a, ok := findClaude(agents, h.pid)
 	if !ok {
 		return false
 	}
-	known, same := h.compareStart(a, now)
-	return known && same
+	drift, known := h.startDrift(a, now)
+	if !known {
+		return false
+	}
+	return drift <= startSlackSec
 }
 
 // full session rescan interval; a new session file also triggers one via the dir mtime
@@ -360,10 +365,10 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 }
 
 // pruneWorkerHosts drops records whose Claude process is gone: no detected
-// Claude has the PID, or one does with a known, different start time (a reused
-// PID). An unknown start time keeps the record, since hooks never resend it; it
-// just proves nothing until the time is readable again. A record for an idle,
-// unlisted worker stays, so the worker keeps its parent if it wakes up.
+// Claude has the PID, or one does whose start time is clearly different (a
+// reused PID). An unknown or marginally different start time keeps the record,
+// since hooks never resend it; it just proves nothing that poll. A record for
+// an idle, unlisted worker stays, so the worker keeps its parent if it wakes up.
 func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, now int64) {
 	for id, h := range hosts {
 		a, ok := findClaude(agents, h.pid)
@@ -371,8 +376,8 @@ func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, now int64) {
 			delete(hosts, id)
 			continue
 		}
-		known, same := h.compareStart(a, now)
-		if known && !same {
+		drift, known := h.startDrift(a, now)
+		if known && drift > reusedStartSec {
 			delete(hosts, id)
 		}
 	}

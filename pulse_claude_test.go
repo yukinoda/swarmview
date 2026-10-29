@@ -76,12 +76,15 @@ func TestClaudeHookBridge(t *testing.T) {
 		return ps, nil
 	}
 	s := &server{run: fakePs}
-	setKind := func(kind string) {
+	setHost := func(kind, etime string) {
 		s.mu.Lock()
 		// Dated an hour ahead so a slow run never refreshes it through the fake ps.
 		at := time.Now().Add(time.Hour).UnixMilli()
-		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind, Etime: "10:00"}}}
+		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind, Etime: etime}}}
 		s.mu.Unlock()
+	}
+	setKind := func(kind string) {
+		setHost(kind, "10:00")
 	}
 	b := newPulseBridge()
 	must(t, b.start(s))
@@ -131,6 +134,18 @@ func TestClaudeHookBridge(t *testing.T) {
 	s.mu.Unlock()
 	if h.start != wantStart {
 		t.Fatalf("recorded start %v, want the host's %v", h.start, wantStart)
+	}
+	// A host whose start time ps didn't report records nothing, and leaves the
+	// worker free for a later SubagentStart once the time is readable.
+	setHost("claude", "")
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a3333330"}`)
+	if _, ok := hostOf("a3333330"); ok {
+		t.Fatal("a host without a start time must not be recorded")
+	}
+	setKind("claude")
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a3333330"}`)
+	if _, ok := hostOf("a3333330"); !ok {
+		t.Fatal("a later SubagentStart with a known start time should record")
 	}
 	setKind("codex")
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a6666666"}`)
