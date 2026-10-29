@@ -22,6 +22,8 @@ cp "$root/desktop/macos/Installation.txt" "$app/Contents/Resources/Installation.
 bridge="$app/Contents/Resources/integrations/opencode"
 mkdir -p "$bridge"
 cp -X "$root/integrations/opencode/"{package.json,tui.ts,observer.js,README.md} "$bridge/"
+mkdir -p "$app/Contents/Resources/integrations/claude"
+cp -X "$root/integrations/claude/README.md" "$app/Contents/Resources/integrations/claude/"
 temporary="$(mktemp -d)"
 trap 'rm -rf "$temporary"' EXIT
 mkdir "$temporary/Swarmview.iconset"

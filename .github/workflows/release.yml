@@ -36,7 +36,8 @@ jobs:
             -C dist swarmview -C "$GITHUB_WORKSPACE" \
             LICENSE README.md GUIDE.md COMPATIBILITY.md CONTRIBUTING.md SECURITY.md assets \
             integrations/opencode/package.json integrations/opencode/tui.ts \
-            integrations/opencode/observer.js integrations/opencode/README.md
+            integrations/opencode/observer.js integrations/opencode/README.md \
+            integrations/claude/README.md
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swarmview-${{ matrix.target }}

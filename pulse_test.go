@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -291,13 +293,21 @@ func TestPulseSocketBoundary(t *testing.T) {
 		t.Fatalf("missing-heartbeat identity was not expired: %v", err)
 	}
 	pulseWait(t, b, func() bool { return len(b.peers) == 0 })
+	// With a viewer watching, a Claude peer reaches its record check and is still refused.
+	ch, _ := pulseViewer(t, b)
 	kind = "claude"
 	c = pulseDial(t, s, b, kind)
+	io.WriteString(c, pulseLine("presence", 1))
 	c.SetReadDeadline(time.Now().Add(time.Second))
 	_, err = c.Read(make([]byte, 1))
 	c.Close()
-	if err != io.EOF {
-		t.Fatalf("non-OpenCode peer accepted: %v", err)
+	// The bridge closes mid-record (it exceeds a hook record's size), which Linux reports as a reset.
+	closed := err == io.EOF || errors.Is(err, syscall.ECONNRESET)
+	if !closed {
+		t.Fatalf("OpenCode protocol accepted from a Claude peer: %v", err)
+	}
+	if len(ch) != 0 {
+		t.Fatal("OpenCode protocol from a Claude peer produced a cue")
 	}
 }
 

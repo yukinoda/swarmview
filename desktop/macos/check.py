@@ -65,6 +65,9 @@ def main():
     bridge_source = Path(__file__).resolve().parents[2] / "integrations/opencode"
     for name in ("package.json", "tui.ts", "observer.js", "README.md"):
         assert (bridge / name).read_bytes() == (bridge_source / name).read_bytes(), f"App must include matching optional bridge file: {name}"
+    hooks = "integrations/claude/README.md"
+    hooks_source = Path(__file__).resolve().parents[2] / hooks
+    assert (resources / hooks).read_bytes() == hooks_source.read_bytes(), "App must include the Claude hook setup"
     assert not any(Path(name).name == "Swarmview" for _, _, name in processes().values()), "Quit existing Swarmview apps yourself before owned-app checks"
     launch = [str(executable)] + (["--communication"] if args.communication else [])
     live_socket = Path.home() / "Library/Caches/swarmview/live.sock"

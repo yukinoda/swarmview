@@ -85,7 +85,7 @@ func TestUI(t *testing.T) {
 		"dashboard.js":     "export const testState = { rows, groups, quietRows };",
 		"search.js":        "export const testState = { searchRows, searchIndex, get searchReturnFocus() { return searchReturnFocus; } };",
 		"notifications.js": "export const testState = { eps };",
-		"communication.js": "export const testState = { activeFeedback, showFeedback, communicationFeedback, communicationStatus, get source() { return communicationSource; }, closeSource() { communicationSource?.close(); communicationSource = null; } };",
+		"communication.js": "export const testState = { activeFeedback, pendingFeedback, showFeedback, communicationFeedback, communicationStatus, get source() { return communicationSource; }, closeSource() { communicationSource?.close(); communicationSource = null; } };",
 	} {
 		code, err := webFiles.ReadFile("web/" + name)
 		must(t, err)

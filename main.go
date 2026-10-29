@@ -17,8 +17,13 @@ import (
 
 func main() {
 	desktop := flag.Bool("desktop", false, "use the desktop app's port and exit when stdin closes")
-	communication := flag.Bool("communication", false, "observe live metadata from the optional OpenCode TUI bridge")
+	communication := flag.Bool("communication", false, "observe live metadata from the optional OpenCode TUI bridge and Claude hooks")
+	claudeHook := flag.Bool("claude-hook", false, "forward one Claude Code hook event from stdin to a running -communication instance")
 	flag.Parse()
+	if *claudeHook {
+		runClaudeHook(os.Stdin)
+		return
+	}
 	debug.SetGCPercent(50)
 	debug.SetMemoryLimit(32 << 20) // safety net only
 	if err := runServer(*desktop, *communication); err != nil {

@@ -5,6 +5,8 @@ let readSnapshot, readSnapshotState, renderSnapshot, refreshSnapshot;
 let communicationSource = null;
 let communicationGap = false;
 const activeFeedback = new Map();
+// Claude cues can arrive before the next poll renders their worker row; retried on render.
+const pendingFeedback = new Map();
 const communicationStatus = el('p');
 communicationStatus.id = 'communication-status';
 communicationStatus.hidden = true;
@@ -22,20 +24,33 @@ export function clearPulses() {
   for (const entry of activeFeedback.values()) entry.clear();
 }
 
+// A waiting cue has no on-screen position, so only losing the stream drops it.
+function dropPending() {
+  clearPulses();
+  pendingFeedback.clear();
+}
+
 export function refreshCommunication(data) {
   txt(
     $('communication-capability'),
     data?.communication
-      ? 'Enabled by server · OpenCode TUI metadata only'
-      : 'Off · requires manual server and OpenCode TUI setup',
+      ? 'Enabled by server · OpenCode TUI and Claude hook metadata only'
+      : 'Off · requires manual server and OpenCode TUI or Claude hook setup',
   );
   communicationStatus.hidden = !data?.communication;
   communicationFeedback.hidden = !data?.communication;
   for (const entry of activeFeedback.values())
     if (!entry.valid()) entry.clear();
+  const due = [...pendingFeedback]; // a still-missing row re-queues itself
+  pendingFeedback.clear();
+  for (const [key, cue] of due) {
+    if (cue.until > Date.now())
+      showFeedback(key, cue.direction, cue.pid, cue.until);
+  }
 }
 
-function showFeedback(key, direction) {
+// pid is set for Claude cues: the worker row must belong to that Claude process.
+function showFeedback(key, direction, pid, until = Date.now() + 5000) {
   if (
     !readSnapshot()?.communication ||
     document.hidden ||
@@ -44,8 +59,17 @@ function showFeedback(key, direction) {
   )
     return;
   const { item, child, parent } = getCommunicationRow(key);
+  if (!item && pid) {
+    const queued = pendingFeedback.get(key);
+    const restart = direction === 'sent' && queued?.direction === 'message';
+    if (!restart && (queued || pendingFeedback.size < 4))
+      pendingFeedback.set(key, { direction, pid, until });
+    return;
+  }
+  // Claude cues mark only Claude metadata rows of their own host; OpenCode cues only live rows.
+  const eligible = (row) => (pid ? row?.sub && row.pid === pid : row?.live);
   if (
-    !item?.live ||
+    !eligible(item) ||
     item.dying ||
     !child ||
     !parent ||
@@ -58,6 +82,8 @@ function showFeedback(key, direction) {
     entry = null;
   }
   if (!entry && activeFeedback.size >= 4) return;
+  // Claude restarts a finished worker for a follow-up message; that start is the same message.
+  if (direction === 'sent' && entry?.direction === 'message') return;
   // One visibility check per observation; static feedback has no travel/refresh geometry.
   const bounds = child.btn.getClientRects()[0];
   if (
@@ -79,6 +105,7 @@ function showFeedback(key, direction) {
       line,
       parent: item.parent,
       pid: item.pid,
+      claude: Boolean(pid),
       timer: null,
       summary: '',
     };
@@ -89,7 +116,7 @@ function showFeedback(key, direction) {
         !document.hidden &&
         !readSnapshotState() &&
         !document.querySelector('dialog[open]') &&
-        current.item?.live &&
+        eligible(current.item) &&
         !current.item.dying &&
         current.item.parent === entry.parent &&
         current.item.pid === entry.pid &&
@@ -125,8 +152,14 @@ function showFeedback(key, direction) {
       ? 'Delegation attempted; acceptance not confirmed'
       : direction === 'sent'
         ? 'Sent to worker'
-        : 'Reply received';
-  entry.summary = `${message}: ${from} → ${to} · observed live`;
+        : direction === 'message'
+          ? 'Message sent to worker'
+          : 'Reply received';
+  // A follow-up message may come from any agent, so its sender is not named.
+  entry.summary =
+    direction === 'message'
+      ? `${message}: ${name(child.name.textContent)} · observed live`
+      : `${message}: ${from} → ${to} · observed live`;
   entry.direction = direction;
   txt(
     entry.label,
@@ -134,7 +167,9 @@ function showFeedback(key, direction) {
       ? 'Attempted from parent · unconfirmed'
       : direction === 'sent'
         ? 'Sent from parent'
-        : 'Reply received by parent',
+        : direction === 'message'
+          ? 'Message sent to worker'
+          : 'Reply received by parent',
   );
   attr(entry.label, 'title', entry.summary);
   attr(child.context, 'data-communication', direction);
@@ -148,7 +183,7 @@ export function communicationStream() {
   if (!data?.communication || document.hidden) {
     communicationSource?.close();
     communicationSource = null;
-    clearPulses();
+    dropPending();
     return;
   }
   if (communicationSource) return;
@@ -174,7 +209,7 @@ export function communicationStream() {
     } // a stream frame is not a new poll
     else refreshSnapshot();
     if (frame.lost) {
-      clearPulses();
+      dropPending();
       communicationGap = true;
       txt(
         communicationStatus,
@@ -182,30 +217,33 @@ export function communicationStream() {
       );
       return;
     }
-    if (frame.ambiguous) clearPulses();
+    // OpenCode ambiguity never affects a Claude cue, which names its own host.
+    if (frame.ambiguous)
+      for (const entry of activeFeedback.values())
+        if (!entry.claude) entry.clear();
     txt(
       communicationStatus,
       (frame.ambiguous
         ? 'Communication: ambiguous TUI views · affected pulses unavailable; select the session in one terminal'
-        : frame.workers.length
+        : frame.workers.length || frame.pid
           ? 'Communication: observing live metadata only'
-          : 'Communication: waiting for live worker metadata · requires opt-in OpenCode TUI bridge') +
+          : 'Communication: waiting for live worker metadata · requires opt-in OpenCode TUI bridge or Claude hooks') +
         ' · other providers unavailable' +
         (communicationGap ? ' · some observations missing; no replay' : ''),
     );
     if (
-      !frame.ambiguous &&
+      (!frame.ambiguous || frame.pid) &&
       frame.key &&
-      ['attempted', 'sent', 'returned'].includes(frame.direction)
+      ['attempted', 'sent', 'returned', 'message'].includes(frame.direction)
     )
-      showFeedback(frame.key, frame.direction);
+      showFeedback(frame.key, frame.direction, frame.pid);
   };
   source.onerror = () => {
     if (communicationSource !== source) return;
     // Non-200 replies (e.g. viewer limit) close without retry; let the next poll reconnect.
     if (source.readyState === 2) communicationSource = null; // EventSource.CLOSED
     communicationGap = true;
-    clearPulses();
+    dropPending();
     txt(
       communicationStatus,
       'Communication disconnected · observations may be missing; no replay',

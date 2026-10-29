@@ -57,6 +57,9 @@ foreground return (**Reply received by parent**, teal), or an explicit
 **Attempted from parent · unconfirmed** observation (amber). Text carries the
 meaning as well as color. Cues clear after 2.5 seconds, with no history or replay;
 they do not change worker activity, imply success, or animate the tree.
+Optional [Claude Code hooks](integrations/claude/README.md) mark existing Claude
+worker rows with **Sent from parent**, **Reply received by parent**, or
+**Message sent to worker**.
 CPU activity and nesting never create communication observations. There is no
 transcript ingestion, and other providers have no communication adapter here.
 
