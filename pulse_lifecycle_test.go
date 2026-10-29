@@ -326,6 +326,9 @@ func TestPulseCLILifecycle(t *testing.T) {
 				if _, err := os.Lstat(path); !os.IsNotExist(err) {
 					t.Fatal("graceful shutdown left socket", err)
 				}
+				if _, err := os.Lstat(liveHookPath(filepath.Dir(path))); !os.IsNotExist(err) {
+					t.Fatal("graceful shutdown left the hook copy", err)
+				}
 			}
 		})
 	}

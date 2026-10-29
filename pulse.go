@@ -119,12 +119,18 @@ func (b *pulseBridge) start(s *server) error {
 	if err != nil {
 		return err
 	}
+	// Copy before listening and rename right after: a crashed bridge's copy can
+	// answer only in the instant between bind and rename, and a failed start
+	// leaves a live bridge's copy alone.
+	staged := stageHookBinary(dir)
 	ln, inode, err := listenPulseSocket(path)
 	if err != nil {
+		os.Remove(staged)
 		lock.Close()
 		return err
 	}
 	b.path, b.ln, b.inode, b.lock = path, ln, inode, lock
+	publishHookBinary(dir, staged)
 	go func() {
 		slots := make(chan bool, pulsePeers)
 		for {
@@ -147,7 +153,10 @@ func (b *pulseBridge) close() {
 	b.once.Do(func() {
 		if b.ln != nil {
 			b.ln.Close()
-			_ = removePulseSocket(b.path, b.inode)
+			// live-hook is ours only while the socket was: a replacement bridge keeps its own.
+			if removePulseSocket(b.path, b.inode) == nil {
+				os.Remove(liveHookPath(filepath.Dir(b.path)))
+			}
 		}
 		b.mu.Lock()
 		b.closed = true

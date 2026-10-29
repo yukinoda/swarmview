@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -79,6 +80,67 @@ func runClaudeHook(stdin io.Reader) {
 	io.Copy(io.Discard, c)
 }
 
+// stageHookBinary copies this binary beside the socket for the Claude plugin's
+// launcher, which then runs the build that is listening without trusting any
+// path outside the owner-only directory. It returns the staged file, or "" if
+// copying failed; publishHookBinary moves it into place.
+func stageHookBinary(dir string) string {
+	tmp := liveHookPath(dir) + ".tmp"
+	// The owner lock excludes other writers, so delete-then-exclusive-create
+	// can't follow a planted symlink or race another bridge.
+	os.Remove(tmp)
+	exe, err := os.Executable()
+	if err != nil {
+		log.Printf("claude plugin: cannot find this binary to copy: %v", err)
+		return ""
+	}
+	src, err := os.Open(exe)
+	if err != nil {
+		log.Printf("claude plugin: cannot copy this binary: %v", err)
+		return ""
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
+	if err != nil {
+		log.Printf("claude plugin: cannot copy this binary: %v", err)
+		return ""
+	}
+	// The umask may have stripped the exec bit; the launcher needs it.
+	err = dst.Chmod(0700)
+	if err == nil {
+		_, err = io.Copy(dst, src)
+	}
+	if closeErr := dst.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		log.Printf("claude plugin: cannot copy this binary: %v", err)
+		os.Remove(tmp)
+		return ""
+	}
+	return tmp
+}
+
+// publishHookBinary moves a staged copy into place as live-hook. Without one,
+// it removes any older copy, so the launcher falls back to PATH and the app
+// instead of running a crashed bridge's build.
+func publishHookBinary(dir, staged string) {
+	if staged == "" {
+		os.Remove(liveHookPath(dir))
+		return
+	}
+	if err := os.Rename(staged, liveHookPath(dir)); err != nil {
+		log.Printf("claude plugin: cannot publish this binary: %v", err)
+		os.Remove(staged)
+		os.Remove(liveHookPath(dir))
+	}
+}
+
+// liveHookPath is the bridge's own binary, copied for the plugin launcher.
+func liveHookPath(dir string) string {
+	return filepath.Join(dir, "live-hook")
+}
+
 func pulseSocketPath() (string, error) {
 	cache, err := os.UserCacheDir()
 	if err != nil {
@@ -104,7 +166,7 @@ func decodeClaudePulse(b []byte) (claudePulse, error) {
 }
 
 // claudeHost returns the detected Claude process that pid is, or descends from within
-// four parent hops (Claude runs hooks through a shell), or 0.
+// five parent hops (Claude runs hooks through a shell, the plugin through a launcher), or 0.
 func claudeHost(s *server, sn snap, pid int) int {
 	claude := map[int]bool{}
 	for _, a := range sn.agents {
@@ -131,7 +193,7 @@ func claudeHost(s *server, sn snap, pid int) int {
 			parent[child] = ppid
 		}
 	}
-	for hop := 0; hop < 4; hop++ {
+	for hop := 0; hop < 5; hop++ {
 		pid = parent[pid]
 		if claude[pid] {
 			return pid

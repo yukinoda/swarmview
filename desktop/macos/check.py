@@ -71,6 +71,7 @@ def main():
     assert not any(Path(name).name == "Swarmview" for _, _, name in processes().values()), "Quit existing Swarmview apps yourself before owned-app checks"
     launch = [str(executable)] + (["--communication"] if args.communication else [])
     live_socket = Path.home() / "Library/Caches/swarmview/live.sock"
+    live_hook = live_socket.with_name("live-hook")  # the Claude plugin's private copy
     if args.communication:
         assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"
     subprocess.run([str(executable), "--installer-self-test"], check=True, timeout=10,
@@ -105,6 +106,7 @@ def main():
     wait_for(lambda: not serving(), "normal quit closes backend")
     if args.communication:
         wait_for(lambda: not live_socket.exists(), "normal quit closes owned bridge socket")
+        wait_for(lambda: not live_hook.exists(), "normal quit removes the hook copy")
 
     before = processes()
     app = subprocess.Popen(launch, env={**os.environ, "PATH": "/usr/bin:/bin"},
@@ -118,6 +120,8 @@ def main():
             with urllib.request.urlopen("http://127.0.0.1:4778/agents", timeout=5) as response:
                 return bool(json.load(response).get("communication"))
         assert communication_enabled() == args.communication, "Native flag did not reach bundled backend"
+        if args.communication:
+            assert live_hook.exists(), "Communication must publish the hook copy"
         if args.compare_cli:
             def targets(port):
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/agents", timeout=5) as response:
@@ -163,6 +167,7 @@ def main():
         wait_for(lambda: not serving(), "force-quit closes listener")
         if args.communication:
             wait_for(lambda: not live_socket.exists(), "force-quit closes owned bridge socket")
+            wait_for(lambda: not live_hook.exists(), "force-quit removes the hook copy")
     finally:
         if app.poll() is None:
             app.kill()

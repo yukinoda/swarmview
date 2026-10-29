@@ -1,0 +1,9 @@
+{
+  "name": "swarmview",
+  "version": "0.1.0",
+  "description": "Forwards Claude Code subagent start, stop and follow-up message events (IDs only) to an opted-in Swarmview",
+  "author": {
+    "name": "Yuki Noda"
+  },
+  "license": "MIT"
+}
