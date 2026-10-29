@@ -285,16 +285,11 @@ kbd {
 .group > .kids {
   --connector-origin: calc(var(--tree-pad) / 2);
 }
-/* The trunk drops from the parent's 20px logo, or from the start of a worker parent's title.
+/* The trunk drops from the parent's 20px logo, or from the node dot in a worker's logo slot.
    Rows at the depth cap share one column, so their children sit beside the parent. */
 .node > .kids {
   --connector-origin: calc(
     var(--tree-pad) + 10px + min(var(--depth, 0), 3) * var(--tree-step)
-  );
-}
-.node.worker > .kids {
-  --connector-origin: calc(
-    var(--worker-pad) + 4px + min(var(--depth, 0), 3) * var(--tree-step)
   );
 }
 .group > .kids::before,
@@ -330,12 +325,14 @@ kbd {
   --row-pad: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step));
   padding-left: var(--row-pad);
 }
-/* The branch runs from the parent trunk to just before this row's logo or title. */
+/* The branch runs from the parent trunk to just before this row's logo; a worker's
+   branch instead runs into its node dot (below). */
 .row-line > .agent::before {
   content: '';
   position: absolute;
   left: var(--connector-origin);
-  top: 23px;
+  /* The logo is centered in the row; its glyph is half a pixel above its box center. */
+  top: calc(50% - 1px);
   width: calc(var(--row-pad) - var(--connector-origin) - 2px);
   border-top: 1px solid var(--line);
 }
@@ -430,11 +427,33 @@ kbd {
 }
 .worker > .row-line > .agent {
   --row-pad: calc(var(--worker-pad) + var(--depth, 0) * var(--tree-step));
+  /* The dot's left edge, centered in the empty 20px logo slot. */
+  --dot-left: calc(var(--tree-pad) + var(--depth, 0) * var(--tree-step) + 6.5px);
+  --dot-color: var(--mut);
 }
-/* Workers have no logo, so their branch points at the title line instead of the row middle. */
+/* Workers have no logo: the branch runs into a node dot in the empty logo slot,
+   centered on the title text (15px below the row top). */
 .worker > .row-line > .agent::before {
-  top: 14px;
-  width: calc(var(--row-pad) - var(--connector-origin) - 4px);
+  top: 14.5px;
+  width: calc(var(--dot-left) - var(--connector-origin));
+}
+/* The border keeps the dot visible in forced-colors mode, where the background is
+   dropped; it is 7px so the dot has a center pixel to line up with the branch. */
+.worker > .row-line > .agent::after {
+  content: '';
+  position: absolute;
+  left: var(--dot-left);
+  top: 11.5px;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border: 3px solid var(--dot-color);
+  background: var(--dot-color);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.worker.s-working > .row-line > .agent {
+  --dot-color: var(--working);
 }
 .live-worker > .row-line .context {
   min-height: 20px;

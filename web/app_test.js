@@ -2709,26 +2709,96 @@ const {
         kids.getBoundingClientRect().left +
         parseFloat(trunk.left) +
         parseFloat(trunk.borderLeftWidth);
-      const stubLeft =
-          row.btn.getBoundingClientRect().left + parseFloat(stub.left),
+      const btnRect = row.btn.getBoundingClientRect();
+      const stubLeft = btnRect.left + parseFloat(stub.left),
         stubWidth = parseFloat(stub.width);
-      const contentLeft = row.btn.firstElementChild.getBoundingClientRect().left,
-        stubGap = contentLeft - (stubLeft + stubWidth);
-      assert(
-        stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
-        'horizontal branches reach just short of the row logo or title: ' +
-          JSON.stringify({ key, stubWidth, stubGap }),
-      );
+      const isWorker = row.node.classList.contains('worker');
+      if (isWorker) {
+        const slotLeft =
+          btnRect.left + parseFloat(getComputedStyle(row.btn).paddingLeft) - 28;
+        const dot = getComputedStyle(row.btn, '::after'),
+          dotLeft = btnRect.left + parseFloat(dot.left),
+          dotCenterY = btnRect.top + parseFloat(dot.top) + 3.5,
+          stubY = btnRect.top + parseFloat(stub.top) + 0.5,
+          titleLine = row.name.getClientRects()[0],
+          titleCenterY = titleLine.top + titleLine.height / 2;
+        const detail = JSON.stringify({
+          key,
+          dotLeft,
+          dotCenterY,
+          slotLeft,
+          stubY,
+          stubWidth,
+          titleCenterY,
+        });
+        assert(
+          dot.content !== 'none' && parseFloat(dot.width) === 7,
+          'worker rows draw a 7px node dot: ' + detail,
+        );
+        assert(
+          dotLeft >= slotLeft && dotLeft + 7 <= slotLeft + 20,
+          'the node dot sits inside the empty logo slot: ' + detail,
+        );
+        assert(
+          Math.abs(dotCenterY - stubY) <= 0.25,
+          'the node dot is centered on its branch: ' + detail,
+        );
+        // The title's line box depends on the platform font, so allow a pixel.
+        assert(
+          Math.abs(dotCenterY - titleCenterY) <= 1,
+          'the node dot is centered on the title text: ' + detail,
+        );
+        assert(
+          stubWidth >= 4 && Math.abs(dotLeft - (stubLeft + stubWidth)) <= 1,
+          'worker branches run into their node dot: ' + detail,
+        );
+        if (row.node.classList.contains('s-working')) {
+          assert(
+            dot.borderTopColor === stub.borderTopColor,
+            'a working node dot takes its branch color: ' + detail,
+          );
+        } else {
+          // The row's context line is drawn in --mut.
+          const restColor = getComputedStyle(row.context).color;
+          assert(
+            dot.borderTopColor === restColor,
+            'a resting node dot uses the muted color: ' + detail,
+          );
+        }
+      } else {
+        const contentLeft =
+            row.btn.firstElementChild.getBoundingClientRect().left,
+          stubGap = contentLeft - (stubLeft + stubWidth);
+        assert(
+          stubWidth >= 4 && stubGap >= 1 && stubGap <= 6,
+          'horizontal branches reach just short of the row logo: ' +
+            JSON.stringify({ key, stubWidth, stubGap }),
+        );
+        const logoRect = row.btn.firstElementChild.getBoundingClientRect(),
+          logoCenterY = logoRect.top + logoRect.height / 2,
+          branchY = btnRect.top + parseFloat(stub.top) + 0.5;
+        // The glyph's center is half a pixel above its box center.
+        assert(
+          Math.abs(branchY - (logoCenterY - 0.5)) <= 0.25,
+          'the branch meets the logo glyph center: ' +
+            JSON.stringify({ key, branchY, logoCenterY }),
+        );
+      }
       const parentRow = rows.get(row.item.parent),
         parentDepth = parentRow ? +parentRow.node.style.getPropertyValue('--depth') : 0;
       if (parentRow && parentDepth < 4) {
-        const parentContentLeft =
-            parentRow.btn.firstElementChild.getBoundingClientRect().left,
-          trunkOffset = trunkRight - 1 - parentContentLeft,
-          maxOffset = parentRow.item.sub ? 8 : 20;
+        const isParentWorker = parentRow.node.classList.contains('worker'),
+          parentPad = parseFloat(getComputedStyle(parentRow.btn).paddingLeft),
+          parentSlotLeft =
+            parentRow.btn.getBoundingClientRect().left +
+            parentPad -
+            (isParentWorker ? 28 : 0),
+          trunkOffset = trunkRight - 1 - parentSlotLeft;
+        // A worker's dot spans slot +7..+13, so its children's trunk must drop through it.
+        const [low, high] = isParentWorker ? [8, 11] : [0, 20];
         assert(
-          trunkOffset >= 0 && trunkOffset <= maxOffset,
-          'child trunks drop from the parent logo, or the start of a worker parent title: ' +
+          trunkOffset >= low && trunkOffset <= high,
+          'child trunks drop from the parent logo, or the node dot of a worker parent: ' +
             JSON.stringify({ key, parentDepth, trunkOffset }),
         );
       }
@@ -2740,8 +2810,33 @@ const {
         stubLeft,
         stubWidth,
         delta: stubLeft - trunkRight,
+        titleLeft: row.name.getBoundingClientRect().left,
       });
     }
+    // Workers keep the title column of logo rows at the same depth.
+    const titleColumns = connectorJunctions.filter((junction) =>
+      connectorJunctions.some(
+        (other) =>
+          other.depth === junction.depth &&
+          (other.source === 'process') !== (junction.source === 'process'),
+      ),
+    );
+    assert(
+      titleColumns.length > 0 &&
+        titleColumns.every(
+          (junction) =>
+            Math.abs(
+              junction.titleLeft -
+                titleColumns.find(
+                  (other) =>
+                    other.depth === junction.depth &&
+                    other.source === 'process',
+                ).titleLeft,
+            ) <= 1,
+        ),
+      'worker titles start in the same column as logo-row titles at the same depth: ' +
+        JSON.stringify(titleColumns),
+    );
     assert(
       connectorJunctions.every((junction) => Math.abs(junction.delta) <= 0.25),
       'horizontal stubs join the actual parent trunk right edge without crossing left at roots or capped depths: ' +
