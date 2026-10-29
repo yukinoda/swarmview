@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
@@ -206,29 +207,36 @@ func claudeHost(s *server, sn snap, pid int) int {
 const maxWorkerHosts = 256
 
 // recordWorkerHost remembers which Claude started a worker. The first record wins,
-// and when full the oldest record is dropped.
-func (s *server) recordWorkerHost(agent string, host int, now int64) {
+// and when full the oldest record is dropped. The next snapshot refresh uses it.
+func (s *server) recordWorkerHost(agent string, host workerHost) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.hosts[agent]; ok {
 		return
 	}
 	if len(s.hosts) >= maxWorkerHosts {
-		oldest := ""
+		oldestID := ""
+		oldestAt := int64(math.MaxInt64)
 		for id, h := range s.hosts {
-			if oldest == "" || h.at < s.hosts[oldest].at {
-				oldest = id
+			if h.at < oldestAt {
+				oldestID = id
+				oldestAt = h.at
 			}
 		}
-		delete(s.hosts, oldest)
+		delete(s.hosts, oldestID)
 	}
-	s.hosts[agent] = workerHost{host, now}
-	// Re-list workers on the cached processes so the next poll shows the new parent.
-	if s.snap != nil {
-		next := *s.snap
-		next.subagents = listClaudeSubagents(next.agents, s.root, now, s.metaCache, s.sessions, s.hosts)
-		s.snap = &next
+	s.hosts[agent] = host
+}
+
+// hostRecord is the record for a SubagentStart reported by Claude process pid in sn.
+func hostRecord(sn snap, pid int, now int64) workerHost {
+	h := workerHost{pid: pid, start: math.NaN(), at: now}
+	for _, a := range sn.agents {
+		if a.Pid == pid {
+			h.start = processStart(a, sn.at)
+		}
 	}
+	return h
 }
 
 // acceptClaude reads one record from a hook connected while its process is still alive.
@@ -256,7 +264,7 @@ func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 		return
 	}
 	if m.Type == "sent" {
-		s.recordWorkerHost(m.Agent, host, time.Now().UnixMilli())
+		s.recordWorkerHost(m.Agent, hostRecord(sn, host, time.Now().UnixMilli()))
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

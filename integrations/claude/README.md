@@ -134,7 +134,8 @@ normally can't tell which one started a worker and shows it directly under the
 repository. With the plugin, Swarmview remembers which Claude's
 `SubagentStart` hook reported each worker, even while no dashboard is open,
 and nests the worker under that Claude. Only the event name and the agent ID
-are used. Workers started before Swarmview was listening, or with the plugin
+are used. A new worker can show under the repository for up to one poll before
+it moves under its Claude. Workers started before Swarmview was listening, or with the plugin
 off, stay unnested rather than guessed. Without `-communication`, nesting is
 unchanged.
 
@@ -159,10 +160,12 @@ processes whose `~/.claude/sessions/<pid>.json` already claims the worker's
 session, and never replaces a parent Swarmview already knows. A program
 running under one of those claimants could record a worker of that same
 session before its real hook arrives, since the first record for a worker
-wins. It can't affect other sessions, or sessions no Claude claims. Swarmview
-keeps at most 256 of these records in memory (worker ID and Claude PID only),
-dropping the oldest when full and a record once its Claude exits, and never
-writes them to disk.
+wins. It can't affect other sessions, or sessions no Claude claims. A record
+names the Claude by PID and by its start time, estimated from the elapsed time
+`ps` already reports to within two seconds, so a later process that reuses the
+PID doesn't inherit it. Swarmview keeps at most 256 of these records in memory
+(worker ID, Claude PID, and start time only), dropping the oldest when full and
+a record once its Claude exits, and never writes them to disk.
 
 Starting `-communication` also copies the running binary into the same
 directory as `live-hook` (mode `0700`, about the binary's size on disk), and

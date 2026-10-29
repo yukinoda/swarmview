@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"math"
 	"os"
 	"path"
 	"regexp"
@@ -24,10 +25,35 @@ type metaEntry struct {
 	parentAgentId, description, model any
 }
 
-// workerHost is the Claude process whose SubagentStart hook reported a worker, and when.
+// workerHost is the Claude process whose SubagentStart hook reported a worker,
+// with its estimated start (Unix seconds, NaN if unknown) and when it was recorded.
 type workerHost struct {
-	pid int
-	at  int64
+	pid   int
+	start float64
+	at    int64
+}
+
+// ps etime has one-second granularity and is read slightly after a snapshot's
+// time, so two estimates of one process's start can differ by about a second.
+const startSlackSec = 2
+
+// processStart estimates when a process started, in Unix seconds, from its
+// elapsed time at now. It is NaN when ps gave no usable elapsed time.
+func processStart(a Agent, now int64) float64 {
+	return float64(now)/1000 - etimeSec(a.Etime)
+}
+
+// runs reports whether a is the very process a record was made for: same PID
+// and start time, so a reused PID never inherits the record.
+func (h workerHost) runs(a Agent, now int64) bool {
+	if a.Pid != h.pid {
+		return false
+	}
+	if a.Kind != "claude" {
+		return false
+	}
+	drift := math.Abs(processStart(a, now) - h.start)
+	return drift <= startSlackSec
 }
 
 // full session rescan interval; a new session file also triggers one via the dir mtime
@@ -178,6 +204,8 @@ func readSessionTitle(logPath, sessionID string) (string, bool) {
 // meta.finished is rarely set, so liveness is the .jsonl mtime: alive < 30 min, working < 60 s.
 // hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
 func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[string]workerHost) []Subagent {
+	// Every record left names a Claude that is still running.
+	pruneWorkerHosts(hosts, agents, now)
 	type group struct {
 		cwd  string
 		pids []int
@@ -302,17 +330,17 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 			delete(sessions, k)
 		}
 	}
-	pruneWorkerHosts(hosts, agents)
 	return out
 }
 
-// pruneWorkerHosts drops records whose Claude process is gone. A record for an
-// idle, unlisted worker stays, so the worker keeps its parent if it wakes up.
-func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent) {
+// pruneWorkerHosts drops records whose Claude process is gone, including a PID
+// now reused by another process. A record for an idle, unlisted worker stays,
+// so the worker keeps its parent if it wakes up.
+func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, now int64) {
 	for id, h := range hosts {
 		alive := false
 		for _, a := range agents {
-			if a.Pid == h.pid && a.Kind == "claude" {
+			if h.runs(a, now) {
 				alive = true
 			}
 		}

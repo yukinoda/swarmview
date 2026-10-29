@@ -83,7 +83,7 @@ func TestClaudeHookBridge(t *testing.T) {
 		s.mu.Lock()
 		// Dated an hour ahead so a slow run never refreshes it through the fake ps.
 		at := time.Now().Add(time.Hour).UnixMilli()
-		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind}}}
+		s.snap = &snap{at: at, agents: []Agent{{Pid: host, Kind: kind, Etime: "10:00"}}}
 		s.mu.Unlock()
 	}
 	b := newPulseBridge()
@@ -128,6 +128,12 @@ func TestClaudeHookBridge(t *testing.T) {
 	}
 	if h.pid != host {
 		t.Fatalf("recorded host %d, want %d", h.pid, host)
+	}
+	s.mu.Lock()
+	wantStart := processStart(s.snap.agents[0], s.snap.at)
+	s.mu.Unlock()
+	if h.start != wantStart {
+		t.Fatalf("recorded start %v, want the host's %v", h.start, wantStart)
 	}
 	setKind("codex")
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a6666666"}`)

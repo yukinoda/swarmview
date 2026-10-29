@@ -262,6 +262,18 @@ func hasParent(parents map[string]*int, id string, pid int) bool {
 	return *p == pid
 }
 
+// claudeUp is a detected Claude that has been running for etime.
+func claudeUp(pid int, cwd, etime string) Agent {
+	a := claude(pid, cwd)
+	a.Etime = etime
+	return a
+}
+
+// hookRecord is what a SubagentStart hook from a records at now.
+func hookRecord(a Agent, now int64) workerHost {
+	return workerHost{pid: a.Pid, start: processStart(a, now), at: now}
+}
+
 func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "projects")
 	now := nowMs()
@@ -279,17 +291,21 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 		101: s101,
 		102: s101,
 	})
+	c100 := claudeUp(100, "/w/a", "10:00")
+	c101 := claudeUp(101, "/w/a", "10:00")
+	c102 := claudeUp(102, "/w/a", "10:00")
+	exited := claudeUp(999, "/w/a", "10:00")
 	hosts := map[string]workerHost{
-		"a1": {101, now}, // must not override the single claimant
-		"a2": {102, now}, // a claimant: proven parent
-		"a3": {100, now}, // nobody claims the session
-		"a4": {100, now}, // a live Claude, but not a claimant of s101
-		"a9": {999, now}, // its Claude has exited
+		"a1": hookRecord(c101, now),   // must not override the single claimant
+		"a2": hookRecord(c102, now),   // a claimant: proven parent
+		"a3": hookRecord(c100, now),   // nobody claims the session
+		"a4": hookRecord(c100, now),   // a live Claude, but not a claimant of s101
+		"a9": hookRecord(exited, now), // its Claude has exited
 	}
 	agents := []Agent{
-		claude(100, "/w/a"),
-		claude(101, "/w/a"),
-		claude(102, "/w/a"),
+		c100,
+		c101,
+		c102,
 	}
 	list := listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
 	parents := parentPids(list)
@@ -310,10 +326,10 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 
 	// The sole Claude in a directory stays the parent whatever a record says.
 	mk(t, root, "/w/b", "s", "a6", meta, 3, now)
-	hosts["a6"] = workerHost{101, now}
+	hosts["a6"] = hookRecord(c101, now)
 	agents = []Agent{
-		claude(100, "/w/b"),
-		{Pid: 101, Kind: "claude"},
+		claudeUp(100, "/w/b", "10:00"),
+		claudeUp(101, "", "10:00"),
 	}
 	list = listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
 	if len(list) != 1 {
@@ -321,6 +337,49 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 	}
 	if !hasParent(parentPids(list), "a6", 100) {
 		t.Errorf("sole Claude should own its worker: %+v", list[0])
+	}
+}
+
+func TestReusedPidDoesNotInheritRecord(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "projects")
+	now := nowMs()
+	s101 := "10100000-0000-0000-0000-000000000000"
+	meta := map[string]any{"description": "R", "model": "m"}
+	mk(t, root, "/w/a", s101, "a2", meta, 3, now)
+	claimSessions(t, root, "/w/a", map[int]string{
+		101: s101,
+		102: s101,
+	})
+	// The record was made for a 102 that started ten minutes ago; the 102
+	// running now started five seconds ago, so it is another process.
+	original := claudeUp(102, "/w/a", "10:00")
+	hosts := map[string]workerHost{"a2": hookRecord(original, now)}
+	agents := []Agent{
+		claudeUp(101, "/w/a", "10:00"),
+		claudeUp(102, "/w/a", "00:05"),
+	}
+	list := listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	if parentPids(list)["a2"] != nil {
+		t.Errorf("a reused PID must not inherit the record: %+v", list)
+	}
+	if _, ok := hosts["a2"]; ok {
+		t.Error("a record for a reused PID should be pruned")
+	}
+
+	// Whole-second elapsed time read later still matches the same process.
+	later := now + 1500
+	agents[1] = claudeUp(102, "/w/a", "10:01")
+	hosts["a2"] = hookRecord(original, now)
+	list = listClaudeSubagents(agents, root, later, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	if !hasParent(parentPids(list), "a2", 102) {
+		t.Errorf("the same process should keep its worker: %+v", list)
+	}
+
+	// Without a usable elapsed time the process can't be proven the same.
+	agents[1] = claudeUp(102, "/w/a", "")
+	list = listClaudeSubagents(agents, root, later, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	if parentPids(list)["a2"] != nil {
+		t.Errorf("an unknown start time must not prove the parent: %+v", list)
 	}
 }
 
@@ -333,11 +392,12 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 		101: s101,
 		102: s101,
 	})
+	c102 := claudeUp(102, "/w/a", "10:00")
 	agents := []Agent{
-		claude(101, "/w/a"),
-		claude(102, "/w/a"),
+		claudeUp(101, "/w/a", "10:00"),
+		c102,
 	}
-	hosts := map[string]workerHost{"a2": {102, now}}
+	hosts := map[string]workerHost{"a2": hookRecord(c102, now)}
 	metaCache := map[string]metaEntry{}
 
 	// Idle past the 30-minute window: hidden, but its record must survive.
@@ -358,48 +418,14 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 	}
 }
 
-func TestRecordedHostRelistsCachedSnapshot(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "projects")
-	now := nowMs()
-	s101 := "10100000-0000-0000-0000-000000000000"
-	meta := map[string]any{"description": "R", "model": "m"}
-	mk(t, root, "/w/a", s101, "a2", meta, 3, now)
-	claimSessions(t, root, "/w/a", map[int]string{
-		101: s101,
-		102: s101,
-	})
-	agents := []Agent{
-		claude(101, "/w/a"),
-		claude(102, "/w/a"),
-	}
-	s := &server{
-		root:      root,
-		metaCache: map[string]metaEntry{},
-		sessions:  map[string]sessionScan{},
-		hosts:     map[string]workerHost{},
-	}
-	list := listClaudeSubagents(agents, root, now, s.metaCache, s.sessions, s.hosts)
-	s.snap = &snap{agents: agents, subagents: list, at: now}
-	if parentPids(list)["a2"] != nil {
-		t.Fatalf("without a record the worker is unattributed: %+v", list)
-	}
-
-	s.recordWorkerHost("a2", 102, now)
-	if s.snap.at != now {
-		t.Error("recording must not refresh the cached processes")
-	}
-	if !hasParent(parentPids(s.snap.subagents), "a2", 102) {
-		t.Errorf("the cached snapshot should show the recorded parent: %+v", s.snap.subagents)
-	}
-}
-
 func TestWorkerHostsPrunedAndBounded(t *testing.T) {
 	now := nowMs()
+	alive := claudeUp(100, "/w/a", "10:00")
 	hosts := map[string]workerHost{
-		"alive": {100, now},
-		"dead":  {999, now},
+		"alive": hookRecord(alive, now),
+		"dead":  hookRecord(claudeUp(999, "/w/a", "10:00"), now),
 	}
-	pruneWorkerHosts(hosts, []Agent{claude(100, "/w/a")})
+	pruneWorkerHosts(hosts, []Agent{alive}, now)
 	if len(hosts) != 1 {
 		t.Errorf("want only the live Claude's record kept, got %v", hosts)
 	}
@@ -409,9 +435,9 @@ func TestWorkerHostsPrunedAndBounded(t *testing.T) {
 
 	s := &server{hosts: map[string]workerHost{}}
 	for i := 0; i <= maxWorkerHosts; i++ {
-		s.recordWorkerHost(fmt.Sprintf("a%07x", i), 100, now+int64(i))
+		s.recordWorkerHost(fmt.Sprintf("a%07x", i), workerHost{pid: 100, at: now + int64(i)})
 	}
-	s.recordWorkerHost("a0000001", 200, now+1000)
+	s.recordWorkerHost("a0000001", workerHost{pid: 200, at: now + 1000})
 	if len(s.hosts) != maxWorkerHosts {
 		t.Fatalf("kept %d records, want %d", len(s.hosts), maxWorkerHosts)
 	}
