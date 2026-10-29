@@ -94,8 +94,10 @@ the app yourself and launch
 `"/Applications/Swarmview.app/Contents/MacOS/Swarmview" --no-communication` (or
 the executable under `dist` for a local build). The Swift app forwards this
 to its own bundled backend on **4778**; no CLI server on 4777 is required.
-If another Swarmview (for example a CLI started with `-communication`) already
-owns the socket, the app still starts, with communication unavailable. A
+The app and `swarmview -communication` compete for one owner-only socket:
+whichever starts first owns it. If the CLI owns it, the app still runs, with
+communication unavailable; if the app owns it, a later `-communication` CLI
+exits with "already owned". Quit one before starting the other. A
 second launch activates the existing singleton without changing its mode;
 quit/relaunch to change it.
 The [OpenCode TUI bridge setup](../../integrations/opencode/README.md) is still
@@ -124,7 +126,7 @@ or mismatched builds and replaced downloads; they do not recycle user files.
 Ghostty consent/focus still needs an interactive packaged-app
 check; the automated smoke test never selects a real agent.
 The default variant verifies the actual owned backend has communication on and
-refuses an existing app/socket; both variants check that inverse-mode second launches
+refuses an existing app/socket (so it never displaces another viewer's listener); both variants check that inverse-mode second launches
 do not reconfigure the singleton. It does not install/enable a TUI plugin.
 
 The optional measurement includes the app, backend, and newly created WebKit

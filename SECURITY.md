@@ -47,6 +47,14 @@ does not expose a native JavaScript bridge. Closing or force-quitting the app
 closes a lifetime pipe so the owned server exits. Its fixed Finder tool search
 path and separate WebKit preferences are documented in `desktop/macos/README.md`.
 
+The macOS app opens the owner-only live communication socket
+(`~/Library/Caches/swarmview/live.sock`, directory 0700, socket 0600) and a
+private copy of its binary for the Claude plugin by default; launch with
+`--no-communication` to avoid both. The CLI does so only with `-communication`.
+The socket carries no conversation content. Nothing is installed automatically:
+the OpenCode plugin and Claude Code hooks stay user-installed, and without
+them nothing is sent. Only same-user processes can connect.
+
 Optional installer cleanup is offered only from Applications after matching the
 mounted installer's app version and both executable files. It requires an
 explicit choice, rechecks the download's file identity, ejects first, and uses

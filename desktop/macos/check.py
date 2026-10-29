@@ -52,10 +52,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     parser.add_argument("--seconds", type=int, default=0)
-    parser.add_argument("--no-communication", action="store_true", help="check the opt-out launch; communication is on by default and the TUI plugin is never installed")
+    parser.add_argument("--no-communication", dest="communication", action="store_false", help="check the opt-out launch; communication is on by default and the TUI plugin is never installed")
     parser.add_argument("--compare-cli", action="store_true", help="compare tmux targets with a CLI on port 4777 using the same default server")
     args = parser.parse_args()
-    args.communication = not args.no_communication
     executable = args.app.resolve() / "Contents/MacOS/Swarmview"
     assert executable.is_file(), "Build Swarmview.app first"
     resources = executable.parent.parent / "Resources"

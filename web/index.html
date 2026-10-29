@@ -185,9 +185,9 @@
         </dd>
         <dt>Hierarchy and communication</dt>
         <dd>
-          Lines show detected parentage, not messages. Communication is unavailable until a bridge is installed; the native
-          app listens for one by default, the CLI only with
-          <code>-communication</code>. The optional OpenCode bridge shows static attempts and
+          Lines show detected parentage, not messages. Without an installed bridge there is nothing to observe, and if another
+          Swarmview owns the live socket this one reports none. The native app
+          listens by default, the CLI only with <code>-communication</code>. The optional OpenCode bridge shows static attempts and
           confirmed background sends or foreground replies observed live; it
           collects no conversation contents or message history. Blue Sent from
           parent is not completion; teal Reply received by parent is not

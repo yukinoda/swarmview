@@ -2,12 +2,16 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"syscall"
 	"time"
 )
+
+// errPulseOwned marks the expected conflict: another Swarmview already owns the bridge.
+var errPulseOwned = errors.New("communication bridge is already owned by another instance")
 
 func ownedPulseFile(fi os.FileInfo, kind os.FileMode) bool {
 	stat, ok := fi.Sys().(*syscall.Stat_t)
@@ -48,7 +52,7 @@ func lockPulseDirectory(dir string) (*os.File, error) {
 		return nil, errors.New("communication lock changed or is not private")
 	}
 	if err = syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil, errors.New("communication bridge is already owned by another instance")
+		return nil, errPulseOwned
 	}
 	current, err = os.Lstat(path)
 	if err != nil {
@@ -85,7 +89,7 @@ func listenPulseSocket(path string) (*net.UnixListener, os.FileInfo, error) {
 		c, probeErr := net.DialTimeout("unix", path, 200*time.Millisecond)
 		if probeErr == nil {
 			c.Close()
-			return nil, nil, errors.New("communication socket has a live listener")
+			return nil, nil, fmt.Errorf("communication socket has a live listener: %w", errPulseOwned)
 		}
 		if !errors.Is(probeErr, syscall.ECONNREFUSED) {
 			return nil, nil, probeErr

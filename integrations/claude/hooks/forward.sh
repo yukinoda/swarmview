@@ -55,7 +55,7 @@ deliver() {
   fi
 }
 
-# No live socket means no opted-in Swarmview: skip starting a binary at all.
+# No live socket means no Swarmview with the bridge on: skip starting a binary at all.
 if [ -S "$dir/live.sock" ]; then
   running=""
   # Run the private copy only while the directory is yours alone (the 0700
