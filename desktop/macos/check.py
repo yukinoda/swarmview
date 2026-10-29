@@ -72,8 +72,7 @@ def main():
     launch = [str(executable)] + ([] if args.communication else ["--no-communication"])
     live_socket = Path.home() / "Library/Caches/swarmview/live.sock"
     live_hook = live_socket.with_name("live-hook")  # the Claude plugin's private copy
-    if args.communication:
-        assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"
+    assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"
     subprocess.run([str(executable), "--installer-self-test"], check=True, timeout=10,
                    stdout=subprocess.DEVNULL)
     probe = socket.socket()
@@ -99,8 +98,7 @@ def main():
             connection.close()
             raise AssertionError("App connected to unrelated listener")
 
-    if args.communication:
-        assert not live_socket.exists(), "Port-conflict startup leaked a bridge socket"
+    assert not live_socket.exists(), "Port-conflict startup leaked a bridge socket"
     smoke = subprocess.run(launch + ["--smoke-test"], capture_output=True, text=True, timeout=30)
     assert smoke.returncode == 0 and "SWARMVIEW_SMOKE" in smoke.stdout, smoke.stdout + smoke.stderr
     wait_for(lambda: not serving(), "normal quit closes backend")
@@ -121,7 +119,11 @@ def main():
                 return bool(json.load(response).get("communication"))
         assert communication_enabled() == args.communication, "Native flag did not reach bundled backend"
         if args.communication:
+            assert live_socket.exists(), "Communication must open the live socket"
             assert live_hook.exists(), "Communication must publish the hook copy"
+        else:
+            assert not live_socket.exists(), "--no-communication must not open the live socket"
+            assert not live_hook.exists(), "--no-communication must not publish the hook copy"
         if args.compare_cli:
             def targets(port):
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/agents", timeout=5) as response:

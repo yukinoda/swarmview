@@ -62,6 +62,9 @@ func startCommunication(s *server, want, required bool) (func(), error) {
 		return bridge.close, nil
 	}
 	if required {
+		if errors.Is(err, errPulseOwned) {
+			err = fmt.Errorf("%w (the desktop app enables it by default; quit it or launch it with --no-communication)", err)
+		}
 		return nil, err
 	}
 	log.Printf("live communication unavailable: %v", err)

@@ -11,7 +11,7 @@ import (
 )
 
 // errPulseOwned marks the expected conflict: another Swarmview already owns the bridge.
-var errPulseOwned = errors.New("another Swarmview already owns the live communication socket (the desktop app enables it by default; quit it or launch it with --no-communication)")
+var errPulseOwned = errors.New("another Swarmview already owns the live communication socket")
 
 func ownedPulseFile(fi os.FileInfo, kind os.FileMode) bool {
 	stat, ok := fi.Sys().(*syscall.Stat_t)
