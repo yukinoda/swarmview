@@ -32,7 +32,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `server.go`: HTTP routes, snapshot caching, and embedded web files.
 - `process.go`: process discovery, agent detection, and activity sampling.
 - `claude.go`: Claude session titles and worker metadata.
-- `pulse*.go`: opt-in local metadata IPC, bounded live relationship/feedback delivery,
+- `pulse*.go`: local metadata IPC (CLI opt-in, default on in the macOS app), bounded live relationship/feedback delivery,
   peer authentication, and socket lifecycle; no conversation/event history.
   `pulse_claude.go` is both the `-claude-hook` client and its one-record
   server path.

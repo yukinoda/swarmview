@@ -24,17 +24,19 @@ mapped by guessing ancestry; they retain normal monitoring only.
 
 1. For the **native macOS app**, download/update the matching app (or build
    locally with `bash desktop/macos/build.sh`), quit an existing Swarmview
-   yourself, then launch:
+   yourself. Communication is on by default, so a normal launch is enough. To
+   turn it off, launch:
 
    ```sh
-   "/Applications/Swarmview.app/Contents/MacOS/Swarmview" --communication
+   "/Applications/Swarmview.app/Contents/MacOS/Swarmview" --no-communication
    ```
 
    For a local build, use `dist/Swarmview.app/Contents/MacOS/Swarmview` instead.
-   This forwards the opt-in only to the app's owned backend on **4778**, with
-   the same lifetime pipe and navigation restrictions. Finder/Dock launches
-   remain off by default. A second launch only activates the existing
-   singleton; it cannot enable/disable its mode, so quit/relaunch to change it.
+   The setting applies only to the app's owned backend on **4778**, with
+   the same lifetime pipe and navigation restrictions. A second launch only
+   activates the existing singleton; it cannot change its mode, so
+   quit/relaunch to change it. If another Swarmview already owns the socket,
+   the app still starts, with communication unavailable.
    No standalone CLI on 4777 is needed for native communication.
 
    For the separate CLI/browser workflow, extract the matching CLI archive
@@ -79,7 +81,7 @@ mapped by guessing ancestry; they retain normal monitoring only.
    or reconstruct a foreground result whose correlation was missed.
 
 Disable by removing the plugin entry and quitting/relaunching Swarmview
-without the communication flag (Finder/Dock also defaults off). Plugin
+(the CLI without `-communication`, the native app with `--no-communication`). Plugin
 cleanup closes the socket/listeners/timer. Neither path installs the plugin.
 
 ## What the UI means
@@ -208,7 +210,7 @@ owned backend, including unchanged singleton mode and socket/pipe cleanup:
 
 ```sh
 python3 desktop/macos/check.py dist/Swarmview.app
-python3 desktop/macos/check.py dist/Swarmview.app --communication
+python3 desktop/macos/check.py dist/Swarmview.app --no-communication
 ```
 
 These checks refuse an existing app/listener rather than stopping user apps.

@@ -51,7 +51,7 @@ Notifications fire once per quiet episode for agents seen working in that tab.
 Restarting Swarmview resets activity history.
 
 Native questions, permission requests and task-completion signals are unavailable.
-Communication is off by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
+Communication needs an installed bridge. The native app listens for one by default (CLI: `-communication`). The optional [OpenCode V2 bridge](integrations/opencode/README.md)
 can show confirmed background admission (**Sent from parent**, blue), a correlated
 foreground return (**Reply received by parent**, teal), or an explicit
 **Attempted from parent · unconfirmed** observation (amber). Text carries the
