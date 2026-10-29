@@ -2743,9 +2743,9 @@ const {
           Math.abs(dotCenterY - stubY) <= 0.25,
           'the node dot is centered on its branch: ' + detail,
         );
-        // Text sits half a pixel below its line box center.
+        // The title's line box depends on the platform font, so allow a pixel.
         assert(
-          Math.abs(dotCenterY - (titleCenterY + 0.5)) <= 0.25,
+          Math.abs(dotCenterY - titleCenterY) <= 1,
           'the node dot is centered on the title text: ' + detail,
         );
         assert(
