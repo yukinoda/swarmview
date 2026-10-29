@@ -32,7 +32,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `server.go`: HTTP routes, snapshot caching, and embedded web files.
 - `process.go`: process discovery, agent detection, and activity sampling.
 - `claude.go`: Claude session titles and worker metadata.
-- `pulse*.go`: opt-in local metadata IPC, bounded live relationship/feedback delivery,
+- `pulse*.go`: local metadata IPC (CLI opt-in, default on in the macOS app), bounded live relationship/feedback delivery,
   peer authentication, and socket lifecycle; no conversation/event history.
   `pulse_claude.go` is both the `-claude-hook` client and its one-record
   server path.
@@ -48,7 +48,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
     and current freshness through the coordinator's snapshot-state callback.
   - `search.js`: local search index, dialog, and keyboard navigation.
   - `notifications.js`: quiet observations, notification episodes, and tab badges.
-  - `communication.js`: opt-in live stream, up to four reused plain-text worker cues,
+  - `communication.js`: live stream (when the server enables it), up to four reused plain-text worker cues,
     polite announcements, and visibility cleanup; reads dashboard rows without owning its tree or snapshot.
   - `icons.js`, `dom.js`: provider glyphs and DOM helpers.
   - `storage.js`: defensive local storage and the local appearance/Preferences dialog;
@@ -58,7 +58,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `desktop/macos/`: native WebView host, installer, and packaging checks.
 - `integrations/opencode/`: manually configured TUI-only metadata observer; uses
   the existing provider connection and forwards identifiers to local IPC.
-- `integrations/claude/`: opt-in Claude Code plugin (async hooks plus a
+- `integrations/claude/`: optional Claude Code plugin (async hooks plus a
   launcher) that runs the binary's `-claude-hook` mode, preferring the
   `live-hook` copy the running bridge keeps in its private directory; the
   repository-root `.claude-plugin/marketplace.json` lists it for

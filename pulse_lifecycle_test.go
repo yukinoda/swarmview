@@ -384,7 +384,7 @@ func TestPulseCLILifecycle(t *testing.T) {
 		ln.Close()
 		owner.stop(t, syscall.SIGTERM)
 	})
-	t.Run("default-off", func(t *testing.T) {
+	t.Run("cli-default-off", func(t *testing.T) {
 		home, path := pulseHome(t)
 		p := startPulseChild(t, home, pulseChildPort(t), false)
 		p.awaitReady(t)

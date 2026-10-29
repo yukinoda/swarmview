@@ -87,26 +87,33 @@ The one-shot check is off the UI thread, with no polling or resident helper.
 
 ## Checks and memory
 
-Live communication is an explicit launch opt-in, not a preference or automatic
-plugin install. After quitting an existing app yourself, launch
-`"/Applications/Swarmview.app/Contents/MacOS/Swarmview" --communication` (or
+Live communication is on by default in the native app, for Finder/Dock and
+direct launches alike. It only opens an owner-only local socket that carries no
+conversation content; nothing is installed automatically. To turn it off, quit
+the app yourself and launch
+`"/Applications/Swarmview.app/Contents/MacOS/Swarmview" --no-communication` (or
 the executable under `dist` for a local build). The Swift app forwards this
 to its own bundled backend on **4778**; no CLI server on 4777 is required.
-Finder/Dock launches remain off by default. A second launch activates the
-existing singleton without changing its mode; quit/relaunch to change it.
+The app and `swarmview -communication` compete for one owner-only socket:
+whichever starts first owns it. If the CLI owns it, the app still runs, with
+communication unavailable (any other failure to open the bridge is logged
+the same way and never stops the app launching); if the app owns it, a later `-communication` CLI
+exits with "already owned". Quit one before starting the other. A
+second launch activates the existing singleton without changing its mode;
+quit/relaunch to change it.
 The [OpenCode TUI bridge setup](../../integrations/opencode/README.md) is still
 manual. The app ships the four optional files in
 `Contents/Resources/integrations/opencode`, not `Contents/MacOS`. Review them
 first, then manually point OpenCode's existing `cli.json` plugin entry at the
 stable installed directory (for example,
 `/Applications/Swarmview.app/Contents/Resources/integrations/opencode`). No
-package dependencies are bundled or automatically installed; default-off and
-settings behavior do not change. Closing/force-quitting the GUI retains the
+package dependencies are bundled or automatically installed, and the plugin
+stays inactive until you add it. Closing/force-quitting the GUI retains the
 same lifetime-pipe cleanup.
 
 ```sh
 python3 desktop/macos/check.py dist/Swarmview.app
-python3 desktop/macos/check.py dist/Swarmview.app --communication
+python3 desktop/macos/check.py dist/Swarmview.app --no-communication
 python3 desktop/macos/check.py dist/Swarmview.app --seconds 300
 # With a CLI dashboard on port 4777 using the same default tmux server:
 python3 desktop/macos/check.py dist/Swarmview.app --compare-cli
@@ -119,8 +126,8 @@ port conflicts. Installer self-checks use temporary fixtures to reject unrelated
 or mismatched builds and replaced downloads; they do not recycle user files.
 Ghostty consent/focus still needs an interactive packaged-app
 check; the automated smoke test never selects a real agent.
-The communication variant verifies the actual owned backend's opt-in state,
-refuses an existing app/socket, and checks that inverse-mode second launches
+The default variant verifies the actual owned backend has communication on and
+refuses an existing app/socket (so it never displaces another viewer's listener); both variants check that inverse-mode second launches
 do not reconfigure the singleton. It does not install/enable a TUI plugin.
 
 The optional measurement includes the app, backend, and newly created WebKit

@@ -52,7 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("app", type=Path)
     parser.add_argument("--seconds", type=int, default=0)
-    parser.add_argument("--communication", action="store_true", help="opt in through the native launcher, without installing the TUI plugin")
+    parser.add_argument("--no-communication", dest="communication", action="store_false", help="check the opt-out launch; communication is on by default and the TUI plugin is never installed")
     parser.add_argument("--compare-cli", action="store_true", help="compare tmux targets with a CLI on port 4777 using the same default server")
     args = parser.parse_args()
     executable = args.app.resolve() / "Contents/MacOS/Swarmview"
@@ -69,11 +69,10 @@ def main():
     hooks_source = Path(__file__).resolve().parents[2] / hooks
     assert (resources / hooks).read_bytes() == hooks_source.read_bytes(), "App must include the Claude hook setup"
     assert not any(Path(name).name == "Swarmview" for _, _, name in processes().values()), "Quit existing Swarmview apps yourself before owned-app checks"
-    launch = [str(executable)] + (["--communication"] if args.communication else [])
+    launch = [str(executable)] + ([] if args.communication else ["--no-communication"])
     live_socket = Path.home() / "Library/Caches/swarmview/live.sock"
     live_hook = live_socket.with_name("live-hook")  # the Claude plugin's private copy
-    if args.communication:
-        assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"
+    assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"
     subprocess.run([str(executable), "--installer-self-test"], check=True, timeout=10,
                    stdout=subprocess.DEVNULL)
     probe = socket.socket()
@@ -99,8 +98,7 @@ def main():
             connection.close()
             raise AssertionError("App connected to unrelated listener")
 
-    if args.communication:
-        assert not live_socket.exists(), "Port-conflict startup leaked a bridge socket"
+    assert not live_socket.exists(), "Port-conflict startup leaked a bridge socket"
     smoke = subprocess.run(launch + ["--smoke-test"], capture_output=True, text=True, timeout=30)
     assert smoke.returncode == 0 and "SWARMVIEW_SMOKE" in smoke.stdout, smoke.stdout + smoke.stderr
     wait_for(lambda: not serving(), "normal quit closes backend")
@@ -121,7 +119,11 @@ def main():
                 return bool(json.load(response).get("communication"))
         assert communication_enabled() == args.communication, "Native flag did not reach bundled backend"
         if args.communication:
+            assert live_socket.exists(), "Communication must open the live socket"
             assert live_hook.exists(), "Communication must publish the hook copy"
+        else:
+            assert not live_socket.exists(), "--no-communication must not open the live socket"
+            assert not live_hook.exists(), "--no-communication must not publish the hook copy"
         if args.compare_cli:
             def targets(port):
                 with urllib.request.urlopen(f"http://127.0.0.1:{port}/agents", timeout=5) as response:
@@ -132,10 +134,10 @@ def main():
             assert common, "No shared agents to compare"
             assert all(cli[pid] == desktop[pid] for pid in common), "Native/CLI tmux targets differ"
         # An inverse-mode second launch must not silently reconfigure the singleton.
-        second = subprocess.run([str(executable)] + ([] if args.communication else ["--communication"]), capture_output=True, text=True, timeout=10)
+        second = subprocess.run([str(executable)] + (["--no-communication"] if args.communication else []), capture_output=True, text=True, timeout=10)
         assert second.returncode == 0, second.stderr
         assert app.poll() is None and backend_pid(app.pid) == child, "Second launch replaced backend"
-        assert communication_enabled() == args.communication, "Second launch changed existing opt-in mode"
+        assert communication_enabled() == args.communication, "Second launch changed existing communication mode"
         lib = ctypes.CDLL("/usr/lib/libproc.dylib")
         lib.proc_pid_rusage.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_void_p]
         lib.proc_pid_rusage.restype = ctypes.c_int

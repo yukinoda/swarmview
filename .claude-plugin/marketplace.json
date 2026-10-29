@@ -8,7 +8,7 @@
     {
       "name": "swarmview",
       "source": "./integrations/claude",
-      "description": "Live Claude Code subagent cues for an opted-in Swarmview dashboard"
+      "description": "Live Claude Code subagent cues for a Swarmview dashboard with live communication on"
     }
   ]
 }
