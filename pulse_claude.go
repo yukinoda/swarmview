@@ -210,9 +210,6 @@ const maxWorkerHosts = 256
 func (s *server) recordWorkerHost(agent string, host int, now int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.hosts == nil {
-		s.hosts = map[string]workerHost{}
-	}
 	if _, ok := s.hosts[agent]; ok {
 		return
 	}
@@ -226,6 +223,12 @@ func (s *server) recordWorkerHost(agent string, host int, now int64) {
 		delete(s.hosts, oldest)
 	}
 	s.hosts[agent] = workerHost{host, now}
+	// Re-list workers on the cached processes so the next poll shows the new parent.
+	if s.snap != nil {
+		next := *s.snap
+		next.subagents = listClaudeSubagents(next.agents, s.root, now, s.metaCache, s.sessions, s.hosts)
+		s.snap = &next
+	}
 }
 
 // acceptClaude reads one record from a hook connected while its process is still alive.

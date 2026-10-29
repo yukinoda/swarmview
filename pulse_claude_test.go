@@ -67,14 +67,18 @@ func TestClaudeHookBridge(t *testing.T) {
 		ps = table
 		mu.Unlock()
 	}
-	s := &server{run: func(cmd string, args ...string) (string, error) {
+	fakePs := func(cmd string, args ...string) (string, error) {
 		if cmd != "ps" {
 			return "", errors.New("unexpected command")
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		return ps, nil
-	}}
+	}
+	s := &server{
+		run:   fakePs,
+		hosts: map[string]workerHost{},
+	}
 	setKind := func(kind string) {
 		s.mu.Lock()
 		// Dated an hour ahead so a slow run never refreshes it through the fake ps.
@@ -118,14 +122,24 @@ func TestClaudeHookBridge(t *testing.T) {
 		t.Fatal("SendMessage must not record a host")
 	}
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a9999999"}`)
-	if h, ok := hostOf("a9999999"); !ok || h.pid != host {
-		t.Fatalf("SubagentStart with no viewer should record host %d, got %+v %v", host, h, ok)
+	h, ok := hostOf("a9999999")
+	if !ok {
+		t.Fatal("SubagentStart with no viewer should record a host")
+	}
+	if h.pid != host {
+		t.Fatalf("recorded host %d, want %d", h.pid, host)
 	}
 	setKind("codex")
 	hook(`{"hook_event_name":"SubagentStart","agent_id":"a6666666"}`)
 	setKind("claude")
 	if _, ok := hostOf("a6666666"); ok {
 		t.Fatal("a hook outside any Claude must not record a host")
+	}
+	setPs(sixHops)
+	hook(`{"hook_event_name":"SubagentStart","agent_id":"a5555555"}`)
+	setPs(fiveHops)
+	if _, ok := hostOf("a5555555"); ok {
+		t.Fatal("a hook too deep below a Claude must not record a host")
 	}
 
 	ch, frame := pulseViewer(t, b)

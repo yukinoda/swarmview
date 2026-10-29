@@ -157,11 +157,12 @@ Claude's own workers. It can't affect other sessions.
 A `SubagentStart` record can only choose a worker's parent among the Claude
 processes whose `~/.claude/sessions/<pid>.json` already claims the worker's
 session, and never replaces a parent Swarmview already knows. A program
-running under one Claude therefore can't move another session's workers. The
-first record for a worker wins. Swarmview keeps at most 256 of these records in
-memory (worker ID and Claude PID only), drops a record once its Claude exits or,
-after a minute, once its worker is no longer shown, and never writes them to
-disk.
+running under one of those claimants could record a worker of that same
+session before its real hook arrives, since the first record for a worker
+wins. It can't affect other sessions, or sessions no Claude claims. Swarmview
+keeps at most 256 of these records in memory (worker ID and Claude PID only),
+dropping the oldest when full and a record once its Claude exits, and never
+writes them to disk.
 
 Starting `-communication` also copies the running binary into the same
 directory as `live-hook` (mode `0700`, about the binary's size on disk), and

@@ -41,7 +41,17 @@ type server struct {
 
 func newServer(run Runner) *server {
 	home, _ := os.UserHomeDir()
-	return &server{port: 4777, run: run, cache: map[int]*cacheEntry{}, metaCache: map[string]metaEntry{}, sessions: map[string]sessionScan{}, hosts: map[string]workerHost{}, noCwd: map[int]int64{}, root: path.Join(home, ".claude/projects"), ghostty: ghosttyInstalled()}
+	return &server{
+		port:      4777,
+		run:       run,
+		cache:     map[int]*cacheEntry{},
+		metaCache: map[string]metaEntry{},
+		sessions:  map[string]sessionScan{},
+		hosts:     map[string]workerHost{},
+		noCwd:     map[int]int64{},
+		root:      path.Join(home, ".claude/projects"),
+		ghostty:   ghosttyInstalled(),
+	}
 }
 
 type snap struct {

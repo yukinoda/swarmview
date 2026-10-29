@@ -30,9 +30,6 @@ type workerHost struct {
 	at  int64
 }
 
-// A record is kept this long even before its worker's metadata appears.
-const workerHostGraceMs = 60e3
-
 // full session rescan interval; a new session file also triggers one via the dir mtime
 const sessionRescanMs = 60e3
 
@@ -305,13 +302,13 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 			delete(sessions, k)
 		}
 	}
-	pruneWorkerHosts(hosts, agents, out, now)
+	pruneWorkerHosts(hosts, agents)
 	return out
 }
 
-// pruneWorkerHosts drops records whose Claude process is gone, or whose worker
-// is no longer listed once the grace period for its metadata to appear is over.
-func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, listed []Subagent, now int64) {
+// pruneWorkerHosts drops records whose Claude process is gone. A record for an
+// idle, unlisted worker stays, so the worker keeps its parent if it wakes up.
+func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent) {
 	for id, h := range hosts {
 		alive := false
 		for _, a := range agents {
@@ -320,19 +317,6 @@ func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, listed []Suba
 			}
 		}
 		if !alive {
-			delete(hosts, id)
-			continue
-		}
-		if now-h.at < workerHostGraceMs {
-			continue
-		}
-		shown := false
-		for _, s := range listed {
-			if s.Id == id {
-				shown = true
-			}
-		}
-		if !shown {
 			delete(hosts, id)
 		}
 	}
