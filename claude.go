@@ -90,7 +90,11 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 		if !ok {
 			k = [2]int64{} // I/O error: retry next poll like an uncached read
 		}
-		*c = sessionTitle{metaKey: k, id: id}
+		// status rewrites keep the id; only a new session drops the old title and model
+		if id != c.id {
+			*c = sessionTitle{id: id}
+		}
+		c.metaKey = k
 	}
 	if c.id == "" {
 		return ""
@@ -157,14 +161,15 @@ func readSessionTitle(logPath, sessionID string) (string, string, bool) {
 	if start > 0 {
 		lines = lines[1:] // the first record may be partial
 	}
-	var title, model string
-	for _, line := range lines {
-		if bytes.Contains(line, []byte(`"type":"assistant"`)) {
-			if m := assistantModel(line, sessionID); m != "" {
-				model = m
-			}
-			continue
+	// newest first, so only the last assistant record is decoded
+	var model string
+	for i := len(lines) - 1; i >= 0 && model == ""; i-- {
+		if bytes.Contains(lines[i], []byte(`"type":"assistant"`)) {
+			model = assistantModel(lines[i], sessionID)
 		}
+	}
+	var title string
+	for _, line := range lines {
 		if !bytes.HasPrefix(line, []byte(`{"type":"ai-title",`)) {
 			continue
 		}

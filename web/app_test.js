@@ -1703,6 +1703,13 @@ const {
           working: true,
           model: 'sonnet',
         },
+        {
+          id: 'inherited-model',
+          parentPid: 44100,
+          cwd: '/model-cases',
+          working: true,
+          model: 'inherit',
+        },
       ],
       at: Date.now(),
     });
@@ -1715,8 +1722,9 @@ const {
     assert(
       modelShown('a:44100', 'Opus 5.5') &&
         modelShown('a:44101', 'gpt-sol6.1') &&
-        modelShown('sub:alias-model', 'Sonnet'),
-      'Details names Claude models and aliases, and shows other model ids as given',
+        modelShown('sub:alias-model', 'Sonnet') &&
+        modelShown('sub:inherited-model', 'Opus 5.5'),
+      'Details names Claude models and aliases, resolves inherited subagent models, and shows other model ids as given',
     );
 
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.

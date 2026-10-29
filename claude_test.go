@@ -106,6 +106,10 @@ func TestClaudeTitleCachedByFileKey(t *testing.T) {
 	if got := title(); got != "Title B" || c.model != "claude-opus-5-5" {
 		t.Errorf("after append = %q, model must be kept: %q", got, c.model)
 	}
+	write(metadata, meta(id)+" ", 8e3) // status rewrite, same session
+	if got := title(); got != "Title B" || c.model != "claude-opus-5-5" {
+		t.Errorf("after metadata rewrite = %q, model must be kept: %q", got, c.model)
+	}
 	write(log(id), record("Title C", id)+record("Title B", id), 0) // same size, mtime in this tick
 	if got := title(); got != "Title B" {
 		t.Errorf("after same-tick write = %q", got)
@@ -116,8 +120,8 @@ func TestClaudeTitleCachedByFileKey(t *testing.T) {
 	}
 	write(log(id2), record("Title D", id2), 10e3)
 	write(metadata, meta(id2), 5e3) // same size, new session
-	if got := title(); got != "Title D" {
-		t.Errorf("after session switch = %q", got)
+	if got := title(); got != "Title D" || c.model != "" {
+		t.Errorf("after session switch = %q, model %q must not carry over", got, c.model)
 	}
 	write(log(id2), record("Title D", id2), 20e3) // new stable mtime forces a read
 	must(t, os.Chmod(log(id2), 0))                // unreadable (I/O error) must not be cached

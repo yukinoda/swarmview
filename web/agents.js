@@ -42,6 +42,11 @@ function modelLabel(id) {
   const version = match[2].slice(1).replaceAll('-', '.');
   return version ? family + ' ' + version : family;
 }
+// A subagent set to "inherit" runs on its parent session's model.
+function subagentModel(model, host) {
+  const resolved = model === 'inherit' ? host?.model : model;
+  return resolved ? modelLabel(resolved) : null;
+}
 const terminalTarget = (a) =>
   a.tmuxTarget
     ? a.tmuxTarget + (a.tmuxAttached ? '' : a.canFocus ? ' · open Ghostty' : ' · attach client')
@@ -128,7 +133,7 @@ function subItem(s, i, host) {
     stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
     up: 'Process age: unavailable',
     cpu: 'CPU: unavailable',
-    model: s.model ? modelLabel(s.model) : null,
+    model: subagentModel(s.model, host),
     ord: 1e9 + i,
     sub: true
   };
