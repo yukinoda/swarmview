@@ -211,6 +211,9 @@ const maxWorkerHosts = 256
 func (s *server) recordWorkerHost(agent string, host workerHost) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.hosts == nil {
+		s.hosts = map[string]workerHost{}
+	}
 	if _, ok := s.hosts[agent]; ok {
 		return
 	}
@@ -228,13 +231,38 @@ func (s *server) recordWorkerHost(agent string, host workerHost) {
 	s.hosts[agent] = host
 }
 
+// record stores a SubagentStart record unless the bridge is closing. It never
+// holds b.mu and s.mu together: close marks the bridge closed before clearing,
+// so a record that lands after that clear sees closed and removes itself.
+func (b *pulseBridge) record(s *server, agent string, host workerHost) {
+	s.recordWorkerHost(agent, host)
+	b.mu.Lock()
+	closed := b.closed
+	b.mu.Unlock()
+	if closed {
+		s.forgetWorkerHost(agent)
+	}
+}
+
+// forgetWorkerHost drops one SubagentStart record.
+func (s *server) forgetWorkerHost(agent string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.hosts, agent)
+}
+
+// clearWorkerHosts forgets every SubagentStart record.
+func (s *server) clearWorkerHosts() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	clear(s.hosts)
+}
+
 // hostRecord is the record for a SubagentStart reported by Claude process pid in sn.
 func hostRecord(sn snap, pid int, now int64) workerHost {
 	h := workerHost{pid: pid, start: math.NaN(), at: now}
-	for _, a := range sn.agents {
-		if a.Pid == pid {
-			h.start = processStart(a, sn.at)
-		}
+	if a, ok := findClaude(sn.agents, pid); ok {
+		h.start = processStart(a, sn.at)
 	}
 	return h
 }
@@ -264,7 +292,7 @@ func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 		return
 	}
 	if m.Type == "sent" {
-		s.recordWorkerHost(m.Agent, hostRecord(sn, host, time.Now().UnixMilli()))
+		b.record(s, m.Agent, hostRecord(sn, host, time.Now().UnixMilli()))
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()

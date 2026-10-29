@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -149,7 +150,12 @@ func mk(t *testing.T, root, cwd, session, id string, meta any, ageSec int64, now
 func claude(pid int, cwd string) Agent { return Agent{Pid: pid, Kind: "claude", Cwd: &cwd} }
 
 func subs(root string, now int64, as ...Agent) []Subagent {
-	return listClaudeSubagents(as, root, now, map[string]metaEntry{}, map[string]sessionScan{}, map[string]workerHost{})
+	return subsWithHosts(root, now, map[string]workerHost{}, as...)
+}
+
+// subsWithHosts lists workers with fresh caches and the given SubagentStart records.
+func subsWithHosts(root string, now int64, hosts map[string]workerHost, as ...Agent) []Subagent {
+	return listClaudeSubagents(as, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
 }
 
 func TestClaudeSlug(t *testing.T) {
@@ -307,7 +313,7 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 		c101,
 		c102,
 	}
-	list := listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	list := subsWithHosts(root, now, hosts, agents...)
 	parents := parentPids(list)
 	if !hasParent(parents, "a1", 100) {
 		t.Errorf("a single claimant keeps its worker: a1=%v", parents["a1"])
@@ -331,7 +337,7 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 		claudeUp(100, "/w/b", "10:00"),
 		claudeUp(101, "", "10:00"),
 	}
-	list = listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	list = subsWithHosts(root, now, hosts, agents...)
 	if len(list) != 1 {
 		t.Fatalf("want one worker in /w/b, got %+v", list)
 	}
@@ -358,7 +364,7 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 		claudeUp(101, "/w/a", "10:00"),
 		claudeUp(102, "/w/a", "00:05"),
 	}
-	list := listClaudeSubagents(agents, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	list := subsWithHosts(root, now, hosts, agents...)
 	if parentPids(list)["a2"] != nil {
 		t.Errorf("a reused PID must not inherit the record: %+v", list)
 	}
@@ -370,16 +376,37 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 	later := now + 1500
 	agents[1] = claudeUp(102, "/w/a", "10:01")
 	hosts["a2"] = hookRecord(original, now)
-	list = listClaudeSubagents(agents, root, later, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	list = subsWithHosts(root, later, hosts, agents...)
 	if !hasParent(parentPids(list), "a2", 102) {
 		t.Errorf("the same process should keep its worker: %+v", list)
 	}
 
-	// Without a usable elapsed time the process can't be proven the same.
+	// Without a usable elapsed time the process can't be proven the same, but
+	// the record is kept: the hook never resends it.
 	agents[1] = claudeUp(102, "/w/a", "")
-	list = listClaudeSubagents(agents, root, later, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
+	list = subsWithHosts(root, later, hosts, agents...)
 	if parentPids(list)["a2"] != nil {
 		t.Errorf("an unknown start time must not prove the parent: %+v", list)
+	}
+	if _, ok := hosts["a2"]; !ok {
+		t.Fatal("an unknown start time must not drop the record")
+	}
+
+	// Once the elapsed time is readable again, the same process is proven.
+	agents[1] = claudeUp(102, "/w/a", "10:01")
+	list = subsWithHosts(root, later, hosts, agents...)
+	if !hasParent(parentPids(list), "a2", 102) {
+		t.Errorf("a readable start time should prove the parent again: %+v", list)
+	}
+
+	// A record made while the start time was unknown proves nothing, but stays.
+	hosts["a2"] = workerHost{pid: 102, start: math.NaN(), at: now}
+	list = subsWithHosts(root, later, hosts, agents...)
+	if parentPids(list)["a2"] != nil {
+		t.Errorf("a record without a start time must not prove the parent: %+v", list)
+	}
+	if _, ok := hosts["a2"]; !ok {
+		t.Error("a record without a start time is kept while its PID runs")
 	}
 }
 
@@ -398,11 +425,10 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 		c102,
 	}
 	hosts := map[string]workerHost{"a2": hookRecord(c102, now)}
-	metaCache := map[string]metaEntry{}
 
 	// Idle past the 30-minute window: hidden, but its record must survive.
 	mk(t, root, "/w/a", s101, "a2", meta, 31*60, now)
-	list := listClaudeSubagents(agents, root, now, metaCache, map[string]sessionScan{}, hosts)
+	list := subsWithHosts(root, now, hosts, agents...)
 	if len(list) != 0 {
 		t.Fatalf("an idle worker should be hidden, got %+v", list)
 	}
@@ -412,7 +438,7 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 
 	// It wakes up and is nested under the same Claude again.
 	mk(t, root, "/w/a", s101, "a2", meta, 3, now)
-	list = listClaudeSubagents(agents, root, now, metaCache, map[string]sessionScan{}, hosts)
+	list = subsWithHosts(root, now, hosts, agents...)
 	if !hasParent(parentPids(list), "a2", 102) {
 		t.Errorf("a revived worker should keep its parent: %+v", list)
 	}
@@ -433,7 +459,8 @@ func TestWorkerHostsPrunedAndBounded(t *testing.T) {
 		t.Errorf("the live Claude's record was dropped: %v", hosts)
 	}
 
-	s := &server{hosts: map[string]workerHost{}}
+	// A bare server has no records map yet; recording must not panic.
+	s := &server{}
 	for i := 0; i <= maxWorkerHosts; i++ {
 		s.recordWorkerHost(fmt.Sprintf("a%07x", i), workerHost{pid: 100, at: now + int64(i)})
 	}

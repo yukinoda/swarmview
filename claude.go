@@ -43,17 +43,42 @@ func processStart(a Agent, now int64) float64 {
 	return float64(now)/1000 - etimeSec(a.Etime)
 }
 
-// runs reports whether a is the very process a record was made for: same PID
-// and start time, so a reused PID never inherits the record.
-func (h workerHost) runs(a Agent, now int64) bool {
-	if a.Pid != h.pid {
+// findClaude returns the detected Claude process with this PID.
+func findClaude(agents []Agent, pid int) (Agent, bool) {
+	isPid := func(a Agent) bool {
+		return a.Pid == pid && a.Kind == "claude"
+	}
+	i := slices.IndexFunc(agents, isPid)
+	if i < 0 {
+		return Agent{}, false
+	}
+	return agents[i], true
+}
+
+// compareStart checks a record against the running Claude with its PID: known
+// is whether both start times are known, and same whether they agree, so a
+// reused PID never inherits the record.
+func (h workerHost) compareStart(a Agent, now int64) (known, same bool) {
+	start := processStart(a, now)
+	if math.IsNaN(start) {
+		return false, false
+	}
+	if math.IsNaN(h.start) {
+		return false, false
+	}
+	drift := math.Abs(start - h.start)
+	return true, drift <= startSlackSec
+}
+
+// proven reports whether the very Claude process the record was made for is
+// running now. An unknown start time proves nothing.
+func (h workerHost) proven(agents []Agent, now int64) bool {
+	a, ok := findClaude(agents, h.pid)
+	if !ok {
 		return false
 	}
-	if a.Kind != "claude" {
-		return false
-	}
-	drift := math.Abs(processStart(a, now) - h.start)
-	return drift <= startSlackSec
+	known, same := h.compareStart(a, now)
+	return known && same
 }
 
 // full session rescan interval; a new session file also triggers one via the dir mtime
@@ -204,7 +229,7 @@ func readSessionTitle(logPath, sessionID string) (string, bool) {
 // meta.finished is rarely set, so liveness is the .jsonl mtime: alive < 30 min, working < 60 s.
 // hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
 func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[string]workerHost) []Subagent {
-	// Every record left names a Claude that is still running.
+	// Every record left names a Claude PID that is still running.
 	pruneWorkerHosts(hosts, agents, now)
 	type group struct {
 		cwd  string
@@ -309,11 +334,12 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				var pp *int
 				owners := claimants[session]
 				host, recorded := hosts[id]
+				claimed := recorded && slices.Contains(owners, host.pid)
 				if len(g.pids) == 1 {
 					pp = &g.pids[0]
 				} else if len(owners) == 1 {
 					pp = &owners[0]
-				} else if recorded && slices.Contains(owners, host.pid) {
+				} else if claimed && host.proven(agents, now) {
 					pp = &host.pid
 				}
 				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, c.model, now-jt < 60e3})
@@ -333,18 +359,20 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 	return out
 }
 
-// pruneWorkerHosts drops records whose Claude process is gone, including a PID
-// now reused by another process. A record for an idle, unlisted worker stays,
-// so the worker keeps its parent if it wakes up.
+// pruneWorkerHosts drops records whose Claude process is gone: no detected
+// Claude has the PID, or one does with a known, different start time (a reused
+// PID). An unknown start time keeps the record, since hooks never resend it; it
+// just proves nothing until the time is readable again. A record for an idle,
+// unlisted worker stays, so the worker keeps its parent if it wakes up.
 func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, now int64) {
 	for id, h := range hosts {
-		alive := false
-		for _, a := range agents {
-			if h.runs(a, now) {
-				alive = true
-			}
+		a, ok := findClaude(agents, h.pid)
+		if !ok {
+			delete(hosts, id)
+			continue
 		}
-		if !alive {
+		known, same := h.compareStart(a, now)
+		if known && !same {
 			delete(hosts, id)
 		}
 	}

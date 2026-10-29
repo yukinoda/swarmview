@@ -75,10 +75,7 @@ func TestClaudeHookBridge(t *testing.T) {
 		defer mu.Unlock()
 		return ps, nil
 	}
-	s := &server{
-		run:   fakePs,
-		hosts: map[string]workerHost{},
-	}
+	s := &server{run: fakePs}
 	setKind := func(kind string) {
 		s.mu.Lock()
 		// Dated an hour ahead so a slow run never refreshes it through the fake ps.
@@ -192,8 +189,21 @@ func TestClaudeHookBridge(t *testing.T) {
 		t.Fatalf("parallel starts queued %d of 3 cues", len(ch))
 	}
 
-	// A stopped bridge leaves no path for the launcher to prefer.
+	// A stopped bridge leaves no path for the launcher to prefer, and no records.
+	if _, ok := hostOf("a9999999"); !ok {
+		t.Fatal("the record should last while the bridge runs")
+	}
 	b.close()
+	s.mu.Lock()
+	left := len(s.hosts)
+	s.mu.Unlock()
+	if left != 0 {
+		t.Fatalf("%d records outlived the bridge", left)
+	}
+	b.record(s, "a4444444", workerHost{pid: host, at: 1})
+	if _, ok := hostOf("a4444444"); ok {
+		t.Fatal("a closed bridge must not record")
+	}
 	if _, err := os.Stat(liveHookPath(filepath.Dir(b.path))); !os.IsNotExist(err) {
 		t.Fatalf("live-hook outlived the bridge: %v", err)
 	}

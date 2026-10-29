@@ -135,9 +135,21 @@ repository. With the plugin, Swarmview remembers which Claude's
 `SubagentStart` hook reported each worker, even while no dashboard is open,
 and nests the worker under that Claude. Only the event name and the agent ID
 are used. A new worker can show under the repository for up to one poll before
-it moves under its Claude. Workers started before Swarmview was listening, or with the plugin
-off, stay unnested rather than guessed. Without `-communication`, nesting is
-unchanged.
+it moves under its Claude. Without `-communication`, nesting is unchanged.
+
+Swarmview leaves a worker unnested rather than guess, so some stay flat:
+
+- Workers started before Swarmview was listening, or with the plugin off.
+- Workers started by a Claude that appeared less than about a second earlier:
+  Swarmview's process list hadn't seen that Claude yet, so its hook is
+  rejected and nothing is recorded.
+- Any worker during a poll in which `ps` gave no usable elapsed time for its
+  Claude. The record is kept and the worker nests again on the next good poll.
+
+The first record for a worker wins and is never updated, so a forged later
+record can't replace the real one. If a different claimant later drives that
+worker after a resume, it stays under the Claude that started it until that
+Claude exits.
 
 Not shown yet: messages between teammates, messages addressed by name, and
 messages to other Claude sessions. Those need a sideways display that the
@@ -165,7 +177,8 @@ names the Claude by PID and by its start time, estimated from the elapsed time
 `ps` already reports to within two seconds, so a later process that reuses the
 PID doesn't inherit it. Swarmview keeps at most 256 of these records in memory
 (worker ID, Claude PID, and start time only), dropping the oldest when full and
-a record once its Claude exits, and never writes them to disk.
+a record once its Claude exits. It never writes them to disk and forgets them
+all when `-communication` stops.
 
 Starting `-communication` also copies the running binary into the same
 directory as `live-hook` (mode `0700`, about the binary's size on disk), and
