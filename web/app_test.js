@@ -2827,8 +2827,11 @@ const {
           (junction) =>
             Math.abs(
               junction.titleLeft -
-                titleColumns.find((other) => other.depth === junction.depth)
-                  .titleLeft,
+                titleColumns.find(
+                  (other) =>
+                    other.depth === junction.depth &&
+                    other.source === 'process',
+                ).titleLeft,
             ) <= 1,
         ),
       'worker titles start in the same column as logo-row titles at the same depth: ' +
