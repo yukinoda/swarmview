@@ -88,13 +88,15 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 	if k := fileKey(fi, now); k == [2]int64{} || k != c.metaKey {
 		id, ok := readSessionID(metaPath, pid, cwd)
 		if !ok {
-			k = [2]int64{} // I/O error: retry next poll like an uncached read
+			// I/O error: keep the cached session and retry next poll like an uncached read
+			c.metaKey = [2]int64{}
+		} else {
+			// status rewrites keep the id; only a new session drops the old title and model
+			if id != c.id {
+				*c = sessionTitle{id: id}
+			}
+			c.metaKey = k
 		}
-		// status rewrites keep the id; only a new session drops the old title and model
-		if id != c.id {
-			*c = sessionTitle{id: id}
-		}
-		c.metaKey = k
 	}
 	if c.id == "" {
 		return ""

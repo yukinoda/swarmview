@@ -110,6 +110,14 @@ func TestClaudeTitleCachedByFileKey(t *testing.T) {
 	if got := title(); got != "Title B" || c.model != "claude-opus-5-5" {
 		t.Errorf("after metadata rewrite = %q, model must be kept: %q", got, c.model)
 	}
+	write(metadata, `{"pid":100`, 9e3) // partially written status update: decode error
+	if got := title(); got != "Title B" || c.model != "claude-opus-5-5" {
+		t.Errorf("after failed metadata read = %q, model must be kept: %q", got, c.model)
+	}
+	write(metadata, meta(id)+"  ", 7e3) // complete again, same session
+	if got := title(); got != "Title B" || c.model != "claude-opus-5-5" {
+		t.Errorf("after metadata recovered = %q, model must be kept: %q", got, c.model)
+	}
 	write(log(id), record("Title C", id)+record("Title B", id), 0) // same size, mtime in this tick
 	if got := title(); got != "Title B" {
 		t.Errorf("after same-tick write = %q", got)
