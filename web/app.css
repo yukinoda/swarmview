@@ -374,6 +374,17 @@ kbd {
 .agent-kind:not(:empty) + .target:not(:empty)::before {
   content: ' · ';
 }
+/* A communication cue follows the row's kind/target text: separate it the same way. */
+.target:not(:empty) + .communication-note::before,
+.agent-kind:not(:empty) + .target:empty + .communication-note::before {
+  content: ' · ';
+  color: var(--mut);
+}
+/* While a cue shows, let the context line wrap so a narrow row doesn't clip the cue away. */
+.context[data-communication] {
+  white-space: normal;
+  overflow: visible;
+}
 .workers {
   font-size: 12px;
   color: var(--mut);
