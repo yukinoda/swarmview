@@ -94,9 +94,9 @@ export function refreshDetails(retained = readDetailsState()) {
   let cpu = item.cpu;
   let age = item.up;
   const claudeWorker = item.sub && !item.live;
+  // A Claude worker runs inside its claude process; only a proven parent's figures are shown, labelled as that process's.
+  const proven = claudeWorker && host?.kind === 'claude' && !host.dying;
   if (claudeWorker) {
-    // A Claude worker runs inside its claude process; only a proven parent's figures are shown, labelled as that process's.
-    const proven = host && !host.dying;
     ram = inParentProcess(proven ? ramDetail(host.mem) : 'Unavailable');
     cpu = inParentProcess(proven ? host.cpu : 'Unavailable');
     age = inParentProcess(proven ? host.up : 'Unavailable');
@@ -163,7 +163,7 @@ export function refreshDetails(retained = readDetailsState()) {
     if (item.live) {
       subHelp += ' Attempted means acceptance is unconfirmed.';
     }
-    if (claudeWorker) {
+    if (proven) {
       subHelp +=
         ' RAM, CPU and process age belong to the parent Claude process, shared with the main agent and its other workers.';
     }
