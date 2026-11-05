@@ -201,6 +201,28 @@ func TestRunningSubagentAttachedToSoleClaude(t *testing.T) {
 	}
 }
 
+// A worker left over from an earlier session in the same cwd must not nest under
+// the sole claude now running a different session; its own session's worker does.
+func TestSoleClaudeAttachesOnlyItsCurrentSession(t *testing.T) {
+	root, now := t.TempDir(), nowMs()
+	sessionA := "a0000000-0000-0000-0000-000000000000"
+	sessionB := "b0000000-0000-0000-0000-000000000000"
+	mk(t, root, "/w/a", sessionA, "old", map[string]any{"description": "R", "model": "inherit"}, 3, now)
+	mk(t, root, "/w/a", sessionB, "new", map[string]any{"description": "R", "model": "inherit"}, 3, now)
+	host := claude(100, "/w/a")
+	host.session = sessionB
+	parents := map[string]*int{}
+	for _, s := range subs(root, now, host) {
+		parents[s.Id] = s.ParentPid
+	}
+	if p, ok := parents["old"]; !ok || p != nil {
+		t.Errorf("earlier session's worker: listed %v, parent %v; want listed without a parent", ok, p)
+	}
+	if p := parents["new"]; p == nil || *p != 100 {
+		t.Errorf("current session's worker parent = %v, want 100", p)
+	}
+}
+
 func TestFinishedSubagentExcluded(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	mk(t, root, "/w/a", "s1", "a1", map[string]any{"description": "R", "model": "m", "finished": true}, 3, now)

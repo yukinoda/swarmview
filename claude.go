@@ -302,8 +302,9 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 	// Every record left names a Claude PID that is still running.
 	pruneWorkerHosts(hosts, agents, now)
 	type group struct {
-		cwd  string
-		pids []int
+		cwd      string
+		pids     []int
+		sessions []string // each process's cached current session id, "" if unknown
 	}
 	var groups []*group
 	for _, a := range agents {
@@ -321,6 +322,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 			groups = append(groups, g)
 		}
 		g.pids = append(g.pids, a.Pid)
+		g.sessions = append(g.sessions, a.session)
 	}
 	out := []Subagent{}
 	seen := map[string]bool{}
@@ -398,14 +400,19 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				if err != nil || now-jt > 30*60e3 {
 					continue
 				}
-				// Attach to the sole claude in that cwd, else to the one process whose session
-				// metadata claims this session. Of several claimants, only the one whose
-				// SubagentStart hook reported this worker is its parent.
+				// Attach to the sole claude in that cwd unless its known current session is
+				// another one (the worker outlived an earlier session), else to the one process
+				// whose session metadata claims this session. Of several claimants, only the one
+				// whose SubagentStart hook reported this worker is its parent.
 				var pp *int
 				owners := claimants[session]
 				host, claimed := sessionHost(hosts, id, owners)
 				if len(g.pids) == 1 {
-					pp = &g.pids[0]
+					current := g.sessions[0]
+					fromOtherSession := current != "" && current != session
+					if !fromOtherSession {
+						pp = &g.pids[0]
+					}
 				} else if len(owners) == 1 {
 					pp = &owners[0]
 				} else if claimed && host.proven(agents, now) {
