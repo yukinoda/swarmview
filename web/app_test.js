@@ -2173,6 +2173,21 @@ const {
         communication.pendingFeedback.size === 0,
       'pending Claude cue shows once its worker row renders',
     );
+    const note = document.querySelector('.communication-note');
+    const noteSeparator = getComputedStyle(note, '::before').content;
+    assert(
+      noteSeparator === '" · "',
+      'the cue is separated from the row context text, not glued to it',
+    );
+    const noteContext = note.parentElement;
+    const noteBox = note.getBoundingClientRect();
+    const noteContextBox = noteContext.getBoundingClientRect();
+    const noteClipped = noteContext.scrollWidth > noteContext.clientWidth;
+    const noteInsideRow = noteBox.right <= noteContextBox.right + 1;
+    assert(
+      !noteClipped && noteInsideRow,
+      'the whole cue stays visible on a narrow row instead of being clipped',
+    );
     clearPulses();
     showFeedback('sub:a1234567', 'returned', 46001);
     assert(
