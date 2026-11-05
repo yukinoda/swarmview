@@ -9,6 +9,8 @@ const rows = new Map(),
   quietRows = new Map();
 let last = new Map(),
   rerender;
+let liveCount = '',
+  retainedCount = '';
 let pins = load('swarmview.pins', []),
   folded = new Set(load('swarmview.folded', []));
 function togglePin(k) {
@@ -232,7 +234,10 @@ export function renderDashboard(data, again = false) {
   const mine = items.filter((i) => !i.dying && !i.sub);
   const working = mine.filter((it) => it.status === 'working').length;
   updateSystemMemory(data.system);
-  txt($('count'), `${mine.length} agent${mine.length === 1 ? '' : 's'} · ${working} working`);
+  const agents = `${mine.length} agent${mine.length === 1 ? '' : 's'}`;
+  liveCount = `${agents} · ${working} working`;
+  retainedCount = `Retained · ${agents}`;
+  txt($('count'), liveCount);
   $('empty').hidden = items.length > 0;
   const workers = items.filter((it) => it.sub && !it.dying).length;
   txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} workers`);
@@ -240,6 +245,8 @@ export function renderDashboard(data, again = false) {
 }
 
 export function refreshDashboard(retained) {
+  $('tree').classList.toggle('retained', Boolean(retained));
+  txt($('count'), retained ? retainedCount : liveCount);
   const offline = retained === 'offline',
     stale = retained === 'stale';
   for (const [key, r] of rows) {

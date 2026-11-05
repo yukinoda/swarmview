@@ -601,6 +601,32 @@ const {
       $('freshness').textContent === 'Last updated 0s ago',
       'recovery refreshes snapshot age',
     );
+    const working = { ...a, recentCpu: 1.36 };
+    const groupCounts = () => groups.get('r:/a').counts;
+    const countsShowLiveState = () =>
+      [...groupCounts().children].some(
+        (count) => {
+          const visible = getComputedStyle(count).display !== 'none';
+          return visible && /working|waiting/.test(count.textContent);
+        },
+      );
+    render({ agents: [working], at: 220000 });
+    freshness(220000);
+    assert(
+      $('count').textContent.includes('1 working') && countsShowLiveState(),
+      'live snapshot shows working counts',
+    );
+    freshness(300000);
+    assert(
+      !countsShowLiveState() && !/working|waiting/.test($('count').textContent),
+      'retained snapshot hides live working counts in headline and groups',
+    );
+    render({ agents: [working], at: 220000 });
+    freshness(220000);
+    assert(
+      $('count').textContent.includes('1 working') && countsShowLiveState(),
+      'recovery restores live working counts',
+    );
     const realFetch = window.fetch,
       realNow = Date.now;
     try {
