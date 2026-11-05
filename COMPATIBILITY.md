@@ -146,7 +146,7 @@ session status or conversation metadata.
 - Native human requests, permissions, completion, and send/reply events are not
   available by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
   observes confirmed sends and foreground result returns for CLI/service 2.1.3–2.1.4
-  with manual TUI opt-in on macOS/Linux. The optional
+  with manual TUI setup on macOS/Linux. The optional
   [Claude Code plugin](integrations/claude/README.md) observes subagent
   start/finish and follow-up messages; its one-step install needs Claude Code
   2.1.275+, and older versions add the marketplace first. Other providers remain
@@ -166,7 +166,8 @@ session status or conversation metadata.
   agent whose `~/.claude/sessions/<pid>.json` (matching PID and working
   directory) names the subagent's session. Sessions no running agent claims, or
   that two agents claim, and older CLI versions without that file, have no
-  exact parent. With `-communication` and the [Claude plugin](integrations/claude/README.md),
+  exact parent. With the bridge on (the native app by default, or the CLI with
+  `-communication`) and the [Claude plugin](integrations/claude/README.md),
   a session that two agents claim (resumed in a second terminal) nests each
   worker under the claimant whose `SubagentStart` hook reported it; workers
   started before Swarmview was listening stay unnested.

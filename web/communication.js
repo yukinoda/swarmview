@@ -227,7 +227,7 @@ export function communicationStream() {
         ? 'Communication: ambiguous TUI views · affected pulses unavailable; select the session in one terminal'
         : frame.workers.length || frame.pid
           ? 'Communication: observing live metadata only'
-          : 'Communication: waiting for live worker metadata · requires opt-in OpenCode TUI bridge or Claude hooks') +
+          : 'Communication: waiting for live worker metadata · needs the OpenCode TUI bridge or Claude hooks installed') +
         ' · other providers unavailable' +
         (communicationGap ? ' · some observations missing; no replay' : ''),
     );
