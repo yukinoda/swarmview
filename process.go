@@ -271,6 +271,7 @@ type Agent struct {
 	MemBytes     int64    `json:"memBytes"` // ~ sum of RSS over the process tree; shared pages count per process
 	Model        string   `json:"model,omitempty"`
 	pane         string
+	session      string // Claude's current session id from the cached sessions/<pid>.json, or ""
 }
 
 type cacheEntry struct {
@@ -401,6 +402,7 @@ func (s *server) listAgents(now int64) ([]Agent, error) {
 				a.Title = &title
 			}
 			a.Model = c.title.model
+			a.session = c.title.id
 		}
 		agents = append(agents, a)
 	}
