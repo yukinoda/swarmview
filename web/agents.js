@@ -99,10 +99,10 @@ function agentItem(a) {
     mem: Number.isFinite(a.memBytes) && a.memBytes > 0 ? a.memBytes : null,
     status,
     stText: stateLabel(status),
-    up: a.etime ? 'Process age: ' + formatProcessAge(a.etime) : 'Process age: unavailable',
+    up: a.etime ? formatProcessAge(a.etime) : 'Unavailable',
     cpu: Number.isFinite(a.recentCpu)
-      ? 'CPU ' + Math.round(a.recentCpu * 100) + '%'
-      : 'CPU: unavailable',
+      ? Math.round(a.recentCpu * 100) + '%'
+      : 'Unavailable',
     model: a.model ? modelLabel(a.model) : null,
     ord: a.pid
   };
@@ -137,8 +137,8 @@ function subItem(s, i, host) {
     mem: null,
     status: s.working === true ? 'working' : s.working === false ? 'idle' : 'unknown',
     stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
-    up: 'Process age: unavailable',
-    cpu: 'CPU: unavailable',
+    up: 'Unavailable',
+    cpu: 'Unavailable',
     model: subagentModel(s.model, parentHost),
     ord: 1e9 + i,
     sub: true
@@ -160,8 +160,8 @@ function liveItem(worker, index, host) {
     status: 'unknown',
     stText: 'unknown',
     idleSec: null,
-    up: 'Process age: unavailable',
-    cpu: 'CPU: unavailable',
+    up: 'Unavailable',
+    cpu: 'Unavailable',
     ord: 2e9 + index,
     tip:
       'Live session relationship, not process activity or task completion. ' +

@@ -148,7 +148,7 @@
           monitoring-only agents too. Click an enabled task to open its
           terminal; this is a separate action.
         </dd>
-        <dt>Process age / CPU 36%</dt>
+        <dt>Process age / CPU</dt>
         <dd>
           Process age is not time spent on the current task. CPU includes child
           processes; 100% is one CPU core and multi-core work can exceed 100%.
@@ -188,10 +188,12 @@
           Lines show detected parentage, not messages. Without an installed bridge there is nothing to observe, and if another
           Swarmview owns the live socket this one reports none. The native app
           listens by default, the CLI only with <code>-communication</code>. The optional OpenCode bridge shows static attempts and
-          confirmed background sends or foreground replies observed live; it
-          collects no conversation contents or message history. Blue Sent from
-          parent is not completion; teal Reply received by parent is not
-          success; amber Attempted from parent means acceptance is unconfirmed.
+          confirmed background sends or foreground replies observed live; Claude
+          Code hooks produce Sent and Reply cues the same way. Neither collects
+          conversation contents or message history. Blue Sent from parent and
+          Message sent to worker are not completion; teal Reply received by
+          parent is not success; amber Attempted from parent (OpenCode only)
+          means acceptance is unconfirmed.
           No cue means no current displayed observation, not idle. Selecting a
           worker name opens the main agent's terminal, not necessarily its
           immediate parent.
@@ -242,8 +244,8 @@
           <code>/plugin install swarmview --marketplace yukinoda/swarmview</code>
           (Claude Code 2.1.275 or later; for older versions see
           <code>integrations/claude/README.md</code>, in the native app under
-          <code>Contents/Resources</code>). This preference
-          does not install or enable anything. Other providers'
+          <code>Contents/Resources</code>). Swarmview does not
+          install or enable anything. Other providers'
           communication is unavailable;
           detected process activity remains independent.
         </p>

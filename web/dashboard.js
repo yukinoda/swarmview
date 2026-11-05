@@ -126,7 +126,8 @@ export function renderDashboard(data, again = false) {
     g.counts.replaceChildren(
       ...n.map(([st, v]) => {
         const e = el('span', 's-' + (st === 'workers' ? 'idle' : st));
-        e.textContent = v + ' ' + stateLabel(st);
+        const label = st === 'workers' && v === 1 ? 'worker' : stateLabel(st);
+        e.textContent = v + ' ' + label;
         return e;
       })
     );
@@ -240,7 +241,8 @@ export function renderDashboard(data, again = false) {
   txt($('count'), liveCount);
   $('empty').hidden = items.length > 0;
   const workers = items.filter((it) => it.sub && !it.dying).length;
-  txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} workers`);
+  const workerNoun = workers === 1 ? 'worker' : 'workers';
+  txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} ${workerNoun}`);
   return { items: new Map([...rows.keys()].map((key) => [key, last.get(key)])), agents: mine };
 }
 

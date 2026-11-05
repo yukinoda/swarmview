@@ -74,7 +74,7 @@ OpenCode · dev:%3                     ~420 MB
 └ Worker abc123                                   Details
   Sent from parent
 
-Details → CPU 13% · Process age: 24m
+Details → CPU: 13% · Process age: 24m
           (separate control, not a terminal action)
 ```
 
@@ -82,8 +82,8 @@ Details → CPU 13% · Process age: 24m
 | --- | --- |
 | `~420 MB` in RAM | Approximate RAM of the agent and its child processes; not guaranteed reclaimable memory |
 | `—` in RAM | Memory is unavailable, not zero |
-| `Process age: 24m` in Details | How long the process has been running, not time spent on this task |
-| `CPU 13%` in Details | Recent CPU use, **not percent complete**. 100% = one core; can exceed 100% |
+| `Process age` = `24m` in Details | How long the process has been running, not time spent on this task |
+| `CPU` = `13%` in Details | Recent CPU use, **not percent complete**. 100% = one core; can exceed 100% |
 | `2 working` | Two working agents in that repository or worktree |
 | `swap … · RAM …% free` | Machine-wide memory indicators on macOS |
 
