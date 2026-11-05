@@ -183,8 +183,9 @@ Claude by PID and by its start time, estimated from the elapsed time `ps`
 already reports. A worker is nested only while the running Claude's start time
 matches to within two seconds, so a later process that reuses the PID doesn't
 inherit it. Swarmview keeps at most 256 of these records in memory (worker ID,
-Claude PID, and start time only), dropping the oldest when full and a record
-once its Claude exits. It never writes them to disk and forgets them all when
+Claude PID, and start time only). When full it drops the oldest record of the
+Claude holding the most, so one Claude can't push out another's records, and it
+drops a record once its Claude exits. It never writes them to disk and forgets them all when
 `-communication` stops.
 
 Starting `-communication` also copies the running binary into the same

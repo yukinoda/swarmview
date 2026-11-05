@@ -215,7 +215,7 @@ func TestClaudeHookBridge(t *testing.T) {
 	if left != 0 {
 		t.Fatalf("%d records outlived the bridge", left)
 	}
-	b.record(s, "a4444444", workerHost{pid: host, at: 1})
+	b.record(s, "a4444444", workerHost{pid: host})
 	if _, ok := hostOf("a4444444"); ok {
 		t.Fatal("a closed bridge must not record")
 	}

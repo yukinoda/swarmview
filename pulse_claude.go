@@ -208,8 +208,8 @@ const maxWorkerHosts = 256
 
 // recordWorkerHost remembers that a Claude reported starting a worker. Each
 // Claude keeps its own first record for a worker, so a record from a Claude
-// that doesn't claim the worker's session can't block the real one. When full,
-// the oldest record is dropped. The next snapshot refresh uses it.
+// that doesn't claim the worker's session can't block the real one. Records
+// are numbered in arrival order. The next snapshot refresh uses it.
 func (s *server) recordWorkerHost(agent string, host workerHost) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -221,17 +221,36 @@ func (s *server) recordWorkerHost(agent string, host workerHost) {
 		return
 	}
 	if len(s.hosts) >= maxWorkerHosts {
-		var oldest hostKey
-		oldestAt := int64(math.MaxInt64)
-		for k, h := range s.hosts {
-			if h.at < oldestAt {
-				oldest = k
-				oldestAt = h.at
-			}
-		}
-		delete(s.hosts, oldest)
+		delete(s.hosts, evictedHost(s.hosts))
 	}
+	s.hostSeq++
+	host.seq = s.hostSeq
 	s.hosts[key] = host
+}
+
+// evictedHost is the record to drop when full: the oldest one of the Claude
+// holding the most records, so a Claude flooding records only evicts its own.
+func evictedHost(hosts map[hostKey]workerHost) hostKey {
+	count := map[int]int{}
+	busiest := 0
+	for k := range hosts {
+		count[k.pid]++
+		if count[k.pid] > count[busiest] {
+			busiest = k.pid
+		}
+	}
+	var oldest hostKey
+	oldestSeq := uint64(math.MaxUint64)
+	for k, h := range hosts {
+		if k.pid != busiest {
+			continue
+		}
+		if h.seq < oldestSeq {
+			oldest = k
+			oldestSeq = h.seq
+		}
+	}
+	return oldest
 }
 
 // record stores a SubagentStart record unless the bridge is closing. It never
@@ -264,7 +283,7 @@ func (s *server) clearWorkerHosts() {
 // hostRecord is the record for a SubagentStart reported by Claude process pid
 // in sn. ok is false when its start time is unknown: such a record could never
 // prove a parent, yet as the first record it would block a later, usable one.
-func hostRecord(sn snap, pid int, now int64) (workerHost, bool) {
+func hostRecord(sn snap, pid int) (workerHost, bool) {
 	a, found := findClaude(sn.agents, pid)
 	if !found {
 		return workerHost{}, false
@@ -273,7 +292,7 @@ func hostRecord(sn snap, pid int, now int64) (workerHost, bool) {
 	if math.IsNaN(start) {
 		return workerHost{}, false
 	}
-	return workerHost{pid: pid, start: start, at: now}, true
+	return workerHost{pid: pid, start: start}, true
 }
 
 // acceptClaude reads one record from a hook connected while its process is still alive.
@@ -301,7 +320,7 @@ func (b *pulseBridge) acceptClaude(s *server, c net.Conn, sn snap, pid int) {
 		return
 	}
 	if m.Type == "sent" {
-		rec, ok := hostRecord(sn, host, time.Now().UnixMilli())
+		rec, ok := hostRecord(sn, host)
 		if ok {
 			b.record(s, m.Agent, rec)
 		}

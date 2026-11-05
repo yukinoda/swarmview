@@ -26,6 +26,7 @@ type server struct {
 	metaCache map[string]metaEntry
 	sessions  map[string]sessionScan
 	hosts     map[hostKey]workerHost // Claude worker ID and host PID -> its SubagentStart record
+	hostSeq   uint64                 // sequence number of the latest SubagentStart record
 	root      string                 // ~/.claude/projects
 	port      int
 	sysU32    func(name string) (uint32, bool) // nil disables system memory (tests, non-darwin)

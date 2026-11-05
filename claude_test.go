@@ -276,7 +276,7 @@ func claudeUp(pid int, cwd, etime string) Agent {
 
 // hookRecord is what a SubagentStart hook from a records at now.
 func hookRecord(a Agent, now int64) workerHost {
-	return workerHost{pid: a.Pid, start: processStart(a, now), at: now}
+	return workerHost{pid: a.Pid, start: processStart(a, now)}
 }
 
 // hookRecords keys records as recordWorkerHost does, by worker and host PID.
@@ -387,9 +387,10 @@ func TestUnrelatedRecordDoesNotBlockClaimant(t *testing.T) {
 	s := &server{}
 	// A program under 100, which doesn't claim s101, reports a2 first.
 	s.recordWorkerHost("a2", hookRecord(c100, now))
-	s.recordWorkerHost("a2", hookRecord(c102, now+1))
-	// A later record from the other claimant doesn't replace the real one.
-	s.recordWorkerHost("a2", hookRecord(c101, now+2))
+	s.recordWorkerHost("a2", hookRecord(c102, now))
+	// A later record from the other claimant doesn't replace the real one,
+	// even within the same millisecond and though 101 is listed first.
+	s.recordWorkerHost("a2", hookRecord(c101, now))
 	list := subsWithHosts(root, now, s.hosts, agents...)
 	if !hasParent(parentPids(list), "a2", 102) {
 		t.Errorf("the claimant's record should win over an unrelated earlier one: %+v", list)
@@ -521,17 +522,30 @@ func TestWorkerHostsPrunedAndBounded(t *testing.T) {
 	// A bare server has no records map yet; recording must not panic.
 	s := &server{}
 	for i := 0; i <= maxWorkerHosts; i++ {
-		s.recordWorkerHost(fmt.Sprintf("a%07x", i), workerHost{pid: 100, at: now + int64(i)})
+		s.recordWorkerHost(fmt.Sprintf("a%07x", i), workerHost{pid: 100})
 	}
-	s.recordWorkerHost("a0000001", workerHost{pid: 100, at: now + 1000})
+	s.recordWorkerHost("a0000001", workerHost{pid: 100, start: 1})
 	if len(s.hosts) != maxWorkerHosts {
 		t.Fatalf("kept %d records, want %d", len(s.hosts), maxWorkerHosts)
 	}
 	if hasRecord(s.hosts, "a0000000") {
 		t.Error("the oldest record should be dropped when full")
 	}
-	if s.hosts[hostKey{"a0000001", 100}].at != now+1 {
+	if s.hosts[hostKey{"a0000001", 100}].start != 0 {
 		t.Error("a Claude's first record for a worker should win")
+	}
+
+	// One Claude flooding records evicts only its own, never another's.
+	s = &server{}
+	s.recordWorkerHost("a1000000", workerHost{pid: 200})
+	for i := 0; i < 2*maxWorkerHosts; i++ {
+		s.recordWorkerHost(fmt.Sprintf("a%07x", i), workerHost{pid: 100})
+	}
+	if !hasRecord(s.hosts, "a1000000") {
+		t.Error("a flood from another Claude evicted this Claude's record")
+	}
+	if len(s.hosts) != maxWorkerHosts {
+		t.Errorf("kept %d records, want %d", len(s.hosts), maxWorkerHosts)
 	}
 }
 

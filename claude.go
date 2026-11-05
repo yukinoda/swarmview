@@ -26,11 +26,11 @@ type metaEntry struct {
 }
 
 // workerHost is the Claude process whose SubagentStart hook reported a worker,
-// with its estimated start (Unix seconds) and when it was recorded.
+// with its estimated start (Unix seconds) and the order it was recorded in.
 type workerHost struct {
 	pid   int
 	start float64
-	at    int64
+	seq   uint64
 }
 
 // hostKey names one Claude's record for one worker. A worker can have a
@@ -50,7 +50,7 @@ func sessionHost(hosts map[hostKey]workerHost, id string, owners []int) (workerH
 		if !ok {
 			continue
 		}
-		if !found || h.at < first.at {
+		if !found || h.seq < first.seq {
 			first = h
 			found = true
 		}
