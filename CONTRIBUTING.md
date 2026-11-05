@@ -65,6 +65,8 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
   `/plugin install`. Bump `version` in its `.claude-plugin/plugin.json`
   whenever `hooks/` changes, so installed copies update.
 - `assets/`: shared branding and documentation images.
+- `docs/`: the dashboard guide and platform compatibility claims.
+- `scripts/`: maintainer tools run by hand or CI, e.g. `memory_check.py`.
 
 The data flow is `web/app.js` → `GET /agents` → `server.snapshot` → process and
 worker discovery → JSON → the dashboard, search, and notification modules. Terminal activation is a separate
@@ -85,7 +87,7 @@ and packaging paths too; individual files do not need an exhaustive listing.
 gofmt -w *.go
 go test -race ./...
 go vet ./...
-python3 memory_check.py --self-test
+python3 scripts/memory_check.py --self-test
 git diff --check
 ```
 
@@ -114,7 +116,7 @@ Do not enable it in an unattended environment that cannot approve Automation.
 - Treat task names and paths as untrusted display text. Preserve host/origin
   checks and avoid shell interpolation of unchecked request data.
 - Preserve keyboard access, readable light/dark themes, and reduced motion.
-- Update [compatibility claims](COMPATIBILITY.md) when platform or terminal
+- Update [compatibility claims](docs/COMPATIBILITY.md) when platform or terminal
   behavior changes. Distinguish locally verified behavior from CI coverage.
 
 The repository uses conventional commit subjects such as `fix: ...`,
