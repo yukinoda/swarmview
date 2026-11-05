@@ -1386,10 +1386,23 @@ const {
     );
     showDetails(deepest);
     assert(
-      detailValue('CPU') === 'Unavailable' &&
-        detailValue('Process age') === 'Unavailable' &&
-        !$('detail-body').textContent.includes('CPU: unavailable'),
-      'worker details never invent CPU or process age, nor repeat the label in the value',
+      detailValue('Approx. RAM') ===
+        'In parent process · ~2.0 GB · process-tree RSS',
+      'worker details show the proven parent’s RAM, labelled as the parent’s',
+    );
+    assert(
+      detailValue('CPU') === 'In parent process · 20%',
+      'worker details show the proven parent’s CPU, labelled as the parent’s',
+    );
+    assert(
+      detailValue('Process age') === 'In parent process · 1m',
+      'worker details show the proven parent’s process age, labelled as the parent’s',
+    );
+    assert(
+      $('detail-body').textContent.includes(
+        'belong to the parent Claude process',
+      ),
+      'worker details explain that the figures belong to the parent Claude process',
     );
     assert(
       !$('detail-body').textContent.includes('Attempted'),
@@ -1903,6 +1916,84 @@ const {
         !modelShown('sub:orphan-inherit', 'Haiku 4.5'),
       'A subagent without a detected parent does not inherit a same-directory agent model',
     );
+    showDetails(rows.get('sub:orphan-inherit'));
+    assert(
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process',
+      'a worker without a proven parent never borrows a same-directory agent’s CPU',
+    );
+    assert(
+      detailValue('Approx. RAM') ===
+        'Unavailable · runs inside its Claude process',
+      'a worker without a proven parent never borrows a same-directory agent’s RAM',
+    );
+    closeDetails();
+
+    render({
+      agents: [
+        agent(44107, '/metric-gaps', {
+          kind: 'claude',
+          recentCpu: undefined,
+        }),
+      ],
+      subagents: [
+        {
+          id: 'metric-gaps',
+          parentPid: 44107,
+          cwd: '/metric-gaps',
+          working: true,
+        },
+      ],
+      at: Date.now(),
+    });
+    showDetails(rows.get('sub:metric-gaps'));
+    assert(
+      detailValue('CPU') === 'In parent process · Unavailable',
+      'a proven parent’s missing CPU stays attributed to the parent, not read as no parent',
+    );
+    assert(
+      detailValue('Approx. RAM') === 'In parent process · Unavailable',
+      'a proven parent’s missing RAM stays attributed to the parent, not read as no parent',
+    );
+    assert(
+      detailValue('Process age') === 'In parent process · 1m',
+      'a proven parent’s available process age is still shown beside its gaps',
+    );
+    render({
+      agents: [],
+      subagents: [
+        {
+          id: 'metric-gaps',
+          parentPid: 44107,
+          cwd: '/metric-gaps',
+          working: true,
+        },
+      ],
+      at: Date.now(),
+    });
+    assert(
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process',
+      'an exiting parent’s figures are not shown as a live parent’s',
+    );
+    closeDetails();
+
+    render({
+      agents: [agent(44108, '/metric-codex')],
+      subagents: [
+        {
+          id: 'metric-codex',
+          parentPid: 44108,
+          cwd: '/metric-codex',
+          working: true,
+        },
+      ],
+      at: Date.now(),
+    });
+    showDetails(rows.get('sub:metric-codex'));
+    assert(
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process',
+      'a non-Claude process is never presented as a Claude worker’s parent',
+    );
+    closeDetails();
 
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.
     const liveHost = agent(45000, '/live-test', {

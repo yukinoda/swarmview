@@ -25,8 +25,10 @@ Per-agent RAM stays neutral regardless of size. Machine-wide warning/critical
 styling uses the actual macOS memory-pressure signal, not low free RAM or swap
 usage alone. Existing swap can remain occupied after pressure falls. Claude Code
 details show the model, such as Opus 5.5, from the session's latest reply in its
-transcript; subagents show it without inventing process age or CPU. Other
-providers show Unavailable.
+transcript, and subagents show it too; other providers show Unavailable. A
+subagent has no RAM, CPU or process age of its own: Details show its live parent
+Claude process's figures, labelled `In parent process`, or
+`Unavailable · runs inside its Claude process` without one.
 
 | Status | Meaning |
 | --- | --- |
