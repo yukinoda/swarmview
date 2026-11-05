@@ -34,7 +34,7 @@ jobs:
           go build -trimpath -ldflags='-s -w' -o dist/swarmview .
           COPYFILE_DISABLE=1 tar -czf "swarmview_${GITHUB_REF_NAME}_${TARGET}.tar.gz" \
             -C dist swarmview -C "$GITHUB_WORKSPACE" \
-            LICENSE README.md GUIDE.md COMPATIBILITY.md CONTRIBUTING.md SECURITY.md assets \
+            LICENSE README.md docs/GUIDE.md docs/COMPATIBILITY.md CONTRIBUTING.md SECURITY.md assets \
             integrations/opencode/package.json integrations/opencode/tui.ts \
             integrations/opencode/observer.js integrations/opencode/README.md \
             integrations/claude/README.md

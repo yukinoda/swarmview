@@ -15,7 +15,7 @@ capabilities.
 | Open a terminal window for a detached tmux session | Ghostty 1.3+ only | Not implemented | Not implemented |
 | System free RAM, memory pressure, and swap | macOS sysctls; missing pressure is explicitly unavailable and missing free/swap values are omitted | Not implemented; pressure displays unavailable, per-agent RSS still works | Unsupported |
 | Dedicated system-WebView desktop app | Prototype; macOS 13.3+, local Apple Silicon check | Not implemented; use browser UI | Unsupported |
-| `memory_check.py` terminal-overhead comparison | macOS only | Not supported as a comparison tool | Unsupported |
+| `scripts/memory_check.py` terminal-overhead comparison | macOS only | Not supported as a comparison tool | Unsupported |
 
 Native Windows builds are not supported: process execution uses Unix process
 groups and signals. WSL should be treated as a Linux environment; native Windows
@@ -44,7 +44,7 @@ as a separate release asset.
 Separate macOS `.dmg` images and `.app.zip` archives bundle a Swift/AppKit WKWebView launcher and
 the Go backend for ARM/Intel. They are ad-hoc signed, not Developer ID signed or
 notarized. Native app builds require Apple's SDK and are separate from CGO-free
-CLI cross-builds. See [desktop app limitations and checks](desktop/macos/README.md).
+CLI cross-builds. See [desktop app limitations and checks](../desktop/macos/README.md).
 DMG builds additionally use Python 3.10+ and a temporary pinned dmgbuild install;
 users downloading the app do not need those tools. The artwork runs in Finder,
 and optional eject/Trash cleanup is a one-shot native action after installation.
@@ -144,10 +144,10 @@ session status or conversation metadata.
   Network/I/O-bound work can still appear quiet; processes that start and
   exit between samples cannot be measured.
 - Native human requests, permissions, completion, and send/reply events are not
-  available by default. The optional [OpenCode V2 bridge](integrations/opencode/README.md)
+  available by default. The optional [OpenCode V2 bridge](../integrations/opencode/README.md)
   observes confirmed sends and foreground result returns for CLI/service 2.1.3–2.1.4
   with manual TUI setup on macOS/Linux. The optional
-  [Claude Code plugin](integrations/claude/README.md) observes subagent
+  [Claude Code plugin](../integrations/claude/README.md) observes subagent
   start/finish and follow-up messages; its one-step install needs Claude Code
   2.1.275+, and older versions add the marketplace first. Other providers remain
   unsupported for communication. Live relationships do not establish worker
@@ -168,7 +168,7 @@ session status or conversation metadata.
   directory) names the subagent's session. Sessions no running agent claims, or
   that two agents claim, and older CLI versions without that file, have no
   exact parent. With the bridge on (the native app by default, or the CLI with
-  `-communication`) and the [Claude plugin](integrations/claude/README.md),
+  `-communication`) and the [Claude plugin](../integrations/claude/README.md),
   a session that two agents claim (resumed in a second terminal) nests each
   worker under the claimant whose `SubagentStart` hook reported it; workers
   started before Swarmview was listening stay unnested.
