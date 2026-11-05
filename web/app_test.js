@@ -1727,6 +1727,45 @@ const {
       'Details names Claude models and aliases, resolves inherited subagent models, and shows other model ids as given',
     );
 
+    render({
+      agents: [
+        agent(44102, '/model-cases', {
+          kind: 'claude',
+          model: 'gpt-5',
+        }),
+        agent(44103, '/model-cases', {
+          kind: 'claude',
+          model: 'gemini-2-5',
+        }),
+        agent(44104, '/model-cases', {
+          kind: 'claude',
+          model: { name: 'not a string' },
+        }),
+      ],
+      subagents: [
+        {
+          id: 'numeric-model',
+          parentPid: 44102,
+          cwd: '/model-cases',
+          working: true,
+          model: 987654,
+        },
+      ],
+      at: Date.now(),
+    });
+    assert(
+      modelShown('a:44102', 'gpt-5') &&
+        modelShown('a:44103', 'gemini-2-5') &&
+        !modelShown('a:44102', 'Gpt 5') &&
+        !modelShown('a:44103', 'Gemini 2.5'),
+      'Models without a claude- prefix or Claude alias are shown unchanged',
+    );
+    assert(
+      !modelShown('a:44104', '[object Object]') &&
+        !modelShown('sub:numeric-model', '987654'),
+      'Non-string model values from metadata are not rendered',
+    );
+
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.
     const liveHost = agent(45000, '/live-test', {
       kind: 'opencode',

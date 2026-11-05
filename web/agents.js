@@ -34,8 +34,11 @@ const statusOf = (a) =>
           : 'idle';
 // Claude model ids and aliases read as names: claude-opus-5-5 → Opus 5.5, sonnet → Sonnet.
 // Anything else (older digit-first ids, other providers) is shown as given.
-const CLAUDE_MODEL = /^(?:claude-)?([a-z]+)((?:-\d{1,2})*)(?:-\d{8})?$/;
+// The lookahead requires the claude- prefix or a bare alias, so gpt-5 stays as given.
+const CLAUDE_MODEL = /^(?=claude-|(?:opus|sonnet|haiku)$)(?:claude-)?([a-z]+)((?:-\d{1,2})*)(?:-\d{8})?$/;
 function modelLabel(id) {
+  // meta.json models are untyped, so ignore anything that is not a string.
+  if (typeof id !== 'string') return null;
   const match = CLAUDE_MODEL.exec(id);
   if (!match) return id;
   const family = match[1][0].toUpperCase() + match[1].slice(1);
