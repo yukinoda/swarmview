@@ -240,6 +240,7 @@ export function renderDashboard(data, again = false) {
   retainedCount = `Retained · ${agents}`;
   txt($('count'), liveCount);
   $('empty').hidden = items.length > 0;
+  $('tree-actions').hidden = items.length === 0;
   const workers = items.filter((it) => it.sub && !it.dying).length;
   const workerNoun = workers === 1 ? 'worker' : 'workers';
   txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} ${workerNoun}`);
