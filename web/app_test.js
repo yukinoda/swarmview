@@ -1766,6 +1766,34 @@ const {
       'Non-string model values from metadata are not rendered',
     );
 
+    render({
+      agents: [
+        agent(44105, '/model-orphan', {
+          kind: 'claude',
+          model: 'claude-opus-5-5',
+        }),
+        agent(44106, '/model-orphan', {
+          kind: 'claude',
+          model: 'claude-haiku-4-5',
+        }),
+      ],
+      subagents: [
+        {
+          id: 'orphan-inherit',
+          parentPid: null,
+          cwd: '/model-orphan',
+          working: true,
+          model: 'inherit',
+        },
+      ],
+      at: Date.now(),
+    });
+    assert(
+      !modelShown('sub:orphan-inherit', 'Opus 5.5') &&
+        !modelShown('sub:orphan-inherit', 'Haiku 4.5'),
+      'A subagent without a detected parent does not inherit a same-directory agent model',
+    );
+
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.
     const liveHost = agent(45000, '/live-test', {
       kind: 'opencode',

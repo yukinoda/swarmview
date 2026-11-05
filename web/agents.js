@@ -111,6 +111,9 @@ function agentItem(a) {
 // Claude subagent: nests under the subagent that spawned it, else its claude session, else the worktree.
 // Recent writes are activity, not communication; click focuses the top-level Claude (if known).
 function subItem(s, i, host) {
+  // A same-directory host is only a guess; inherit a model from the real parent alone.
+  const isParent = s.parentPid != null && host?.pid === s.parentPid;
+  const parentHost = isParent ? host : null;
   return {
     key: 'sub:' + s.id,
     parent: s.parentAgentId
@@ -136,7 +139,7 @@ function subItem(s, i, host) {
     stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
     up: 'Process age: unavailable',
     cpu: 'CPU: unavailable',
-    model: subagentModel(s.model, host),
+    model: subagentModel(s.model, parentHost),
     ord: 1e9 + i,
     sub: true
   };
