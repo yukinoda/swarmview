@@ -15,8 +15,8 @@ metric help at the bottom explains the numbers without leaving your sessions.
 | `2 working` | Working agents in this repository or worktree; quiet and worker counts appear separately |
 | `~1.6 GB` in RAM | Approximate resident RAM of the agent and its child processes |
 | `—` in a process RAM cell, or unavailable metrics in worker Details | Missing measurements, not zero; live metadata workers omit empty process-metric cells |
-| `Process age: 1h` in Details | Process age, not duration of the current task |
-| `CPU 36%` in Details | Recent process-tree CPU use; 100% is one core, and values can exceed 100%. **Not task progress.** |
+| `Process age` = `1h` in Details | Process age, not duration of the current task |
+| `CPU` = `36%` in Details | Recent process-tree CPU use; 100% is one core, and values can exceed 100%. **Not task progress.** |
 | `OpenCode · dev:%42` | Agent identity and tmux session/pane target; not a metric |
 | `swap 0 MB · RAM 89% free` | Machine-wide swap and macOS-reported available-memory percentage; macOS only |
 | `Last updated 0s ago` | Snapshot age; retained data keeps aging while offline |

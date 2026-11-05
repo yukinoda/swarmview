@@ -35,7 +35,7 @@ export function refreshCommunication(data) {
     $('communication-capability'),
     data?.communication
       ? 'Enabled by server · OpenCode TUI and Claude hook metadata only'
-      : 'Off · requires manual server and OpenCode TUI or Claude hook setup',
+      : 'Off · start the CLI with -communication (on by default in the macOS app); needs the OpenCode TUI bridge or Claude hooks',
   );
   communicationStatus.hidden = !data?.communication;
   communicationFeedback.hidden = !data?.communication;
@@ -227,7 +227,7 @@ export function communicationStream() {
         ? 'Communication: ambiguous TUI views · affected pulses unavailable; select the session in one terminal'
         : frame.workers.length || frame.pid
           ? 'Communication: observing live metadata only'
-          : 'Communication: waiting for live worker metadata · needs the OpenCode TUI bridge or Claude hooks installed') +
+          : 'Communication: waiting for live metadata from the OpenCode TUI bridge or Claude hooks') +
         ' · other providers unavailable' +
         (communicationGap ? ' · some observations missing; no replay' : ''),
     );
