@@ -36,6 +36,26 @@ const {
     const assert = (ok, message) => {
       if (!ok) throw new Error(message);
     };
+    const contrast = (a, b) => {
+      const light = (color) =>
+        color
+          .match(/[\d.]+/g)
+          .slice(0, 3)
+          .map(Number)
+          .map((v) => v / 255)
+          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+          .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+      const x = light(a);
+      const y = light(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    const backdropOf = (element) => {
+      for (let node = element; node; node = node.parentElement) {
+        const color = getComputedStyle(node).backgroundColor;
+        if (color !== 'rgba(0, 0, 0, 0)') return color;
+      }
+      return getComputedStyle(document.body).backgroundColor;
+    };
     const agent = (pid, repo, extra = {}) => ({
       pid,
       ppid: 1,
@@ -51,6 +71,11 @@ const {
       ...extra,
     });
     const show = (agents) => render({ agents, subagents: [] });
+    const detailValue = (label) => {
+      const terms = Array.from($('detail-body').querySelectorAll('dt'));
+      const term = terms.find((dt) => dt.textContent === label);
+      return term?.nextElementSibling?.textContent;
+    };
     const branchOf = (row) => {
       if (
         !$('detail-dialog').open ||
@@ -121,6 +146,23 @@ const {
         !document.querySelector('#preferences-dialog input[type=checkbox]'),
       'Preferences contains the one real notification control and read-only capability, not a fake bridge switch',
     );
+    const borderedControls = [
+      $('appearance'),
+      $('search').parentElement,
+      $('notify'),
+    ];
+    for (const control of borderedControls) {
+      const style = getComputedStyle(control);
+      const background = backdropOf(control);
+      assert(
+        style.borderTopStyle === 'solid' && style.borderTopWidth !== '0px',
+        'form controls keep a drawn border',
+      );
+      assert(
+        contrast(style.borderTopColor, background) >= 3,
+        'form control borders meet the 3:1 non-text contrast minimum in both themes',
+      );
+    }
     for (const theme of ['dark', 'light', 'system', 'invalid']) {
       $('appearance').value = theme;
       $('appearance').dispatchEvent(new Event('change'));
@@ -213,14 +255,14 @@ const {
       'State and RAM share one aligned readable metric column',
     );
     assert(
-      metrics.item.cpu === 'CPU 136%' &&
+      metrics.item.cpu === '136%' &&
         metrics.mem.textContent === '~1.6 GB' &&
         metrics.toggle.getAttribute('aria-label').includes('RAM'),
       'metrics identify CPU (including multi-core use) and approximate RAM',
     );
     assert(
-      metrics.item.up === 'Process age: 1m',
-      'uptime is labeled as process age',
+      metrics.item.up === '1m',
+      'process age is the bare formatted age',
     );
     assert(
       !$('detail-dialog').open &&
@@ -249,8 +291,8 @@ const {
         'monitoring-only details open accessibly',
       );
       assert(
-        $('detail-body').textContent.includes('CPU 136%') &&
-          $('detail-body').textContent.includes('Process age: 1m') &&
+        detailValue('CPU') === '136%' &&
+          detailValue('Process age') === '1m' &&
           $('detail-body').getBoundingClientRect().height > 0,
         'opened details expose CPU and process age',
       );
@@ -289,7 +331,7 @@ const {
       showDetails(metrics);
       show([{ ...a, recentCpu: 0.5, memBytes: 500 * MB }]);
       assert(
-        $('detail-body').textContent.includes('CPU 50%') &&
+        detailValue('CPU') === '50%' &&
           $('detail-body').textContent.includes('~500 MB'),
         'the selected shared Details follows current measurements rather than retaining its opening snapshot',
       );
@@ -600,6 +642,32 @@ const {
     assert(
       $('freshness').textContent === 'Last updated 0s ago',
       'recovery refreshes snapshot age',
+    );
+    const working = { ...a, recentCpu: 1.36 };
+    const groupCounts = () => groups.get('r:/a').counts;
+    const countsShowLiveState = () =>
+      [...groupCounts().children].some(
+        (count) => {
+          const visible = getComputedStyle(count).display !== 'none';
+          return visible && /working|waiting/.test(count.textContent);
+        },
+      );
+    render({ agents: [working], at: 220000 });
+    freshness(220000);
+    assert(
+      $('count').textContent.includes('1 working') && countsShowLiveState(),
+      'live snapshot shows working counts',
+    );
+    freshness(300000);
+    assert(
+      !countsShowLiveState() && !/working|waiting/.test($('count').textContent),
+      'retained snapshot hides live working counts in headline and groups',
+    );
+    render({ agents: [working], at: 220000 });
+    freshness(220000);
+    assert(
+      $('count').textContent.includes('1 working') && countsShowLiveState(),
+      'recovery restores live working counts',
     );
     const realFetch = window.fetch,
       realNow = Date.now;
@@ -1077,6 +1145,14 @@ const {
         /\b1 worker\b/.test(fallbackRoot.workers.textContent),
       'fallback worker contributes to its effective parent branch count and control',
     );
+    const singleWorkerCounts = groups.get('r:/fallback')?.counts.textContent;
+    assert(
+      /\b1 worker\b/.test($('tree-count').textContent) &&
+        !/\b1 workers\b/.test($('tree-count').textContent) &&
+        /\b1 worker\b/.test(singleWorkerCounts ?? '') &&
+        !/\b1 workers\b/.test(singleWorkerCounts ?? ''),
+      'a single worker is counted as "1 worker" in the header and repository counts',
+    );
     assert(
       Math.abs(
         survivor.st.getBoundingClientRect().right -
@@ -1282,9 +1358,14 @@ const {
     );
     showDetails(deepest);
     assert(
-      $('detail-body').textContent.includes('CPU: unavailable') &&
-        $('detail-body').textContent.includes('Process age: unavailable'),
-      'worker details never invent CPU or process age',
+      detailValue('CPU') === 'Unavailable' &&
+        detailValue('Process age') === 'Unavailable' &&
+        !$('detail-body').textContent.includes('CPU: unavailable'),
+      'worker details never invent CPU or process age, nor repeat the label in the value',
+    );
+    assert(
+      !$('detail-body').textContent.includes('Attempted'),
+      'Claude worker details do not describe the Attempted cue, which Claude never emits',
     );
     closeDetails();
     assert(
@@ -1529,7 +1610,7 @@ const {
     show([agent(20000, '/synthetic', { recentCpu: null, idleSec: 30 })]);
     assert(
       rows.get('a:20000').st.textContent === 'unknown' &&
-        rows.get('a:20000').item.cpu.includes('unavailable') &&
+        rows.get('a:20000').item.cpu === 'Unavailable' &&
         $('quiet').hidden,
       'missing activity telemetry is unknown, never quiet or zero CPU',
     );
@@ -1673,7 +1754,8 @@ const {
       ) &&
         $('detail-body').textContent.includes('Immediate parent') &&
         $('detail-body').textContent.includes('main agent’s terminal') &&
-        $('detail-body').textContent.includes('CPU: unavailable'),
+        detailValue('CPU') === 'Unavailable' &&
+        $('detail-body').textContent.includes('Attempted means acceptance is unconfirmed'),
       'live Details preserves full identity, immediate-parent/host-terminal meaning and unavailable telemetry',
     );
     closeDetails();
@@ -1831,7 +1913,7 @@ const {
           !r.logo &&
           r.item.stText === 'unknown' &&
           r.item.mem === null &&
-          r.item.cpu.includes('unavailable'),
+          r.item.cpu === 'Unavailable',
         'native session workers never invent CPU, RSS or lifecycle status or allocate unavailable metric DOM',
       );
       assert(
@@ -1940,19 +2022,6 @@ const {
         liveRow.name.getBoundingClientRect().bottom <= contextBox.top,
       'badge stays in its secondary slot without covering title or metrics',
     );
-    const contrast = (a, b) => {
-      const light = (color) =>
-        color
-          .match(/[\d.]+/g)
-          .slice(0, 3)
-          .map(Number)
-          .map((v) => v / 255)
-          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-          .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
-      const x = light(a),
-        y = light(b);
-      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-    };
     const badgeStyle = getComputedStyle(badge),
       background = getComputedStyle(document.body).backgroundColor;
     assert(
@@ -2185,6 +2254,21 @@ const {
           'Sent from parent' &&
         communication.pendingFeedback.size === 0,
       'pending Claude cue shows once its worker row renders',
+    );
+    const note = document.querySelector('.communication-note');
+    const noteSeparator = getComputedStyle(note, '::before').content;
+    assert(
+      noteSeparator === '" · "',
+      'the cue is separated from the row context text, not glued to it',
+    );
+    const noteContext = note.parentElement;
+    const noteBox = note.getBoundingClientRect();
+    const noteContextBox = noteContext.getBoundingClientRect();
+    const noteClipped = noteContext.scrollWidth > noteContext.clientWidth;
+    const noteInsideRow = noteBox.right <= noteContextBox.right + 1;
+    assert(
+      !noteClipped && noteInsideRow,
+      'the whole cue stays visible on a narrow row instead of being clipped',
     );
     clearPulses();
     showFeedback('sub:a1234567', 'returned', 46001);
@@ -2648,7 +2732,7 @@ const {
       $('detail-body').textContent.includes(
         'stale · retained, not live state',
       ) &&
-        $('detail-body').textContent.includes('CPU 50%') &&
+        detailValue('CPU') === '50%' &&
         $('detail-body').textContent.includes('~123 MB'),
       'opening already-stale Details immediately labels retained activity without replacing valid cached measurements',
     );
@@ -2660,7 +2744,7 @@ const {
       $('detail-body').textContent.includes(
         'offline · retained, not live state',
       ) &&
-        $('detail-body').textContent.includes('CPU 50%') &&
+        detailValue('CPU') === '50%' &&
         $('detail-body').textContent.includes('~123 MB'),
       'opening already-offline Details immediately labels retained activity without another freshness pass',
     );
