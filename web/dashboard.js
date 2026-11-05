@@ -234,7 +234,7 @@ export function renderDashboard(data, again = false) {
   updateSystemMemory(data.system);
   txt($('count'), `${mine.length} agent${mine.length === 1 ? '' : 's'} · ${working} working`);
   $('empty').hidden = items.length > 0;
-  document.querySelector('.tree-toolbar .bar').hidden = items.length === 0;
+  $('tree-actions').hidden = items.length === 0;
   const workers = items.filter((it) => it.sub && !it.dying).length;
   txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} workers`);
   return { items: new Map([...rows.keys()].map((key) => [key, last.get(key)])), agents: mine };

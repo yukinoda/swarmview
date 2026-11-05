@@ -1855,7 +1855,7 @@ const {
     assert(
       Math.abs(liveToggleBox.top - liveLineBox.top) <= 0.5 &&
         liveToggleBox.top <= liveNameBox.top + 12,
-      "a live worker Details button starts at the top of its row beside the name, not centered under a taller context line: " +
+      'a live worker Details button starts at the top of its row beside the name, not centered under a taller context line: ' +
         JSON.stringify({
           line: liveLineBox,
           name: liveNameBox,
@@ -3112,55 +3112,54 @@ const {
       'quiet monogram fallbacks return to neutral',
     );
 
-    const layoutAgent = agent(52000, "/layout-polish", {
-      title: "Layout polish",
+    const layoutAgent = agent(52000, '/layout-polish', {
+      title: 'Layout polish',
       idleSec: 30,
       canFocus: true,
     });
     show([]);
     show([]); // a vanished agent shows once as exiting before it is removed
     assert(
-      !$("empty").hidden &&
-        document.querySelector(".tree-toolbar .bar").hidden &&
-        getComputedStyle(document.querySelector(".tree-toolbar .bar"))
-          .display === "none",
-      "Expand all and Collapse all are hidden when there are no rows",
+      !$('empty').hidden &&
+        $('tree-actions').hidden &&
+        getComputedStyle($('tree-actions')).display === 'none',
+      'Expand all and Collapse all are hidden when there are no rows',
     );
     show([{ ...layoutAgent, recentCpu: 0.5, idleSec: 0 }]);
     show([{ ...layoutAgent, recentCpu: 0, idleSec: 15 }]);
     assert(
-      !document.querySelector(".tree-toolbar .bar").hidden &&
-        $("expand").getBoundingClientRect().height > 0,
-      "Expand all and Collapse all return once rows exist",
+      !$('tree-actions').hidden &&
+        $('expand').getBoundingClientRect().height > 0,
+      'Expand all and Collapse all return once rows exist',
     );
     assert(
-      getComputedStyle($("notify")).marginTop === "8px",
-      "the Notifications button keeps 8px below its heading",
+      getComputedStyle($('notify')).marginTop === '8px',
+      'the Notifications button keeps 8px below its heading',
     );
-    const quietCard = quietRows.get("a:52000");
+    const quietCard = quietRows.get('a:52000');
     assert(
-      quietCard && getComputedStyle(quietCard.meta).fontSize === "12px",
-      "quiet card status text matches the 12px tree status column",
+      quietCard && getComputedStyle(quietCard.meta).fontSize === '12px',
+      'quiet card status text matches the 12px tree status column',
     );
     assert(
-      getComputedStyle(rows.get("a:52000").workers).whiteSpace === "nowrap",
-      "the nested-agent count never wraps mid-phrase",
+      getComputedStyle(rows.get('a:52000').workers).whiteSpace === 'nowrap',
+      'the nested-agent count never wraps mid-phrase',
     );
-    search("layout");
+    search('layout');
     assert(
-      getComputedStyle(searchRows.get("a:52000").meta).fontSize === "12px",
-      "search result status text matches the 12px tree status column",
+      getComputedStyle(searchRows.get('a:52000').meta).fontSize === '12px',
+      'search result status text matches the 12px tree status column',
     );
     const searchHelpShown =
-      getComputedStyle($("search-help")).display !== "none";
+      getComputedStyle($('search-help')).display !== 'none';
     assert(
       searchHelpShown === window.innerWidth > 480,
-      "keyboard-only search help yields to results on phones and stays on wider screens",
+      'keyboard-only search help yields to results on phones and stays on wider screens',
     );
-    search("no-such-agent-anywhere");
+    search('no-such-agent-anywhere');
     assert(
-      getComputedStyle($("search-help")).display !== "none",
-      "search help returns when there are no results to scroll",
+      getComputedStyle($('search-help')).display !== 'none',
+      'search help returns when there are no results to scroll',
     );
     closeSearch();
 

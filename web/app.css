@@ -389,8 +389,6 @@ kbd {
 }
 .st {
   color: var(--mut);
-}
-.agent > .st {
   font-size: 12px;
 }
 .s-working > .row-line > .row-metrics .st {
