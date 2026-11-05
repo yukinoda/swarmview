@@ -69,6 +69,12 @@ export function showDetails(row) {
   refreshDetails();
   if (selectedRow && !$('detail-dialog').open) $('detail-dialog').showModal();
 }
+const ramDetail = (mem) =>
+  mem == null ? 'Unavailable' : '~' + fmtBytes(mem) + ' · process-tree RSS';
+const inParentProcess = (value) =>
+  value === 'Unavailable'
+    ? 'Unavailable · runs inside its Claude process'
+    : 'In parent process · ' + value;
 export function refreshDetails(retained = readDetailsState()) {
   if (!selectedRow) return;
   const { item, row, parent, host } = detailLookup(selectedRow.item.key);
@@ -83,6 +89,17 @@ export function refreshDetails(retained = readDetailsState()) {
   ) {
     closeDetails();
     return;
+  }
+  let ram = ramDetail(item.mem);
+  let cpu = item.cpu;
+  let age = item.up;
+  const claudeWorker = item.sub && !item.live;
+  if (claudeWorker) {
+    // A Claude worker runs inside its claude process; only a proven parent's figures are shown, labelled as that process's.
+    const proven = host && !host.dying;
+    ram = inParentProcess(proven ? ramDetail(host.mem) : 'Unavailable');
+    cpu = inParentProcess(proven ? host.cpu : 'Unavailable');
+    age = inParentProcess(proven ? host.up : 'Unavailable');
   }
   const pairs = [
     ['Provider', item.agentName],
@@ -106,14 +123,9 @@ export function refreshDetails(retained = readDetailsState()) {
       'Activity',
       retained ? retained + ' · retained, not live state' : item.stText,
     ],
-    [
-      'Approx. RAM',
-      item.mem == null
-        ? 'Unavailable'
-        : '~' + fmtBytes(item.mem) + ' · process-tree RSS',
-    ],
-    ['CPU', item.cpu],
-    ['Process age', item.up],
+    ['Approx. RAM', ram],
+    ['CPU', cpu],
+    ['Process age', age],
     ['Model', item.model || 'Unavailable'],
   ];
   // Snapshots rebuild item/fold objects every poll; compare what is shown so an open dialog keeps its DOM.
@@ -150,6 +162,10 @@ export function refreshDetails(retained = readDetailsState()) {
       'Sent and Message sent to worker are not completion; Reply is not success.';
     if (item.live) {
       subHelp += ' Attempted means acceptance is unconfirmed.';
+    }
+    if (claudeWorker) {
+      subHelp +=
+        ' RAM, CPU and process age belong to the parent Claude process, shared with the main agent and its other workers.';
     }
     help.append(document.createTextNode(subHelp));
   }

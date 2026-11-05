@@ -1358,10 +1358,14 @@ const {
     );
     showDetails(deepest);
     assert(
-      detailValue('CPU') === 'Unavailable' &&
-        detailValue('Process age') === 'Unavailable' &&
-        !$('detail-body').textContent.includes('CPU: unavailable'),
-      'worker details never invent CPU or process age, nor repeat the label in the value',
+      detailValue('Approx. RAM') ===
+        'In parent process · ~2.0 GB · process-tree RSS' &&
+        detailValue('CPU') === 'In parent process · 20%' &&
+        detailValue('Process age') === 'In parent process · 1m' &&
+        $('detail-body').textContent.includes(
+          'belong to the parent Claude process',
+        ),
+      'worker details show the proven parent process figures, labelled as the parent’s',
     );
     assert(
       !$('detail-body').textContent.includes('Attempted'),
@@ -1875,6 +1879,14 @@ const {
         !modelShown('sub:orphan-inherit', 'Haiku 4.5'),
       'A subagent without a detected parent does not inherit a same-directory agent model',
     );
+    showDetails(rows.get('sub:orphan-inherit'));
+    assert(
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process' &&
+        detailValue('Approx. RAM') ===
+          'Unavailable · runs inside its Claude process',
+      'a worker without a proven parent never borrows a same-directory agent’s figures',
+    );
+    closeDetails();
 
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.
     const liveHost = agent(45000, '/live-test', {
