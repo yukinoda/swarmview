@@ -380,6 +380,11 @@ kbd {
   content: ' · ';
   color: var(--mut);
 }
+/* While a cue shows, let the context line wrap so a narrow row doesn't clip the cue away. */
+.context[data-communication] {
+  white-space: normal;
+  overflow: visible;
+}
 .workers {
   font-size: 12px;
   color: var(--mut);
