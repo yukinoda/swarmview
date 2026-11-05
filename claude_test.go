@@ -201,13 +201,24 @@ func TestRunningSubagentAttachedToSoleClaude(t *testing.T) {
 	}
 }
 
-func TestSubagentPrefersResolvedModelOverAlias(t *testing.T) {
+func TestSubagentShowsResolvedModelFromTranscript(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
-	meta := map[string]any{"description": "R", "model": "opus", "pickedEffortModel": "claude-opus-5-5"}
-	mk(t, root, "/w/a", "s1", "a1", meta, 3, now)
+	session := "11111111-1111-1111-1111-111111111111"
+	meta := map[string]any{"description": "R", "model": "sonnet"}
+	mk(t, root, "/w/a", session, "a1", meta, 3, now)
+	record := `{"type":"assistant","sessionId":"` + session + `","message":{"model":"claude-sonnet-5-5"}}` + "\n"
+	logPath := filepath.Join(root, claudeSlug("/w/a"), session, "subagents", "agent-a1.jsonl")
+	must(t, os.WriteFile(logPath, []byte(record), 0o644))
+	modTime := time.UnixMilli(now - 3000)
+	must(t, os.Chtimes(logPath, modTime, modTime))
+
 	got := subs(root, now, claude(100, "/w/a"))
-	if len(got) != 1 || got[0].Model != "claude-opus-5-5" {
-		t.Errorf("got %+v", got)
+
+	if len(got) != 1 {
+		t.Fatalf("got %+v", got)
+	}
+	if got[0].Model != "claude-sonnet-5-5" {
+		t.Errorf("model: got %v", got[0].Model)
 	}
 }
 

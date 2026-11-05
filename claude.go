@@ -23,6 +23,8 @@ type metaEntry struct {
 	mt                                int64
 	finished                          bool
 	parentAgentId, description, model any
+	logKey                            [2]int64 // transcript size and mtime at the last tail read
+	logModel                          string   // last model in the transcript, "" if none seen yet
 }
 
 // workerHost is the Claude process whose SubagentStart hook reported a worker,
@@ -390,21 +392,44 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 						continue
 					}
 					fin, _ := obj["finished"].(bool)
-					// pickedEffortModel is the resolved model id; model is only the requested alias.
-					model := obj["model"]
-					resolved, _ := obj["pickedEffortModel"].(string)
-					if resolved != "" {
-						model = resolved
+					c = metaEntry{
+						mt:            mmt,
+						finished:      fin,
+						parentAgentId: obj["parentAgentId"],
+						description:   obj["description"],
+						model:         obj["model"],
 					}
-					c = metaEntry{mmt, fin, obj["parentAgentId"], obj["description"], model}
 					metaCache[mp] = c
 				}
 				if c.finished {
 					continue
 				}
-				jt, err := mtimeMs(path.Join(sub, "agent-"+id+".jsonl"))
-				if err != nil || now-jt > 30*60e3 {
+				logPath := path.Join(sub, "agent-"+id+".jsonl")
+				logInfo, err := os.Stat(logPath)
+				if err != nil {
 					continue
+				}
+				jt := logInfo.ModTime().UnixMilli()
+				if now-jt > 30*60e3 {
+					continue
+				}
+				// The meta file only names the requested alias; the transcript has the resolved model.
+				// Worker records carry the parent session's id.
+				logKey := fileKey(logInfo, now)
+				if logKey == [2]int64{} || logKey != c.logKey {
+					_, logModel, ok := readSessionTitle(logPath, session)
+					if ok {
+						c.logKey = logKey
+					}
+					// a long tool result can push every assistant record out of the tail; keep the last model seen
+					if logModel != "" {
+						c.logModel = logModel
+					}
+					metaCache[mp] = c
+				}
+				model := c.model
+				if c.logModel != "" {
+					model = c.logModel
 				}
 				// Attach to the sole claude in that cwd unless its known current session is
 				// another one (the worker outlived an earlier session) and its SubagentStart
@@ -427,7 +452,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				} else if claimed && host.proven(agents, now) {
 					pp = &host.pid
 				}
-				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, c.model, now-jt < 60e3})
+				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, model, now-jt < 60e3})
 			}
 		}
 	}
