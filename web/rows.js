@@ -140,14 +140,14 @@ export function refreshDetails(retained = readDetailsState()) {
     'p',
     'Activity is not progress or a request for input. ' +
       'RSS is approximate, not additive physical memory or guaranteed reclaimable RAM. ' +
-      'CPU 100% is one core, not task progress. Process age is not task duration.',
+      'CPU at 100% is one core, not task progress. Process age is not task duration.',
   );
   help.className = 'detail-help';
   if (item.sub) {
     let subHelp =
       ' The tree shows the immediate parent; the name opens the main agent’s terminal when available, ' +
       'not a separate worker terminal. ' +
-      'Sent is not completion; Reply is not success.';
+      'Sent and Message sent to worker are not completion; Reply is not success.';
     if (item.live) {
       subHelp += ' Attempted means acceptance is unconfirmed.';
     }

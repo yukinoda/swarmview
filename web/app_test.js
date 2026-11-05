@@ -225,7 +225,7 @@ const {
     );
     assert(
       metrics.item.up === '1m',
-      'uptime is labeled as process age',
+      'process age is the bare formatted age',
     );
     assert(
       !$('detail-dialog').open &&
@@ -254,8 +254,8 @@ const {
         'monitoring-only details open accessibly',
       );
       assert(
-        $('detail-body').textContent.includes('136%') &&
-          $('detail-body').textContent.includes('1m') &&
+        detailValue('CPU') === '136%' &&
+          detailValue('Process age') === '1m' &&
           $('detail-body').getBoundingClientRect().height > 0,
         'opened details expose CPU and process age',
       );
@@ -294,7 +294,7 @@ const {
       showDetails(metrics);
       show([{ ...a, recentCpu: 0.5, memBytes: 500 * MB }]);
       assert(
-        $('detail-body').textContent.includes('50%') &&
+        detailValue('CPU') === '50%' &&
           $('detail-body').textContent.includes('~500 MB'),
         'the selected shared Details follows current measurements rather than retaining its opening snapshot',
       );
@@ -2654,7 +2654,7 @@ const {
       $('detail-body').textContent.includes(
         'stale · retained, not live state',
       ) &&
-        $('detail-body').textContent.includes('50%') &&
+        detailValue('CPU') === '50%' &&
         $('detail-body').textContent.includes('~123 MB'),
       'opening already-stale Details immediately labels retained activity without replacing valid cached measurements',
     );
@@ -2666,7 +2666,7 @@ const {
       $('detail-body').textContent.includes(
         'offline · retained, not live state',
       ) &&
-        $('detail-body').textContent.includes('50%') &&
+        detailValue('CPU') === '50%' &&
         $('detail-body').textContent.includes('~123 MB'),
       'opening already-offline Details immediately labels retained activity without another freshness pass',
     );
