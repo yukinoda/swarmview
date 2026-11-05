@@ -223,6 +223,22 @@ func TestSoleClaudeAttachesOnlyItsCurrentSession(t *testing.T) {
 	}
 }
 
+// A worker this process's SubagentStart hook reported (started before a /clear
+// moved the process to a new session) keeps its parent.
+func TestSoleClaudeKeepsHookReportedWorkerAfterClear(t *testing.T) {
+	root, now := t.TempDir(), nowMs()
+	sessionA := "a0000000-0000-0000-0000-000000000000"
+	sessionB := "b0000000-0000-0000-0000-000000000000"
+	mk(t, root, "/w/a", sessionA, "old", map[string]any{"description": "R", "model": "inherit"}, 3, now)
+	host := claudeUp(100, "/w/a", "10:00")
+	host.session = sessionB
+	hosts := hookRecords(map[string]workerHost{"old": hookRecord(host, now)})
+	got := subsWithHosts(root, now, hosts, host)
+	if !hasParent(parentPids(got), "old", 100) {
+		t.Errorf("hook-reported worker should keep its parent: %+v", got)
+	}
+}
+
 func TestFinishedSubagentExcluded(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	mk(t, root, "/w/a", "s1", "a1", map[string]any{"description": "R", "model": "m", "finished": true}, 3, now)

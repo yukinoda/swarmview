@@ -401,16 +401,19 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 					continue
 				}
 				// Attach to the sole claude in that cwd unless its known current session is
-				// another one (the worker outlived an earlier session), else to the one process
-				// whose session metadata claims this session. Of several claimants, only the one
-				// whose SubagentStart hook reported this worker is its parent.
+				// another one (the worker outlived an earlier session) and its SubagentStart
+				// hook didn't report this worker (one it started before a /clear). Else attach
+				// to the one process whose session metadata claims this session. Of several
+				// claimants, only the one whose hook reported this worker is its parent.
 				var pp *int
 				owners := claimants[session]
 				host, claimed := sessionHost(hosts, id, owners)
 				if len(g.pids) == 1 {
 					current := g.sessions[0]
 					fromOtherSession := current != "" && current != session
-					if !fromOtherSession {
+					soleHost, recorded := hosts[hostKey{id, g.pids[0]}]
+					startedHere := recorded && soleHost.proven(agents, now)
+					if !fromOtherSession || startedHere {
 						pp = &g.pids[0]
 					}
 				} else if len(owners) == 1 {
