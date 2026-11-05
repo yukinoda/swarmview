@@ -2692,6 +2692,14 @@ const {
         );
       }
     }
+    // A wrapping context line grows the row; the dot and branch must stay on the title.
+    const wrappingRow = rows.get(connectorLive[0].key);
+    const wrappingText = 'Reading a long context line that wraps. ';
+    wrappingRow.context.textContent = wrappingText.repeat(12);
+    assert(
+      wrappingRow.btn.getBoundingClientRect().height > 100,
+      'the long context fixture really wraps and grows its worker row',
+    );
     const connectorJunctions = [];
     for (const [key, row] of rows) {
       const kids = row.node.parentElement,
