@@ -398,6 +398,8 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 						parentAgentId: obj["parentAgentId"],
 						description:   obj["description"],
 						model:         obj["model"],
+						logKey:        c.logKey,
+						logModel:      c.logModel,
 					}
 					metaCache[mp] = c
 				}
