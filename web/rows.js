@@ -71,10 +71,11 @@ export function showDetails(row) {
 }
 const ramDetail = (mem) =>
   mem == null ? 'Unavailable' : '~' + fmtBytes(mem) + ' · process-tree RSS';
-const inParentProcess = (value) =>
-  value === 'Unavailable'
-    ? 'Unavailable · runs inside its Claude process'
-    : 'In parent process · ' + value;
+// Without a proven parent there is no process to attribute figures to; a proven parent's gaps stay labelled as the parent's.
+const inParentProcess = (parentHost, value) =>
+  parentHost
+    ? 'In parent process · ' + value
+    : 'Unavailable · runs inside its Claude process';
 export function refreshDetails(retained = readDetailsState()) {
   if (!selectedRow) return;
   const { item, row, parent, host } = detailLookup(selectedRow.item.key);
@@ -97,9 +98,10 @@ export function refreshDetails(retained = readDetailsState()) {
   // A Claude worker runs inside its claude process; only a proven parent's figures are shown, labelled as that process's.
   const proven = claudeWorker && host?.kind === 'claude' && !host.dying;
   if (claudeWorker) {
-    ram = inParentProcess(proven ? ramDetail(host.mem) : 'Unavailable');
-    cpu = inParentProcess(proven ? host.cpu : 'Unavailable');
-    age = inParentProcess(proven ? host.up : 'Unavailable');
+    const parentHost = proven ? host : null;
+    ram = inParentProcess(parentHost, ramDetail(parentHost?.mem));
+    cpu = inParentProcess(parentHost, parentHost?.cpu);
+    age = inParentProcess(parentHost, parentHost?.up);
   }
   const pairs = [
     ['Provider', item.agentName],

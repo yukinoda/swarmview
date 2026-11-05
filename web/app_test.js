@@ -1359,13 +1359,22 @@ const {
     showDetails(deepest);
     assert(
       detailValue('Approx. RAM') ===
-        'In parent process · ~2.0 GB · process-tree RSS' &&
-        detailValue('CPU') === 'In parent process · 20%' &&
-        detailValue('Process age') === 'In parent process · 1m' &&
-        $('detail-body').textContent.includes(
-          'belong to the parent Claude process',
-        ),
-      'worker details show the proven parent process figures, labelled as the parent’s',
+        'In parent process · ~2.0 GB · process-tree RSS',
+      'worker details show the proven parent’s RAM, labelled as the parent’s',
+    );
+    assert(
+      detailValue('CPU') === 'In parent process · 20%',
+      'worker details show the proven parent’s CPU, labelled as the parent’s',
+    );
+    assert(
+      detailValue('Process age') === 'In parent process · 1m',
+      'worker details show the proven parent’s process age, labelled as the parent’s',
+    );
+    assert(
+      $('detail-body').textContent.includes(
+        'belong to the parent Claude process',
+      ),
+      'worker details explain that the figures belong to the parent Claude process',
     );
     assert(
       !$('detail-body').textContent.includes('Attempted'),
@@ -1881,10 +1890,45 @@ const {
     );
     showDetails(rows.get('sub:orphan-inherit'));
     assert(
-      detailValue('CPU') === 'Unavailable · runs inside its Claude process' &&
-        detailValue('Approx. RAM') ===
-          'Unavailable · runs inside its Claude process',
-      'a worker without a proven parent never borrows a same-directory agent’s figures',
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process',
+      'a worker without a proven parent never borrows a same-directory agent’s CPU',
+    );
+    assert(
+      detailValue('Approx. RAM') ===
+        'Unavailable · runs inside its Claude process',
+      'a worker without a proven parent never borrows a same-directory agent’s RAM',
+    );
+    closeDetails();
+
+    render({
+      agents: [
+        agent(44107, '/metric-gaps', {
+          kind: 'claude',
+          recentCpu: undefined,
+        }),
+      ],
+      subagents: [
+        {
+          id: 'metric-gaps',
+          parentPid: 44107,
+          cwd: '/metric-gaps',
+          working: true,
+        },
+      ],
+      at: Date.now(),
+    });
+    showDetails(rows.get('sub:metric-gaps'));
+    assert(
+      detailValue('CPU') === 'In parent process · Unavailable',
+      'a proven parent’s missing CPU stays attributed to the parent, not read as no parent',
+    );
+    assert(
+      detailValue('Approx. RAM') === 'In parent process · Unavailable',
+      'a proven parent’s missing RAM stays attributed to the parent, not read as no parent',
+    );
+    assert(
+      detailValue('Process age') === 'In parent process · 1m',
+      'a proven parent’s available process age is still shown beside its gaps',
     );
     closeDetails();
 
