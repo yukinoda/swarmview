@@ -155,9 +155,10 @@ session status or conversation metadata.
   Recently quiet observations and notifications do not confirm that
   someone needs to act. Nesting indicates discovered parentage, not communication.
 - Per-agent RAM is approximate process-tree RSS and remains neutral regardless of
-  size. Missing measurements (including Claude workers) remain unavailable, not
-  zero. Process rows can display a dash; live metadata workers omit empty cells
-  and explain unavailable metrics in Details.
+  size. Missing measurements (including Claude workers' own) remain unavailable,
+  not zero; a Claude worker's Details show its live parent process's figures,
+  labelled `In parent process`. Process rows can display a dash; live metadata
+  workers omit empty cells and explain unavailable metrics in Details.
   Machine-wide warning colors require the macOS pressure signal; free RAM and
   existing swap alone do not establish pressure.
 - Claude Code has additional read-only subagent discovery under

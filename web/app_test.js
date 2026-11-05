@@ -1930,6 +1930,41 @@ const {
       detailValue('Process age') === 'In parent process · 1m',
       'a proven parent’s available process age is still shown beside its gaps',
     );
+    render({
+      agents: [],
+      subagents: [
+        {
+          id: 'metric-gaps',
+          parentPid: 44107,
+          cwd: '/metric-gaps',
+          working: true,
+        },
+      ],
+      at: Date.now(),
+    });
+    assert(
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process',
+      'an exiting parent’s figures are not shown as a live parent’s',
+    );
+    closeDetails();
+
+    render({
+      agents: [agent(44108, '/metric-codex')],
+      subagents: [
+        {
+          id: 'metric-codex',
+          parentPid: 44108,
+          cwd: '/metric-codex',
+          working: true,
+        },
+      ],
+      at: Date.now(),
+    });
+    showDetails(rows.get('sub:metric-codex'));
+    assert(
+      detailValue('CPU') === 'Unavailable · runs inside its Claude process',
+      'a non-Claude process is never presented as a Claude worker’s parent',
+    );
     closeDetails();
 
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.

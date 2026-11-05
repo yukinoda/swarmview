@@ -84,7 +84,7 @@ Details → CPU: 13% · Process age: 24m
 | `—` in RAM | Memory is unavailable, not zero |
 | `Process age` = `24m` in Details | How long the process has been running, not time spent on this task |
 | `CPU` = `13%` in Details | Recent CPU use, **not percent complete**. 100% = one core; can exceed 100% |
-| `In parent process · 13%` in a Claude worker's Details | The parent Claude process's figure, shared with the main agent and its other workers; not the worker's own. Without a detected parent it reads `Unavailable · runs inside its Claude process` |
+| `In parent process · 13%` in a Claude worker's Details | The parent Claude process's figure, shared with the main agent and its other workers; not the worker's own. Without a live detected Claude parent it reads `Unavailable · runs inside its Claude process` |
 | `2 working` | Two working agents in that repository or worktree |
 | `swap … · RAM …% free` | Machine-wide memory indicators on macOS |
 
