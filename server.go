@@ -25,7 +25,9 @@ type server struct {
 	cache     map[int]*cacheEntry
 	metaCache map[string]metaEntry
 	sessions  map[string]sessionScan
-	root      string // ~/.claude/projects
+	hosts     map[hostKey]workerHost // Claude worker ID and host PID -> its SubagentStart record
+	hostSeq   uint64                 // sequence number of the latest SubagentStart record
+	root      string                 // ~/.claude/projects
 	port      int
 	sysU32    func(name string) (uint32, bool) // nil disables system memory (tests, non-darwin)
 	sys       system
@@ -40,7 +42,17 @@ type server struct {
 
 func newServer(run Runner) *server {
 	home, _ := os.UserHomeDir()
-	return &server{port: 4777, run: run, cache: map[int]*cacheEntry{}, metaCache: map[string]metaEntry{}, sessions: map[string]sessionScan{}, noCwd: map[int]int64{}, root: path.Join(home, ".claude/projects"), ghostty: ghosttyInstalled()}
+	return &server{
+		port:      4777,
+		run:       run,
+		cache:     map[int]*cacheEntry{},
+		metaCache: map[string]metaEntry{},
+		sessions:  map[string]sessionScan{},
+		hosts:     map[hostKey]workerHost{},
+		noCwd:     map[int]int64{},
+		root:      path.Join(home, ".claude/projects"),
+		ghostty:   ghosttyInstalled(),
+	}
 }
 
 type snap struct {
@@ -74,20 +86,34 @@ func toPayload(s snap) payload {
 func (s *server) snapshot(now int64) (snap, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.snapshotLocked(now)
+}
+
+// currentSnapshot is snapshot at the time the lock is acquired. A time read
+// before waiting for the lock would be paired with ps's later elapsed times,
+// skewing every process start estimated from them.
+func (s *server) currentSnapshot() (snap, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.snapshotLocked(time.Now().UnixMilli())
+}
+
+// snapshotLocked must be called with s.mu held.
+func (s *server) snapshotLocked(now int64) (snap, error) {
 	if s.snap == nil || now-s.snap.at >= 1000 {
 		agents, err := s.listAgents(now)
 		if err != nil {
 			return snap{}, err
 		}
 		s.refreshSystem(now)
-		s.snap = &snap{agents, listClaudeSubagents(agents, s.root, now, s.metaCache, s.sessions), now, s.sys}
+		s.snap = &snap{agents, listClaudeSubagents(agents, s.root, now, s.metaCache, s.sessions, s.hosts), now, s.sys}
 	}
 	return *s.snap, nil
 }
 
 // focus runs the terminal switch outside the lock on a snapshot copy.
-func (s *server) focus(pid int, now int64) (bool, string, error) {
-	sn, err := s.snapshot(now)
+func (s *server) focus(pid int) (bool, string, error) {
+	sn, err := s.currentSnapshot()
 	if err != nil {
 		return false, "", err
 	}
@@ -176,7 +202,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "image/svg+xml")
 		w.Write(logoSVG)
 	case "GET /agents":
-		sn, err := s.snapshot(time.Now().UnixMilli())
+		sn, err := s.currentSnapshot()
 		if err != nil {
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
@@ -222,7 +248,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				pid = int(f)
 			}
 		}
-		ok, e, err := s.focus(pid, time.Now().UnixMilli())
+		ok, e, err := s.focus(pid)
 		if err != nil {
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return

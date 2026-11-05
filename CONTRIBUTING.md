@@ -35,7 +35,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `pulse*.go`: opt-in local metadata IPC, bounded live relationship/feedback delivery,
   peer authentication, and socket lifecycle; no conversation/event history.
   `pulse_claude.go` is both the `-claude-hook` client and its one-record
-  server path.
+  server path, which also tells `claude.go` which Claude started a worker.
 - `tmux.go`, `sys_*.go`: terminal navigation and platform-specific integration.
 - `system.go`: machine-wide memory measurements.
 - `web/`: build-free browser interface; `index.html` loads `app.css` and the

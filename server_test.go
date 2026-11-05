@@ -259,6 +259,26 @@ func TestAgentsPsFailure500(t *testing.T) {
 	}
 }
 
+func TestCurrentSnapshotTimedAfterLockWait(t *testing.T) {
+	s := srvWith(func(cmd string, args ...string) (string, error) {
+		return "", nil
+	})
+	s.mu.Lock()
+	done := make(chan snap)
+	go func() {
+		sn, _ := s.currentSnapshot()
+		done <- sn
+	}()
+	time.Sleep(50 * time.Millisecond)
+	unlocked := time.Now().UnixMilli()
+	s.mu.Unlock()
+	sn := <-done
+	// ps runs after the wait, so the time its elapsed times pair with must too.
+	if sn.at < unlocked {
+		t.Errorf("snapshot timed %d ms before the lock was free", unlocked-sn.at)
+	}
+}
+
 func TestConcurrentSnapshotsOnePs(t *testing.T) {
 	var n atomic.Int32
 	s := srvWith(func(cmd string, args ...string) (string, error) {

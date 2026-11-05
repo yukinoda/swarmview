@@ -63,6 +63,7 @@ type pulseBridge struct {
 	inode   os.FileInfo
 	once    sync.Once
 	closed  bool
+	srv     *server // its SubagentStart records are cleared on close
 }
 
 // errBye ends a peer's stream after its goodbye record: a deliberate, lossless quit.
@@ -130,6 +131,7 @@ func (b *pulseBridge) start(s *server) error {
 		return err
 	}
 	b.path, b.ln, b.inode, b.lock = path, ln, inode, lock
+	b.srv = s
 	publishHookBinary(dir, staged)
 	go func() {
 		slots := make(chan bool, pulsePeers)
@@ -164,6 +166,10 @@ func (b *pulseBridge) close() {
 			c.Close()
 		}
 		b.mu.Unlock()
+		// Records come only from this bridge's hooks: none outlive it.
+		if b.srv != nil {
+			b.srv.clearWorkerHosts()
+		}
 		// Never unlink the lock inode: another starter may already have it open.
 		if b.lock != nil {
 			b.lock.Close()
@@ -178,7 +184,7 @@ func (b *pulseBridge) accept(s *server, c net.Conn) {
 		return
 	}
 	// Kernel peer PID, not a sender-supplied PID, authenticates the TUI process.
-	sn, err := s.snapshot(time.Now().UnixMilli())
+	sn, err := s.currentSnapshot()
 	if err != nil {
 		return
 	}

@@ -166,7 +166,10 @@ session status or conversation metadata.
   agent whose `~/.claude/sessions/<pid>.json` (matching PID and working
   directory) names the subagent's session. Sessions no running agent claims, or
   that two agents claim, and older CLI versions without that file, have no
-  exact parent.
+  exact parent. With `-communication` and the [Claude plugin](integrations/claude/README.md),
+  a session that two agents claim (resumed in a second terminal) nests each
+  worker under the claimant whose `SubagentStart` hook reported it; workers
+  started before Swarmview was listening stay unnested.
 - When Claude's pane title is generic or unavailable, generated task titles are
   read from `ai-title` metadata records in the last 64 KiB of the session JSONL.
   This requires matching PID and working directory metadata in
