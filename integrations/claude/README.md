@@ -136,7 +136,7 @@ repository. With the plugin, Swarmview remembers which Claude's
 `SubagentStart` hook reported each worker, even while no dashboard is open,
 and nests the worker under that Claude. Only the event name and the agent ID
 are used. A new worker can show under the repository for up to one poll before
-it moves under its Claude. Without `-communication`, nesting is unchanged.
+it moves under its Claude. With the bridge off, nesting is unchanged.
 
 Swarmview leaves a worker unnested rather than guess, so some stay flat:
 
