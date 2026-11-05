@@ -1684,6 +1684,115 @@ const {
       'Claude read-only lifecycle/model information is retained without claiming process measurements',
     );
     closeDetails();
+    render({
+      agents: [
+        agent(44100, '/model-cases', {
+          kind: 'claude',
+          model: 'claude-opus-5-5',
+        }),
+        agent(44101, '/model-cases', {
+          kind: 'codex',
+          model: 'gpt-sol6.1',
+        }),
+      ],
+      subagents: [
+        {
+          id: 'alias-model',
+          parentPid: 44100,
+          cwd: '/model-cases',
+          working: true,
+          model: 'sonnet',
+        },
+        {
+          id: 'inherited-model',
+          parentPid: 44100,
+          cwd: '/model-cases',
+          working: true,
+          model: 'inherit',
+        },
+      ],
+      at: Date.now(),
+    });
+    const modelShown = (key, label) => {
+      showDetails(rows.get(key));
+      const shown = $('detail-body').textContent.includes(label);
+      closeDetails();
+      return shown;
+    };
+    assert(
+      modelShown('a:44100', 'Opus 5.5') &&
+        modelShown('a:44101', 'gpt-sol6.1') &&
+        modelShown('sub:alias-model', 'Sonnet') &&
+        modelShown('sub:inherited-model', 'Opus 5.5'),
+      'Details names Claude models and aliases, resolves inherited subagent models, and shows other model ids as given',
+    );
+
+    render({
+      agents: [
+        agent(44102, '/model-cases', {
+          kind: 'claude',
+          model: 'gpt-5',
+        }),
+        agent(44103, '/model-cases', {
+          kind: 'claude',
+          model: 'gemini-2-5',
+        }),
+        agent(44104, '/model-cases', {
+          kind: 'claude',
+          model: { name: 'not a string' },
+        }),
+      ],
+      subagents: [
+        {
+          id: 'numeric-model',
+          parentPid: 44102,
+          cwd: '/model-cases',
+          working: true,
+          model: 987654,
+        },
+      ],
+      at: Date.now(),
+    });
+    assert(
+      modelShown('a:44102', 'gpt-5') &&
+        modelShown('a:44103', 'gemini-2-5') &&
+        !modelShown('a:44102', 'Gpt 5') &&
+        !modelShown('a:44103', 'Gemini 2.5'),
+      'Models without a claude- prefix or Claude alias are shown unchanged',
+    );
+    assert(
+      !modelShown('a:44104', '[object Object]') &&
+        !modelShown('sub:numeric-model', '987654'),
+      'Non-string model values from metadata are not rendered',
+    );
+
+    render({
+      agents: [
+        agent(44105, '/model-orphan', {
+          kind: 'claude',
+          model: 'claude-opus-5-5',
+        }),
+        agent(44106, '/model-orphan', {
+          kind: 'claude',
+          model: 'claude-haiku-4-5',
+        }),
+      ],
+      subagents: [
+        {
+          id: 'orphan-inherit',
+          parentPid: null,
+          cwd: '/model-orphan',
+          working: true,
+          model: 'inherit',
+        },
+      ],
+      at: Date.now(),
+    });
+    assert(
+      !modelShown('sub:orphan-inherit', 'Opus 5.5') &&
+        !modelShown('sub:orphan-inherit', 'Haiku 4.5'),
+      'A subagent without a detected parent does not inherit a same-directory agent model',
+    );
 
     // Synthetic protocol frames only: no user provider, plugin, or agent is started.
     const liveHost = agent(45000, '/live-test', {

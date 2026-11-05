@@ -23,8 +23,10 @@ metric help at the bottom explains the numbers without leaving your sessions.
 
 Per-agent RAM stays neutral regardless of size. Machine-wide warning/critical
 styling uses the actual macOS memory-pressure signal, not low free RAM or swap
-usage alone. Existing swap can remain occupied after pressure falls. Subagent
-details show their model when available rather than inventing process age or CPU.
+usage alone. Existing swap can remain occupied after pressure falls. Claude Code
+details show the model, such as Opus 5.5, from the session's latest reply in its
+transcript; subagents show it without inventing process age or CPU. Other
+providers show Unavailable.
 
 | Status | Meaning |
 | --- | --- |
