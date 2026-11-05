@@ -51,6 +51,11 @@ const {
       ...extra,
     });
     const show = (agents) => render({ agents, subagents: [] });
+    const detailValue = (label) => {
+      const terms = Array.from($('detail-body').querySelectorAll('dt'));
+      const term = terms.find((dt) => dt.textContent === label);
+      return term?.nextElementSibling?.textContent;
+    };
     const branchOf = (row) => {
       if (
         !$('detail-dialog').open ||
@@ -213,13 +218,13 @@ const {
       'State and RAM share one aligned readable metric column',
     );
     assert(
-      metrics.item.cpu === 'CPU 136%' &&
+      metrics.item.cpu === '136%' &&
         metrics.mem.textContent === '~1.6 GB' &&
         metrics.toggle.getAttribute('aria-label').includes('RAM'),
       'metrics identify CPU (including multi-core use) and approximate RAM',
     );
     assert(
-      metrics.item.up === 'Process age: 1m',
+      metrics.item.up === '1m',
       'uptime is labeled as process age',
     );
     assert(
@@ -249,8 +254,8 @@ const {
         'monitoring-only details open accessibly',
       );
       assert(
-        $('detail-body').textContent.includes('CPU 136%') &&
-          $('detail-body').textContent.includes('Process age: 1m') &&
+        $('detail-body').textContent.includes('136%') &&
+          $('detail-body').textContent.includes('1m') &&
           $('detail-body').getBoundingClientRect().height > 0,
         'opened details expose CPU and process age',
       );
@@ -289,7 +294,7 @@ const {
       showDetails(metrics);
       show([{ ...a, recentCpu: 0.5, memBytes: 500 * MB }]);
       assert(
-        $('detail-body').textContent.includes('CPU 50%') &&
+        $('detail-body').textContent.includes('50%') &&
           $('detail-body').textContent.includes('~500 MB'),
         'the selected shared Details follows current measurements rather than retaining its opening snapshot',
       );
@@ -1077,6 +1082,14 @@ const {
         /\b1 worker\b/.test(fallbackRoot.workers.textContent),
       'fallback worker contributes to its effective parent branch count and control',
     );
+    const singleWorkerCounts = groups.get('r:/fallback')?.counts.textContent;
+    assert(
+      /\b1 worker\b/.test($('tree-count').textContent) &&
+        !/\b1 workers\b/.test($('tree-count').textContent) &&
+        /\b1 worker\b/.test(singleWorkerCounts ?? '') &&
+        !/\b1 workers\b/.test(singleWorkerCounts ?? ''),
+      'a single worker is counted as "1 worker" in the header and repository counts',
+    );
     assert(
       Math.abs(
         survivor.st.getBoundingClientRect().right -
@@ -1282,9 +1295,14 @@ const {
     );
     showDetails(deepest);
     assert(
-      $('detail-body').textContent.includes('CPU: unavailable') &&
-        $('detail-body').textContent.includes('Process age: unavailable'),
-      'worker details never invent CPU or process age',
+      detailValue('CPU') === 'Unavailable' &&
+        detailValue('Process age') === 'Unavailable' &&
+        !$('detail-body').textContent.includes('CPU: unavailable'),
+      'worker details never invent CPU or process age, nor repeat the label in the value',
+    );
+    assert(
+      !$('detail-body').textContent.includes('Attempted'),
+      'Claude worker details do not describe the Attempted cue, which Claude never emits',
     );
     closeDetails();
     assert(
@@ -1529,7 +1547,7 @@ const {
     show([agent(20000, '/synthetic', { recentCpu: null, idleSec: 30 })]);
     assert(
       rows.get('a:20000').st.textContent === 'unknown' &&
-        rows.get('a:20000').item.cpu.includes('unavailable') &&
+        rows.get('a:20000').item.cpu === 'Unavailable' &&
         $('quiet').hidden,
       'missing activity telemetry is unknown, never quiet or zero CPU',
     );
@@ -1673,7 +1691,8 @@ const {
       ) &&
         $('detail-body').textContent.includes('Immediate parent') &&
         $('detail-body').textContent.includes('main agent’s terminal') &&
-        $('detail-body').textContent.includes('CPU: unavailable'),
+        detailValue('CPU') === 'Unavailable' &&
+        $('detail-body').textContent.includes('Attempted means acceptance is unconfirmed'),
       'live Details preserves full identity, immediate-parent/host-terminal meaning and unavailable telemetry',
     );
     closeDetails();
@@ -1831,7 +1850,7 @@ const {
           !r.logo &&
           r.item.stText === 'unknown' &&
           r.item.mem === null &&
-          r.item.cpu.includes('unavailable'),
+          r.item.cpu === 'Unavailable',
         'native session workers never invent CPU, RSS or lifecycle status or allocate unavailable metric DOM',
       );
       assert(
@@ -2635,7 +2654,7 @@ const {
       $('detail-body').textContent.includes(
         'stale · retained, not live state',
       ) &&
-        $('detail-body').textContent.includes('CPU 50%') &&
+        $('detail-body').textContent.includes('50%') &&
         $('detail-body').textContent.includes('~123 MB'),
       'opening already-stale Details immediately labels retained activity without replacing valid cached measurements',
     );
@@ -2647,7 +2666,7 @@ const {
       $('detail-body').textContent.includes(
         'offline · retained, not live state',
       ) &&
-        $('detail-body').textContent.includes('CPU 50%') &&
+        $('detail-body').textContent.includes('50%') &&
         $('detail-body').textContent.includes('~123 MB'),
       'opening already-offline Details immediately labels retained activity without another freshness pass',
     );
