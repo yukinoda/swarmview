@@ -72,8 +72,15 @@ def main():
     hooks_source = Path(__file__).resolve().parents[2] / hooks
     assert (resources / hooks).read_bytes() == hooks_source.read_bytes(), "App must include the Claude hook setup"
     assert not any(Path(name).name == "Swarmview" for _, _, name in processes().values()), "Quit existing Swarmview apps yourself before owned-app checks"
-    opt_out = ["-NoCommunication", "YES"] if args.no_communication_default else ["--no-communication"]
-    launch = [str(executable)] + ([] if args.communication else opt_out)
+    # Per-process overrides keep a saved NoCommunication preference from affecting the checks.
+    force_on = ["-NoCommunication", "NO"]
+    if args.no_communication_default:
+        mode = ["-NoCommunication", "YES"]
+    elif args.communication:
+        mode = force_on
+    else:
+        mode = ["--no-communication"]
+    launch = [str(executable)] + mode
     live_socket = Path.home() / "Library/Caches/swarmview/live.sock"
     live_hook = live_socket.with_name("live-hook")  # the Claude plugin's private copy
     assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"
@@ -138,7 +145,7 @@ def main():
             assert common, "No shared agents to compare"
             assert all(cli[pid] == desktop[pid] for pid in common), "Native/CLI tmux targets differ"
         # An inverse-mode second launch must not silently reconfigure the singleton.
-        second = subprocess.run([str(executable)] + (["--no-communication"] if args.communication else []), capture_output=True, text=True, timeout=10)
+        second = subprocess.run([str(executable)] + (["--no-communication"] if args.communication else force_on), capture_output=True, text=True, timeout=10)
         assert second.returncode == 0, second.stderr
         assert app.poll() is None and backend_pid(app.pid) == child, "Second launch replaced backend"
         assert communication_enabled() == args.communication, "Second launch changed existing communication mode"
