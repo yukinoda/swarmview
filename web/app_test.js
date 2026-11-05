@@ -669,6 +669,34 @@ const {
       $('count').textContent.includes('1 working') && countsShowLiveState(),
       'recovery restores live working counts',
     );
+    const separatedWorker = {
+      id: 'separated',
+      parentPid: working.pid,
+      cwd: working.cwd,
+      working: true,
+    };
+    const withWorker = {
+      agents: [working],
+      subagents: [separatedWorker],
+      at: 220000,
+    };
+    const separatorBefore = (count) =>
+      getComputedStyle(count, '::before').content;
+    render(withWorker);
+    freshness(220000);
+    const [liveCount, workerCount] = groupCounts().children;
+    assert(
+      separatorBefore(liveCount) === 'none' &&
+        separatorBefore(workerCount) === '"·"',
+      'repository counts are separated so two counts do not read as one phrase',
+    );
+    freshness(300000);
+    assert(
+      separatorBefore(workerCount) === 'none',
+      'a retained snapshot does not lead its counts with a separator',
+    );
+    render(withWorker);
+    freshness(220000);
     const realFetch = window.fetch,
       realNow = Date.now;
     try {

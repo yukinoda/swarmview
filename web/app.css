@@ -256,6 +256,19 @@ kbd {
 #tree.retained .counts :is(.s-working, .s-waiting) {
   display: none;
 }
+/* Separate the counts like the rest of the dashboard, so two counts don't read as one phrase. */
+.counts > * + *::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--mut);
+}
+/* Live counts lead the list; once they are hidden, the next count starts the line. */
+#tree.retained
+  .counts
+  > :is(.s-working, .s-waiting)
+  + :not(.s-working, .s-waiting)::before {
+  content: none;
+}
 .pin {
   flex: none;
   width: 44px;
@@ -754,6 +767,9 @@ select {
   .counts {
     gap: 2px 4px;
     font-size: 11px;
+  }
+  .counts > * + *::before {
+    margin-right: 4px;
   }
   .detail-list {
     grid-template-columns: 95px minmax(0, 1fr);
