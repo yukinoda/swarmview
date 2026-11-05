@@ -90,9 +90,13 @@ The one-shot check is off the UI thread, with no polling or resident helper.
 Live communication is on by default in the native app, for Finder/Dock and
 direct launches alike. It only opens an owner-only local socket that carries no
 conversation content; nothing is installed automatically. To turn it off, quit
-the app yourself and launch
+the app yourself and either launch
 `"/Applications/Swarmview.app/Contents/MacOS/Swarmview" --no-communication` (or
-the executable under `dist` for a local build). The Swift app forwards this
+the executable under `dist` for a local build), or make the opt-out persistent,
+including for Finder/Dock/Spotlight launches, with
+`defaults write dev.swarmview.desktop NoCommunication -bool true`
+(`defaults delete dev.swarmview.desktop NoCommunication` turns communication
+back on). The Swift app forwards this
 to its own bundled backend on **4778**; no CLI server on 4777 is required.
 The app and `swarmview -communication` compete for one owner-only socket:
 whichever starts first owns it. If the CLI owns it, the app still runs, with

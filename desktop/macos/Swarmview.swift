@@ -16,7 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private var quitting = false
     private var lock: Int32 = -1
     private let smoke = CommandLine.arguments.contains("--smoke-test")
-    private let communicationDisabled = CommandLine.arguments.contains("--no-communication")
+    private let communicationDisabled: Bool = {
+        let flagged = CommandLine.arguments.contains("--no-communication")
+        let stored = UserDefaults.standard.bool(forKey: "NoCommunication")
+        return flagged || stored
+    }()
     private var checkedInstaller = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {

@@ -53,8 +53,11 @@ def main():
     parser.add_argument("app", type=Path)
     parser.add_argument("--seconds", type=int, default=0)
     parser.add_argument("--no-communication", dest="communication", action="store_false", help="check the opt-out launch; communication is on by default and the TUI plugin is never installed")
+    parser.add_argument("--no-communication-default", action="store_true", help="check the persistent opt-out (the NoCommunication user default, passed as -NoCommunication YES) instead of the argument")
     parser.add_argument("--compare-cli", action="store_true", help="compare tmux targets with a CLI on port 4777 using the same default server")
     args = parser.parse_args()
+    if args.no_communication_default:
+        args.communication = False
     executable = args.app.resolve() / "Contents/MacOS/Swarmview"
     assert executable.is_file(), "Build Swarmview.app first"
     resources = executable.parent.parent / "Resources"
@@ -69,7 +72,8 @@ def main():
     hooks_source = Path(__file__).resolve().parents[2] / hooks
     assert (resources / hooks).read_bytes() == hooks_source.read_bytes(), "App must include the Claude hook setup"
     assert not any(Path(name).name == "Swarmview" for _, _, name in processes().values()), "Quit existing Swarmview apps yourself before owned-app checks"
-    launch = [str(executable)] + ([] if args.communication else ["--no-communication"])
+    opt_out = ["-NoCommunication", "YES"] if args.no_communication_default else ["--no-communication"]
+    launch = [str(executable)] + ([] if args.communication else opt_out)
     live_socket = Path.home() / "Library/Caches/swarmview/live.sock"
     live_hook = live_socket.with_name("live-hook")  # the Claude plugin's private copy
     assert not live_socket.exists(), "Existing communication socket: do not replace another viewer's listener"

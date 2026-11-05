@@ -32,6 +32,8 @@ mapped by guessing ancestry; they retain normal monitoring only.
    ```
 
    For a local build, use `dist/Swarmview.app/Contents/MacOS/Swarmview` instead.
+   To keep it off for every launch, run
+   `defaults write dev.swarmview.desktop NoCommunication -bool true`.
    The setting applies only to the app's owned backend on **4778**, with
    the same lifetime pipe and navigation restrictions. A second launch only
    activates the existing singleton; it cannot change its mode, so
