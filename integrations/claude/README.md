@@ -151,10 +151,10 @@ Swarmview leaves a worker unnested rather than guess, so some stay flat:
   seconds. The record is kept and the worker nests again on the next good poll;
   it is dropped only once the start times are more than 30 seconds apart.
 
-The first record for a worker wins and is never updated, so a forged later
-record can't replace the real one. If a different claimant later drives that
-worker after a resume, it stays under the Claude that started it until that
-Claude exits.
+Of the records the session's Claude processes made for a worker, the first wins
+and is never updated, so a forged later record can't replace the real one. If a
+different claimant later drives that worker after a resume, it stays under the
+Claude that started it until that Claude exits.
 
 Not shown yet: messages between teammates, messages addressed by name, and
 messages to other Claude sessions. Those need a sideways display that the
@@ -174,17 +174,18 @@ Claude's own workers. It can't affect other sessions.
 
 A `SubagentStart` record can only choose a worker's parent among the Claude
 processes whose `~/.claude/sessions/<pid>.json` already claims the worker's
-session, and never replaces a parent Swarmview already knows. A program
-running under one of those claimants could record a worker of that same
-session before its real hook arrives, since the first record for a worker
-wins. It can't affect other sessions, or sessions no Claude claims. A record
-names the Claude by PID and by its start time, estimated from the elapsed time
-`ps` already reports. A worker is nested only while the running Claude's start
-time matches to within two seconds, so a later process that reuses the PID
-doesn't inherit it. Swarmview keeps at most 256 of these records in memory
-(worker ID, Claude PID, and start time only), dropping the oldest when full and
-a record once its Claude exits. It never writes them to disk and forgets them
-all when `-communication` stops.
+session, and never replaces a parent Swarmview already knows. A program running
+under one of those claimants could record a worker of that same session before
+its real hook arrives, since the first record for a worker wins. It can't
+affect other sessions, or sessions no Claude claims: each Claude keeps its own
+record for a worker, and only the claimants' records count. A record names the
+Claude by PID and by its start time, estimated from the elapsed time `ps`
+already reports. A worker is nested only while the running Claude's start time
+matches to within two seconds, so a later process that reuses the PID doesn't
+inherit it. Swarmview keeps at most 256 of these records in memory (worker ID,
+Claude PID, and start time only), dropping the oldest when full and a record
+once its Claude exits. It never writes them to disk and forgets them all when
+`-communication` stops.
 
 Starting `-communication` also copies the running binary into the same
 directory as `live-hook` (mode `0700`, about the binary's size on disk), and

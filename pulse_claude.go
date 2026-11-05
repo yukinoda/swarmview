@@ -206,29 +206,32 @@ func claudeHost(s *server, sn snap, pid int) int {
 // maxWorkerHosts bounds the SubagentStart records kept for nesting doubly claimed sessions.
 const maxWorkerHosts = 256
 
-// recordWorkerHost remembers which Claude started a worker. The first record wins,
-// and when full the oldest record is dropped. The next snapshot refresh uses it.
+// recordWorkerHost remembers that a Claude reported starting a worker. Each
+// Claude keeps its own first record for a worker, so a record from a Claude
+// that doesn't claim the worker's session can't block the real one. When full,
+// the oldest record is dropped. The next snapshot refresh uses it.
 func (s *server) recordWorkerHost(agent string, host workerHost) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.hosts == nil {
-		s.hosts = map[string]workerHost{}
+		s.hosts = map[hostKey]workerHost{}
 	}
-	if _, ok := s.hosts[agent]; ok {
+	key := hostKey{agent, host.pid}
+	if _, ok := s.hosts[key]; ok {
 		return
 	}
 	if len(s.hosts) >= maxWorkerHosts {
-		oldestID := ""
+		var oldest hostKey
 		oldestAt := int64(math.MaxInt64)
-		for id, h := range s.hosts {
+		for k, h := range s.hosts {
 			if h.at < oldestAt {
-				oldestID = id
+				oldest = k
 				oldestAt = h.at
 			}
 		}
-		delete(s.hosts, oldestID)
+		delete(s.hosts, oldest)
 	}
-	s.hosts[agent] = host
+	s.hosts[key] = host
 }
 
 // record stores a SubagentStart record unless the bridge is closing. It never
@@ -240,15 +243,15 @@ func (b *pulseBridge) record(s *server, agent string, host workerHost) {
 	closed := b.closed
 	b.mu.Unlock()
 	if closed {
-		s.forgetWorkerHost(agent)
+		s.forgetWorkerHost(hostKey{agent, host.pid})
 	}
 }
 
 // forgetWorkerHost drops one SubagentStart record.
-func (s *server) forgetWorkerHost(agent string) {
+func (s *server) forgetWorkerHost(key hostKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	delete(s.hosts, agent)
+	delete(s.hosts, key)
 }
 
 // clearWorkerHosts forgets every SubagentStart record.

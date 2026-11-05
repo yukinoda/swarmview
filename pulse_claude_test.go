@@ -107,7 +107,7 @@ func TestClaudeHookBridge(t *testing.T) {
 	hostOf := func(agent string) (workerHost, bool) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		h, ok := s.hosts[agent]
+		h, ok := s.hosts[hostKey{agent, host}]
 		return h, ok
 	}
 

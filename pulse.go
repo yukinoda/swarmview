@@ -184,7 +184,7 @@ func (b *pulseBridge) accept(s *server, c net.Conn) {
 		return
 	}
 	// Kernel peer PID, not a sender-supplied PID, authenticates the TUI process.
-	sn, err := s.snapshot(time.Now().UnixMilli())
+	sn, err := s.currentSnapshot()
 	if err != nil {
 		return
 	}

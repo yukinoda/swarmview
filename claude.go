@@ -33,6 +33,31 @@ type workerHost struct {
 	at    int64
 }
 
+// hostKey names one Claude's record for one worker. A worker can have a
+// record from each Claude that reported starting it.
+type hostKey struct {
+	agent string
+	pid   int
+}
+
+// sessionHost is the earliest record for worker id made by one of its
+// session's claimants (owners). Records from any other Claude are ignored.
+func sessionHost(hosts map[hostKey]workerHost, id string, owners []int) (workerHost, bool) {
+	var first workerHost
+	found := false
+	for _, pid := range owners {
+		h, ok := hosts[hostKey{id, pid}]
+		if !ok {
+			continue
+		}
+		if !found || h.at < first.at {
+			first = h
+			found = true
+		}
+	}
+	return first, found
+}
+
 // ps etime has one-second granularity and is read slightly after a snapshot's
 // time, so two estimates of one process's start can differ by about a second.
 // Attribution needs this close a match.
@@ -233,7 +258,7 @@ func readSessionTitle(logPath, sessionID string) (string, bool) {
 // Claude Code subagents live in <root>/<slug>/<session>/subagents/agent-<id>.{jsonl,meta.json}.
 // meta.finished is rarely set, so liveness is the .jsonl mtime: alive < 30 min, working < 60 s.
 // hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
-func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[string]workerHost) []Subagent {
+func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[hostKey]workerHost) []Subagent {
 	// Every record left names a Claude PID that is still running.
 	pruneWorkerHosts(hosts, agents, now)
 	type group struct {
@@ -338,8 +363,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				// SubagentStart hook reported this worker is its parent.
 				var pp *int
 				owners := claimants[session]
-				host, recorded := hosts[id]
-				claimed := recorded && slices.Contains(owners, host.pid)
+				host, claimed := sessionHost(hosts, id, owners)
 				if len(g.pids) == 1 {
 					pp = &g.pids[0]
 				} else if len(owners) == 1 {
@@ -369,16 +393,16 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 // reused PID). An unknown or marginally different start time keeps the record,
 // since hooks never resend it; it just proves nothing that poll. A record for
 // an idle, unlisted worker stays, so the worker keeps its parent if it wakes up.
-func pruneWorkerHosts(hosts map[string]workerHost, agents []Agent, now int64) {
-	for id, h := range hosts {
+func pruneWorkerHosts(hosts map[hostKey]workerHost, agents []Agent, now int64) {
+	for key, h := range hosts {
 		a, ok := findClaude(agents, h.pid)
 		if !ok {
-			delete(hosts, id)
+			delete(hosts, key)
 			continue
 		}
 		drift, known := h.startDrift(a, now)
 		if known && drift > reusedStartSec {
-			delete(hosts, id)
+			delete(hosts, key)
 		}
 	}
 }

@@ -149,11 +149,11 @@ func mk(t *testing.T, root, cwd, session, id string, meta any, ageSec int64, now
 func claude(pid int, cwd string) Agent { return Agent{Pid: pid, Kind: "claude", Cwd: &cwd} }
 
 func subs(root string, now int64, as ...Agent) []Subagent {
-	return subsWithHosts(root, now, map[string]workerHost{}, as...)
+	return subsWithHosts(root, now, map[hostKey]workerHost{}, as...)
 }
 
 // subsWithHosts lists workers with fresh caches and the given SubagentStart records.
-func subsWithHosts(root string, now int64, hosts map[string]workerHost, as ...Agent) []Subagent {
+func subsWithHosts(root string, now int64, hosts map[hostKey]workerHost, as ...Agent) []Subagent {
 	return listClaudeSubagents(as, root, now, map[string]metaEntry{}, map[string]sessionScan{}, hosts)
 }
 
@@ -279,6 +279,25 @@ func hookRecord(a Agent, now int64) workerHost {
 	return workerHost{pid: a.Pid, start: processStart(a, now), at: now}
 }
 
+// hookRecords keys records as recordWorkerHost does, by worker and host PID.
+func hookRecords(byWorker map[string]workerHost) map[hostKey]workerHost {
+	hosts := map[hostKey]workerHost{}
+	for id, h := range byWorker {
+		hosts[hostKey{id, h.pid}] = h
+	}
+	return hosts
+}
+
+// hasRecord reports whether any Claude has a record for worker id.
+func hasRecord(hosts map[hostKey]workerHost, id string) bool {
+	for k := range hosts {
+		if k.agent == id {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "projects")
 	now := nowMs()
@@ -300,13 +319,13 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 	c101 := claudeUp(101, "/w/a", "10:00")
 	c102 := claudeUp(102, "/w/a", "10:00")
 	exited := claudeUp(999, "/w/a", "10:00")
-	hosts := map[string]workerHost{
+	hosts := hookRecords(map[string]workerHost{
 		"a1": hookRecord(c101, now),   // must not override the single claimant
 		"a2": hookRecord(c102, now),   // a claimant: proven parent
 		"a3": hookRecord(c100, now),   // nobody claims the session
 		"a4": hookRecord(c100, now),   // a live Claude, but not a claimant of s101
 		"a9": hookRecord(exited, now), // its Claude has exited
-	}
+	})
 	agents := []Agent{
 		c100,
 		c101,
@@ -325,13 +344,13 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 			t.Errorf("%s: an unproven parent must stay unattributed, got %d", id, *parents[id])
 		}
 	}
-	if _, ok := hosts["a9"]; ok {
+	if hasRecord(hosts, "a9") {
 		t.Error("listing should prune a record whose Claude has exited")
 	}
 
 	// The sole Claude in a directory stays the parent whatever a record says.
 	mk(t, root, "/w/b", "s", "a6", meta, 3, now)
-	hosts["a6"] = hookRecord(c101, now)
+	hosts[hostKey{"a6", 101}] = hookRecord(c101, now)
 	agents = []Agent{
 		claudeUp(100, "/w/b", "10:00"),
 		claudeUp(101, "", "10:00"),
@@ -342,6 +361,38 @@ func TestDoublyClaimedSessionNestsByHook(t *testing.T) {
 	}
 	if !hasParent(parentPids(list), "a6", 100) {
 		t.Errorf("sole Claude should own its worker: %+v", list[0])
+	}
+}
+
+func TestUnrelatedRecordDoesNotBlockClaimant(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "projects")
+	now := nowMs()
+	s100 := "10000000-0000-0000-0000-000000000000"
+	s101 := "10100000-0000-0000-0000-000000000000"
+	meta := map[string]any{"description": "R", "model": "m"}
+	mk(t, root, "/w/a", s101, "a2", meta, 3, now)
+	claimSessions(t, root, "/w/a", map[int]string{
+		100: s100,
+		101: s101,
+		102: s101,
+	})
+	c100 := claudeUp(100, "/w/a", "10:00")
+	c101 := claudeUp(101, "/w/a", "10:00")
+	c102 := claudeUp(102, "/w/a", "10:00")
+	agents := []Agent{
+		c100,
+		c101,
+		c102,
+	}
+	s := &server{}
+	// A program under 100, which doesn't claim s101, reports a2 first.
+	s.recordWorkerHost("a2", hookRecord(c100, now))
+	s.recordWorkerHost("a2", hookRecord(c102, now+1))
+	// A later record from the other claimant doesn't replace the real one.
+	s.recordWorkerHost("a2", hookRecord(c101, now+2))
+	list := subsWithHosts(root, now, s.hosts, agents...)
+	if !hasParent(parentPids(list), "a2", 102) {
+		t.Errorf("the claimant's record should win over an unrelated earlier one: %+v", list)
 	}
 }
 
@@ -358,7 +409,7 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 	// The record was made for a 102 that started ten minutes ago; the 102
 	// running now started five seconds ago, so it is another process.
 	original := claudeUp(102, "/w/a", "10:00")
-	hosts := map[string]workerHost{"a2": hookRecord(original, now)}
+	hosts := hookRecords(map[string]workerHost{"a2": hookRecord(original, now)})
 	agents := []Agent{
 		claudeUp(101, "/w/a", "10:00"),
 		claudeUp(102, "/w/a", "00:05"),
@@ -367,27 +418,27 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 	if parentPids(list)["a2"] != nil {
 		t.Errorf("a reused PID must not inherit the record: %+v", list)
 	}
-	if _, ok := hosts["a2"]; ok {
+	if hasRecord(hosts, "a2") {
 		t.Error("a record for a reused PID should be pruned")
 	}
 
 	// 31 seconds apart is already clearly another process.
-	hosts["a2"] = hookRecord(original, now)
+	hosts[hostKey{"a2", 102}] = hookRecord(original, now)
 	agents[1] = claudeUp(102, "/w/a", "09:29")
 	subsWithHosts(root, now, hosts, agents...)
-	if _, ok := hosts["a2"]; ok {
+	if hasRecord(hosts, "a2") {
 		t.Error("a start 31 s off should prune the record")
 	}
 
 	// 5 seconds apart (a slow poll, say) doesn't prove the parent, but keeps
 	// the record: the hook never resends it.
-	hosts["a2"] = hookRecord(original, now)
+	hosts[hostKey{"a2", 102}] = hookRecord(original, now)
 	agents[1] = claudeUp(102, "/w/a", "09:55")
 	list = subsWithHosts(root, now, hosts, agents...)
 	if parentPids(list)["a2"] != nil {
 		t.Errorf("a start 5 s off must not prove the parent: %+v", list)
 	}
-	if _, ok := hosts["a2"]; !ok {
+	if !hasRecord(hosts, "a2") {
 		t.Fatal("a start 5 s off must not drop the record")
 	}
 
@@ -406,7 +457,7 @@ func TestReusedPidDoesNotInheritRecord(t *testing.T) {
 	if parentPids(list)["a2"] != nil {
 		t.Errorf("an unknown start time must not prove the parent: %+v", list)
 	}
-	if _, ok := hosts["a2"]; !ok {
+	if !hasRecord(hosts, "a2") {
 		t.Fatal("an unknown start time must not drop the record")
 	}
 
@@ -432,7 +483,7 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 		claudeUp(101, "/w/a", "10:00"),
 		c102,
 	}
-	hosts := map[string]workerHost{"a2": hookRecord(c102, now)}
+	hosts := hookRecords(map[string]workerHost{"a2": hookRecord(c102, now)})
 
 	// Idle past the 30-minute window: hidden, but its record must survive.
 	mk(t, root, "/w/a", s101, "a2", meta, 31*60, now)
@@ -440,7 +491,7 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 	if len(list) != 0 {
 		t.Fatalf("an idle worker should be hidden, got %+v", list)
 	}
-	if _, ok := hosts["a2"]; !ok {
+	if !hasRecord(hosts, "a2") {
 		t.Fatal("hiding an idle worker must not drop its recorded host")
 	}
 
@@ -455,15 +506,15 @@ func TestIdleWorkerKeepsRecordedHost(t *testing.T) {
 func TestWorkerHostsPrunedAndBounded(t *testing.T) {
 	now := nowMs()
 	alive := claudeUp(100, "/w/a", "10:00")
-	hosts := map[string]workerHost{
+	hosts := hookRecords(map[string]workerHost{
 		"alive": hookRecord(alive, now),
 		"dead":  hookRecord(claudeUp(999, "/w/a", "10:00"), now),
-	}
+	})
 	pruneWorkerHosts(hosts, []Agent{alive}, now)
 	if len(hosts) != 1 {
 		t.Errorf("want only the live Claude's record kept, got %v", hosts)
 	}
-	if hosts["alive"].pid != 100 {
+	if !hasRecord(hosts, "alive") {
 		t.Errorf("the live Claude's record was dropped: %v", hosts)
 	}
 
@@ -472,15 +523,15 @@ func TestWorkerHostsPrunedAndBounded(t *testing.T) {
 	for i := 0; i <= maxWorkerHosts; i++ {
 		s.recordWorkerHost(fmt.Sprintf("a%07x", i), workerHost{pid: 100, at: now + int64(i)})
 	}
-	s.recordWorkerHost("a0000001", workerHost{pid: 200, at: now + 1000})
+	s.recordWorkerHost("a0000001", workerHost{pid: 100, at: now + 1000})
 	if len(s.hosts) != maxWorkerHosts {
 		t.Fatalf("kept %d records, want %d", len(s.hosts), maxWorkerHosts)
 	}
-	if _, ok := s.hosts["a0000000"]; ok {
+	if hasRecord(s.hosts, "a0000000") {
 		t.Error("the oldest record should be dropped when full")
 	}
-	if s.hosts["a0000001"].pid != 100 {
-		t.Error("the first record for a worker should win")
+	if s.hosts[hostKey{"a0000001", 100}].at != now+1 {
+		t.Error("a Claude's first record for a worker should win")
 	}
 }
 
