@@ -222,6 +222,42 @@ func TestSubagentShowsResolvedModelFromTranscript(t *testing.T) {
 	}
 }
 
+// A meta rewrite must not drop the model once the transcript tail no longer has an assistant record.
+func TestSubagentKeepsTranscriptModelAcrossMetaRewrite(t *testing.T) {
+	root, now := t.TempDir(), nowMs()
+	session := "11111111-1111-1111-1111-111111111111"
+	mk(t, root, "/w/a", session, "a1", map[string]any{"description": "R", "model": "sonnet"}, 3, now)
+	sub := filepath.Join(root, claudeSlug("/w/a"), session, "subagents")
+	logPath := filepath.Join(sub, "agent-a1.jsonl")
+	metaPath := filepath.Join(sub, "agent-a1.meta.json")
+	record := `{"type":"assistant","sessionId":"` + session + `","message":{"model":"claude-sonnet-5-5"}}` + "\n"
+	must(t, os.WriteFile(logPath, []byte(record), 0o644))
+	modTime := time.UnixMilli(now - 3000)
+	must(t, os.Chtimes(logPath, modTime, modTime))
+	cache := map[string]metaEntry{}
+	list := func(at int64) []Subagent {
+		return listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, at, cache, map[string]sessionScan{}, nil)
+	}
+	list(now)
+
+	// a long tool result pushes the assistant record out of the 64 KiB tail
+	toolResult := `{"type":"user","content":"` + strings.Repeat("x", 70<<10) + `"}` + "\n"
+	must(t, os.WriteFile(logPath, []byte(record+toolResult), 0o644))
+	rewriteTime := modTime.Add(time.Second)
+	must(t, os.Chtimes(logPath, rewriteTime, rewriteTime))
+	must(t, os.WriteFile(metaPath, []byte(`{"description":"R","model":"sonnet"}`), 0o644))
+	must(t, os.Chtimes(metaPath, rewriteTime, rewriteTime))
+
+	got := list(now + 1)
+
+	if len(got) != 1 {
+		t.Fatalf("got %+v", got)
+	}
+	if got[0].Model != "claude-sonnet-5-5" {
+		t.Errorf("model: got %v", got[0].Model)
+	}
+}
+
 // A worker left over from an earlier session in the same cwd must not nest under
 // the sole claude now running a different session; its own session's worker does.
 func TestSoleClaudeAttachesOnlyItsCurrentSession(t *testing.T) {
