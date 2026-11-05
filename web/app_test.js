@@ -36,6 +36,26 @@ const {
     const assert = (ok, message) => {
       if (!ok) throw new Error(message);
     };
+    const contrast = (a, b) => {
+      const light = (color) =>
+        color
+          .match(/[\d.]+/g)
+          .slice(0, 3)
+          .map(Number)
+          .map((v) => v / 255)
+          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+          .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+      const x = light(a);
+      const y = light(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    const backdropOf = (element) => {
+      for (let node = element; node; node = node.parentElement) {
+        const color = getComputedStyle(node).backgroundColor;
+        if (color !== 'rgba(0, 0, 0, 0)') return color;
+      }
+      return getComputedStyle(document.body).backgroundColor;
+    };
     const agent = (pid, repo, extra = {}) => ({
       pid,
       ppid: 1,
@@ -126,6 +146,23 @@ const {
         !document.querySelector('#preferences-dialog input[type=checkbox]'),
       'Preferences contains the one real notification control and read-only capability, not a fake bridge switch',
     );
+    const borderedControls = [
+      $('appearance'),
+      $('search').parentElement,
+      $('notify'),
+    ];
+    for (const control of borderedControls) {
+      const style = getComputedStyle(control);
+      const background = backdropOf(control);
+      assert(
+        style.borderTopStyle === 'solid' && style.borderTopWidth !== '0px',
+        'form controls keep a drawn border',
+      );
+      assert(
+        contrast(style.borderTopColor, background) >= 3,
+        'form control borders meet the 3:1 non-text contrast minimum in both themes',
+      );
+    }
     for (const theme of ['dark', 'light', 'system', 'invalid']) {
       $('appearance').value = theme;
       $('appearance').dispatchEvent(new Event('change'));
@@ -1946,19 +1983,6 @@ const {
         liveRow.name.getBoundingClientRect().bottom <= contextBox.top,
       'badge stays in its secondary slot without covering title or metrics',
     );
-    const contrast = (a, b) => {
-      const light = (color) =>
-        color
-          .match(/[\d.]+/g)
-          .slice(0, 3)
-          .map(Number)
-          .map((v) => v / 255)
-          .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-          .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
-      const x = light(a),
-        y = light(b);
-      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-    };
     const badgeStyle = getComputedStyle(badge),
       background = getComputedStyle(document.body).backgroundColor;
     assert(
@@ -2191,6 +2215,21 @@ const {
           'Sent from parent' &&
         communication.pendingFeedback.size === 0,
       'pending Claude cue shows once its worker row renders',
+    );
+    const note = document.querySelector('.communication-note');
+    const noteSeparator = getComputedStyle(note, '::before').content;
+    assert(
+      noteSeparator === '" · "',
+      'the cue is separated from the row context text, not glued to it',
+    );
+    const noteContext = note.parentElement;
+    const noteBox = note.getBoundingClientRect();
+    const noteContextBox = noteContext.getBoundingClientRect();
+    const noteClipped = noteContext.scrollWidth > noteContext.clientWidth;
+    const noteInsideRow = noteBox.right <= noteContextBox.right + 1;
+    assert(
+      !noteClipped && noteInsideRow,
+      'the whole cue stays visible on a narrow row instead of being clipped',
     );
     clearPulses();
     showFeedback('sub:a1234567', 'returned', 46001);
