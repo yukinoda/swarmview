@@ -390,7 +390,13 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 						continue
 					}
 					fin, _ := obj["finished"].(bool)
-					c = metaEntry{mmt, fin, obj["parentAgentId"], obj["description"], obj["model"]}
+					// pickedEffortModel is the resolved model id; model is only the requested alias.
+					model := obj["model"]
+					resolved, _ := obj["pickedEffortModel"].(string)
+					if resolved != "" {
+						model = resolved
+					}
+					c = metaEntry{mmt, fin, obj["parentAgentId"], obj["description"], model}
 					metaCache[mp] = c
 				}
 				if c.finished {

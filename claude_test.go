@@ -201,6 +201,16 @@ func TestRunningSubagentAttachedToSoleClaude(t *testing.T) {
 	}
 }
 
+func TestSubagentPrefersResolvedModelOverAlias(t *testing.T) {
+	root, now := t.TempDir(), nowMs()
+	meta := map[string]any{"description": "R", "model": "opus", "pickedEffortModel": "claude-opus-5-5"}
+	mk(t, root, "/w/a", "s1", "a1", meta, 3, now)
+	got := subs(root, now, claude(100, "/w/a"))
+	if len(got) != 1 || got[0].Model != "claude-opus-5-5" {
+		t.Errorf("got %+v", got)
+	}
+}
+
 // A worker left over from an earlier session in the same cwd must not nest under
 // the sole claude now running a different session; its own session's worker does.
 func TestSoleClaudeAttachesOnlyItsCurrentSession(t *testing.T) {
