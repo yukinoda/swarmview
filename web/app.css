@@ -603,7 +603,7 @@ dialog::backdrop {
 }
 .button-row button,
 #notify {
-  border: 1px solid var(--line);
+  border: 1px solid var(--mut);
 }
 .field {
   display: block;
@@ -615,7 +615,7 @@ select {
   min-height: 44px;
   padding: 8px 12px;
   margin-top: 7px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--mut);
   border-radius: 6px;
   background: var(--surface);
 }
@@ -643,7 +643,7 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--mut);
   border-radius: 6px;
   padding: 0 10px;
   margin: 12px 0 4px;
