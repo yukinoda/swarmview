@@ -1,6 +1,6 @@
 # Dashboard guide
 
-[← Overview and quick start](README.md)
+[← Overview and quick start](../README.md)
 
 Use the dashboard to see activity across your coding agents, compare memory,
 and return to the right terminal. Click a task's separate **Details** control to open
@@ -55,13 +55,13 @@ Notifications fire once per quiet episode for agents seen working in that tab.
 Restarting Swarmview resets activity history.
 
 Native questions, permission requests and task-completion signals are unavailable.
-Communication needs an installed bridge. The native app listens for one by default (CLI: `-communication`). The optional [OpenCode V2 bridge](integrations/opencode/README.md)
+Communication needs an installed bridge. The native app listens for one by default (CLI: `-communication`). The optional [OpenCode V2 bridge](../integrations/opencode/README.md)
 can show confirmed background admission (**Sent from parent**, blue), a correlated
 foreground return (**Reply received by parent**, teal), or an explicit
 **Attempted from parent · unconfirmed** observation (amber). Text carries the
 meaning as well as color. Cues clear after 2.5 seconds, with no history or replay;
 they do not change worker activity, imply success, or animate the tree.
-The optional [Claude Code plugin](integrations/claude/README.md) marks existing
+The optional [Claude Code plugin](../integrations/claude/README.md) marks existing
 Claude worker rows with **Sent from parent**, **Reply received by parent**, or
 **Message sent to worker**.
 CPU activity and nesting never create communication observations. There is no
@@ -183,6 +183,6 @@ agent releases its private memory, but surviving helper processes can retain RAM
 Historical macOS arm64 measurements before the current tmux/Ghostty integration:
 about 17 MB server RSS and 0.09% CPU over 120 seconds. These are not a benchmark
 of the current version. For terminal-overhead comparisons on macOS, use
-`python3 memory_check.py --samples 30` with equivalent warmed-up workloads.
+`python3 scripts/memory_check.py --samples 30` with equivalent warmed-up workloads.
 It compares Orca, Ghostty, and tmux, excluding hosted agents; summed RSS is
 approximate and existing swap can remain occupied after pressure falls.

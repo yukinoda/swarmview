@@ -110,13 +110,13 @@ context. Live metadata-worker rows keep unavailable process metrics in Details
 instead of showing empty metric cells; confirmed communication appears as plain
 colored text, not a worker activity state. Open **Preferences** for appearance
 and opt-in quiet notifications. Read the
-[dashboard guide](GUIDE.md#reading-the-dashboard) for status and metric definitions.
+[dashboard guide](docs/GUIDE.md#reading-the-dashboard) for status and metric definitions.
 
 ## Learn more
 
-- [Dashboard guide](GUIDE.md) — statuses, search filters, tmux workflow, and resource use
+- [Dashboard guide](docs/GUIDE.md) — statuses, search filters, tmux workflow, and resource use
 - [Annotated dashboard illustration](assets/dashboard-guide.svg) — an earlier layout's numbered guide to task rows and metrics
-- [Compatibility](COMPATIBILITY.md) — platforms, terminals, dependencies, and limitations
+- [Compatibility](docs/COMPATIBILITY.md) — platforms, terminals, dependencies, and limitations
 - [Contributing](CONTRIBUTING.md) — code layout, development checks, and release process
 - [Security](SECURITY.md) · [Issues](https://github.com/yukinoda/swarmview/issues) · [Brand assets](assets/README.md)
 
