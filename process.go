@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"math"
@@ -278,13 +279,29 @@ type Agent struct {
 type cacheEntry struct {
 	cwd, etime   string
 	git          gitInfo
+	gitRetryAt   int64 // nonzero when git failed transiently (e.g. timed out) and should be asked again
 	lastActiveAt int64
 	active       bool
 	title        sessionTitle
 }
 
-// lsof retry interval for pids whose cwd it can't read (e.g. other users' processes)
+// lsof retry interval for pids whose cwd it can't read (e.g. other users' processes);
+// also the git retry interval after a transient git failure
 const cwdRetryMs = 30e3
+
+// resolveGit returns the cwd's repository and, when git failed for a reason other than
+// "not a repository" (exit 128), when to ask again; otherwise a slow first call sticks for the pid's lifetime.
+func (s *server) resolveGit(cwd string, now int64) (gitInfo, int64) {
+	out, err := s.run("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel")
+	if err == nil {
+		return parseGit(out, cwd), 0
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 128 {
+		return parseGit("", cwd), 0
+	}
+	return parseGit("", cwd), now + cwdRetryMs
+}
 
 // listAgents must be called with s.mu held (or single-threaded).
 func (s *server) listAgents(now int64) ([]Agent, error) {
@@ -364,12 +381,16 @@ func (s *server) listAgents(now int64) ([]Agent, error) {
 				continue
 			}
 			delete(s.noCwd, a.Pid)
-			g := ""
-			if o, err := s.run("git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir", "--show-toplevel"); err == nil {
-				g = o
-			}
-			s.cache[a.Pid] = &cacheEntry{cwd: cwd, etime: a.Etime, git: parseGit(g, cwd)}
+			git, retryAt := s.resolveGit(cwd, now)
+			s.cache[a.Pid] = &cacheEntry{cwd: cwd, etime: a.Etime, git: git, gitRetryAt: retryAt}
 		}
+	}
+	for _, a := range rows {
+		c := s.cache[a.Pid]
+		if c == nil || c.gitRetryAt == 0 || now < c.gitRetryAt {
+			continue
+		}
+		c.git, c.gitRetryAt = s.resolveGit(c.cwd, now)
 	}
 	agents := make([]Agent, 0, len(rows))
 	for _, r := range rows {
