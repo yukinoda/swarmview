@@ -182,9 +182,9 @@ Apply the appropriate label before publishing a release. Conventional commit
 subjects alone do not determine the category.
 
 The release workflow verifies the repository on macOS and Linux, builds binary
-archives for `darwin`/`linux` on `arm64`/`amd64`, and publishes SHA-256 checksums
-and generated notes when a version tag is pushed. It does not sign or notarize
-macOS binaries.
+archives for `darwin`/`linux` on `arm64`/`amd64`, and publishes SHA-256
+checksums, build provenance attestations, and generated notes when a version tag
+is pushed. It does not sign or notarize macOS binaries.
 
 The release workflow also builds ARM/Intel macOS `.dmg` and `.app.zip` archives on a Mac.
 They use ad-hoc signatures for the bundle and helper, without Developer ID
@@ -193,9 +193,12 @@ signing/notarization. CLI archives retain their existing build path.
 1. Review the compatibility documentation and CI results for the release commit.
 2. Tag that commit with `vMAJOR.MINOR.PATCH` (or a `-prerelease` suffix).
 3. Push the tag to trigger `.github/workflows/release.yml`.
-4. Inspect the published archives, checksums, and generated notes. Tags with a
-   prerelease suffix are published as GitHub prereleases.
+4. Inspect the published archives, checksums, and generated notes, and run the
+   README's `gh attestation verify` command on a downloaded asset. Tags with a
+   prerelease suffix are published as GitHub prereleases. If attestation fails,
+   nothing is published; re-run the failed `publish` job within the 7-day
+   artifact retention, or re-run the whole workflow after that.
 
 Release archives contain the binary, license, README, compatibility/contribution/
-security documentation, and brand assets. Build provenance can be inspected with
+security documentation, and brand assets. Go build info can be inspected with
 `go version -m ./swarmview`.
