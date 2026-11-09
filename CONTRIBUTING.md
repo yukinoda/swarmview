@@ -4,6 +4,8 @@ Bug reports, small focused fixes, documentation improvements, and additional
 agent integrations are welcome. For a larger feature, open an issue describing
 the actual workflow before building it.
 
+Participation is covered by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Local setup
 
 Use the Go version in [`go.mod`](go.mod), Git, `lsof`, and tmux. Install
