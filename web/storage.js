@@ -1,4 +1,4 @@
-import { $ } from './dom.js';
+import { $, closeOnBackdrop } from './dom.js';
 
 export const load = (k, d) => {
   try {
@@ -50,6 +50,7 @@ export function setupPreferences(beforeOpen) {
     dialog.showModal();
   };
   $('close-preferences').onclick = close;
+  closeOnBackdrop(dialog, close);
   dialog.oncancel = (event) => {
     event.preventDefault();
     close();

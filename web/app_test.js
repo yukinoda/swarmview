@@ -36,6 +36,22 @@ const {
     const assert = (ok, message) => {
       if (!ok) throw new Error(message);
     };
+    const pointerAt = (target, type, point) => {
+      const PointerType = type === 'click' ? MouseEvent : PointerEvent;
+      target.dispatchEvent(new PointerType(type, { ...point, bubbles: true }));
+    };
+    const pressAndClick = (pressTarget, clickTarget, point) => {
+      pointerAt(pressTarget, 'pointerdown', point);
+      pointerAt(clickTarget, 'click', point);
+    };
+    const backdropPoint = { clientX: 0, clientY: 0 };
+    const centerOf = (element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2,
+      };
+    };
     const contrast = (a, b) => {
       const light = (color) =>
         color
@@ -189,6 +205,23 @@ const {
       !$('preferences-dialog').open &&
         document.activeElement === $('preferences-toggle'),
       'Preferences Escape works without native dialog cancel and returns focus',
+    );
+    $('preferences-toggle').click();
+    const preferences = $('preferences-dialog');
+    const preferencesTitle = $('preferences-title');
+    pressAndClick(preferencesTitle, preferencesTitle, centerOf(preferencesTitle));
+    assert(preferences.open, 'a click inside Preferences keeps it open');
+    pressAndClick(preferences, preferences, centerOf(preferences));
+    assert(preferences.open, 'a click on Preferences padding or scrollbar keeps it open');
+    pressAndClick(preferencesTitle, preferences, backdropPoint);
+    assert(
+      preferences.open,
+      'a text selection dragged from Preferences onto the backdrop keeps it open',
+    );
+    pressAndClick(preferences, preferences, backdropPoint);
+    assert(
+      !preferences.open && document.activeElement === $('preferences-toggle'),
+      'a backdrop click closes Preferences and returns focus to its opener',
     );
 
     for (const kind of ['aider', 'cursor-agent']) {
@@ -352,6 +385,19 @@ const {
           !$('detail-body').children.length &&
           document.activeElement === metrics.toggle,
         'Details Escape releases selected DOM and safely restores focus',
+      );
+      showDetails(metrics);
+      pressAndClick($('detail-title'), $('detail-dialog'), backdropPoint);
+      assert(
+        $('detail-dialog').open,
+        'a text selection dragged from Details onto the backdrop keeps it open',
+      );
+      pressAndClick($('detail-dialog'), $('detail-dialog'), backdropPoint);
+      assert(
+        !$('detail-dialog').open &&
+          !$('detail-body').children.length &&
+          document.activeElement === metrics.toggle,
+        'a backdrop click closes Details, releases its DOM, and restores focus',
       );
       showDetails(metrics);
       show([]);
@@ -996,9 +1042,12 @@ const {
       document.activeElement === $('search') && !$('search-panel').hidden,
       'Ctrl/Cmd K opens and focuses search',
     );
-    $('search-panel').dispatchEvent(
-      new MouseEvent('click', { clientX: 0, clientY: 0, bubbles: true }),
+    pressAndClick($('search'), $('search-panel'), backdropPoint);
+    assert(
+      !$('search-panel').hidden,
+      'a text selection dragged from the search box onto the backdrop keeps search open',
     );
+    pressAndClick($('search-panel'), $('search-panel'), backdropPoint);
     assert(
       $('search-panel').hidden && document.activeElement === $('expand'),
       'closing search restores its previous keyboard focus',
