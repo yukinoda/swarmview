@@ -24,7 +24,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y tmux lsof
       - run: google-chrome --version
       - name: warm chrome files (odd shards)
-        if: matrix.shard % 2 == 1
+        if: contains(fromJSON('[1,3,5,7,9,11,13,15,17,19]'), matrix.shard)
         run: time cat $(find -L /opt/google/chrome -type f) > /dev/null
       - name: cold first launch
         continue-on-error: true
