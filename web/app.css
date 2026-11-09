@@ -239,12 +239,13 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The caret sits centred on the trunk below it (a group's --connector-origin minus
-   the line's half pixel); the negative margin cancels the button's 8px padding. */
+/* The caret sits centred on the trunk below it: the trunk's 1px line ends at
+   --connector-origin (half of --tree-pad), so a box one pixel narrower than
+   --tree-pad shares its centre. The negative margin cancels the button's 8px padding. */
 .chev {
   position: relative;
   flex: none;
-  width: 15px;
+  width: calc(var(--tree-pad) - 1px);
   height: 15px;
   margin-left: -8px;
   color: var(--mut);
@@ -259,6 +260,12 @@ kbd {
 }
 .fold[aria-expanded='false'] .chev::before {
   transform: rotate(-90deg);
+}
+/* Forced colors replace the background that paints the masked chevron with Canvas. */
+@media (forced-colors: active) {
+  .chev::before {
+    background: CanvasText;
+  }
 }
 .counts {
   display: flex;
@@ -302,12 +309,15 @@ kbd {
   font-weight: 500;
   color: var(--mut);
 }
-.kids {
-  position: relative;
+/* Tree geometry lives on #tree so group carets and row connectors share it. */
+#tree {
   --tree-step: 24px;
   --tree-pad: 16px;
   /* Titles start after the 20px logo and 8px gap; logo-less worker titles keep that column. */
   --worker-pad: calc(var(--tree-pad) + 28px);
+}
+.kids {
+  position: relative;
 }
 .kids:empty {
   display: none;
@@ -769,7 +779,7 @@ select {
   .live-worker > .row-line {
     grid-template-columns: minmax(0, 1fr) 56px;
   }
-  .kids {
+  #tree {
     --tree-step: 16px;
     --tree-pad: 12px;
   }
