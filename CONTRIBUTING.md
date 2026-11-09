@@ -187,7 +187,7 @@ checksums, build provenance attestations, and generated notes when a version tag
 is pushed. It does not sign or notarize macOS binaries.
 
 The release workflow also builds one universal (ARM and Intel) macOS `.dmg` on a Mac.
-They use ad-hoc signatures for the bundle and helper, without Developer ID
+Its app bundle and helper use ad-hoc signatures, without Developer ID
 signing/notarization. CLI archives retain their existing build path.
 
 1. Review the compatibility documentation and CI results for the release commit.

@@ -43,7 +43,7 @@ as a separate release asset. Releases published after v0.2.0 also carry build
 provenance attestations (see the README).
 
 A universal macOS `.dmg` bundles a Swift/AppKit WKWebView launcher and
-the Go backend for both ARM and Intel. They are ad-hoc signed, not Developer ID signed or
+the Go backend for both ARM and Intel. Both are ad-hoc signed, not Developer ID signed or
 notarized. Native app builds require Apple's SDK and are separate from CGO-free
 CLI cross-builds. See [desktop app limitations and checks](../desktop/macos/README.md).
 DMG builds additionally use Python 3.10+ and a temporary pinned dmgbuild install;
