@@ -1,7 +1,7 @@
 import { $, el, txt, cls, attr, uniqueID } from './dom.js';
 import { load, save } from './storage.js';
 import { HEAT, stateLabel, fmtBytes, formatDuration, snapshotItems } from './agents.js';
-import { createAgentRow, updateAgentRow, focusTerminal, syncAgentCards, setupDetails, refreshDetails } from './rows.js';
+import { createAgentRow, updateAgentRow, syncAgentCards, setupDetails, refreshDetails } from './rows.js';
 
 const QUIET_LIMIT = 3;
 const rows = new Map(),
@@ -251,11 +251,6 @@ export function showQuiet(quiet) {
     quiet.slice(0, QUIET_LIMIT),
     (it) => 'quiet ' + formatDuration(it.idleSec)
   );
-}
-
-export function focusAgent(pid) {
-  const row = rows.get('a:' + pid);
-  if (row) return focusTerminal(row);
 }
 
 // Read-only row lookup for communication; tree ownership stays in this module.

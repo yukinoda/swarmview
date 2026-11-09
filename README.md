@@ -23,8 +23,8 @@ Runs locally: one Go binary, no account, no analytics, no hosted service.
 ### Check → choose → continue
 
 1. **Check what might need you.** Recently active agents that go quiet appear
-   under **Recently quiet** as bounded observations; optionally enable desktop
-   notifications. Quiet activity is not a confirmed request for help.
+   under **Recently quiet** as bounded observations. Quiet activity is not a
+   confirmed request for help.
 2. **Choose a task.** Browse by repository or press **⌘ K / Ctrl K**
    to search task names, agents, and repositories.
 3. **Continue in its terminal.** Click an enabled task identity to select its tmux pane.
@@ -118,8 +118,8 @@ nothing is observed until you follow the manual setup linked above.
 Use the separate **Details** control for CPU, process age, model and terminal
 context. Live metadata-worker rows keep unavailable process metrics in Details
 instead of showing empty metric cells; confirmed communication appears as plain
-colored text, not a worker activity state. Open **Preferences** for appearance
-and opt-in quiet notifications. Read the
+colored text, not a worker activity state. Open **Preferences** for appearance.
+Read the
 [dashboard guide](docs/GUIDE.md#reading-the-dashboard) for status and metric definitions.
 
 ## Learn more

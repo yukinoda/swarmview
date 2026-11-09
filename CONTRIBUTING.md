@@ -49,15 +49,15 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
     and terminal activation; reads current parent/host data through a dashboard callback
     and current freshness through the coordinator's snapshot-state callback.
   - `search.js`: local search index, dialog, and keyboard navigation.
-  - `notifications.js`: quiet observations, notification episodes, and tab badges.
+  - `notifications.js`: quiet observations, working episodes, and tab badges.
   - `communication.js`: live stream (when the server enables it), up to four reused plain-text worker cues,
     polite announcements, and visibility cleanup; reads dashboard rows without owning its tree or snapshot.
   - `icons.js`, `dom.js`: provider glyphs and DOM helpers.
   - `storage.js`: defensive local storage and the local appearance/Preferences dialog;
-    notification ownership stays in `notifications.js`, server capability in `communication.js`.
+    quiet-observation ownership stays in `notifications.js`, server capability in `communication.js`.
 - `web/app_test.js`, `ui_test.go`: browser assertions and their Go test harness.
 - `*_test.go`: tests beside their subjects; `test_helpers_test.go` contains shared fixtures.
-- `desktop/macos/`: native WebView host (including the OS notification bridge WKWebView lacks), installer, and packaging checks.
+- `desktop/macos/`: native WebView host, installer, and packaging checks.
 - `integrations/opencode/`: manually configured TUI-only metadata observer; uses
   the existing provider connection and forwards identifiers to local IPC.
 - `integrations/claude/`: optional Claude Code plugin (async hooks plus a
@@ -71,7 +71,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
 - `scripts/`: maintainer tools run by hand or CI, e.g. `memory_check.py`.
 
 The data flow is `web/app.js` → `GET /agents` → `server.snapshot` → process and
-worker discovery → JSON → the dashboard, search, and notification modules. Terminal activation is a separate
+worker discovery → JSON → the dashboard, search, and quiet-observation modules. Terminal activation is a separate
 `POST /focus` request. The macOS app hosts the same interface in WebKit. Feature
 modules do not import `app.js`; it coordinates them without a shared global store.
 The optional TUI observer → private socket → `GET /communication` stream supplies

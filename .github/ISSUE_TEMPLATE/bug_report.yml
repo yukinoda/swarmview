@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem with monitoring, labels, notifications, or focus.
+description: Report a reproducible problem with monitoring, labels, or focus.
 body:
   - type: textarea
     id: environment

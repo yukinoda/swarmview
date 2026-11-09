@@ -26,7 +26,7 @@ browser pages, not local processes such as curl.
 
 The dashboard can display local project paths, task titles, process activity,
 and memory use. The focus endpoint can select tmux panes and, on supported
-macOS setups, control Ghostty windows. Browser notifications can show task titles.
+macOS setups, control Ghostty windows.
 
 Swarmview reads process metadata, Claude subagent metadata, and bounded session
 JSONL tails for generated title records. It does not read process environments

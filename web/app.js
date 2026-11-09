@@ -6,11 +6,10 @@ import {
   renderDashboard,
   refreshDashboard,
   showQuiet,
-  focusAgent,
   setupDashboard
 } from './dashboard.js';
 import { setupSearch, updateSearch, refreshSearch } from './search.js';
-import { setupNotifications, updateNotifications, clearBadge } from './notifications.js';
+import { updateNotifications, clearBadge } from './notifications.js';
 import { setupCommunication, refreshCommunication, communicationStream, clearPulses } from './communication.js';
 
 const POLL_MS = 2000;
@@ -85,7 +84,6 @@ setupPreferences(() => {
   clearPulses();
   closeDetails();
 });
-setupNotifications(focusAgent);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     clearTimeout(timer);

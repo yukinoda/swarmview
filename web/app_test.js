@@ -157,15 +157,14 @@ const {
     $('preferences-toggle').click();
     assert(
       $('preferences-dialog').open &&
-        !$('notify').closest('header') &&
+        !$('notify') &&
         $('communication-capability').textContent.includes('Waiting') &&
         !document.querySelector('#preferences-dialog input[type=checkbox]'),
-      'Preferences contains the one real notification control and read-only capability, not a fake bridge switch',
+      'Preferences shows read-only capability with no notification control or fake bridge switch',
     );
     const borderedControls = [
       $('appearance'),
       $('search').parentElement,
-      $('notify'),
     ];
     for (const control of borderedControls) {
       const style = getComputedStyle(control);
@@ -432,107 +431,34 @@ const {
       'labeled metrics and repository counts fit the narrow viewport',
     );
 
-    let notifications = 0,
-      notificationBody = '';
-    window.Notification = class {
-      static permission = 'granted';
-      constructor(title, options) {
-        notifications++;
-        notificationBody = options.body;
-      }
-    };
-    await $('notify').onclick();
-    await $('notify').onclick(); // turn off before testing an explicit permission request
-    let permissions = 0;
-    Notification.permission = 'default';
-    Notification.requestPermission = async () => {
-      permissions++;
-      return 'denied';
-    };
-    $('preferences-toggle').click();
-    $('appearance').dispatchEvent(new Event('change'));
-    $('close-preferences').click();
-    assert(
-      permissions === 0,
-      'opening Preferences or changing appearance never prompts for OS notification permission',
-    );
-    await $('notify').onclick();
-    assert(
-      permissions === 1 && $('notify').getAttribute('aria-pressed') === 'false',
-      'only explicit notification enable requests permission and denied permission stays off',
-    );
-    Notification.permission = 'granted';
-    await $('notify').onclick();
-    assert(
-      $('notify').getAttribute('aria-pressed') === 'true',
-      'the existing opt-in notification control can be re-enabled after permission is granted',
-    );
     show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
     show([{ ...a, idleSec: 14 }]);
-    assert(
-      $('quiet').hidden && notifications === 0,
-      'quiet observation grace period',
-    );
+    assert($('quiet').hidden, 'quiet observation grace period');
     show([{ ...a, idleSec: 15 }]);
     assert(
       !$('quiet').hidden && $('quiet-list').children.length === 1,
       'recently quiet observation section',
     );
     assert(
-      document.title === '(1) recently quiet · Swarmview' &&
-        notifications === 1,
-      'quiet observation badge and notification',
+      document.title === '(1) recently quiet · Swarmview',
+      'quiet observation badge',
     );
-    assert(
-      notificationBody.includes('Recently quiet') &&
-        notificationBody.includes('not a request'),
-      'notification describes evidence without inventing a human request',
-    );
-    show([{ ...a, idleSec: 20 }]);
-    assert(notifications === 1, 'notify once per waiting episode');
     show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
     assert(
       $('quiet').hidden && document.title === 'Swarmview',
       'working clears quiet badge',
     );
     show([{ ...a, idleSec: 15 }]);
-    assert(notifications === 2, 'new working episode rearms notification');
+    assert(
+      !$('quiet').hidden,
+      'a new working episode is observed as quiet again',
+    );
     show([]);
     show([{ ...a, idleSec: 15 }]);
-    assert(notifications === 2, 'unseen work does not notify');
     assert(
       $('quiet').hidden,
       'unseen quiet processes are not presented as newly observed transitions',
     );
-    const nativeMessages = [];
-    window.webkit = {
-      messageHandlers: {
-        notify: {
-          postMessage: async (message) => {
-            nativeMessages.push(message);
-            return message.action === 'request';
-          },
-        },
-      },
-    };
-    await $('notify').onclick(); // turn off, then enable through the native bridge
-    await $('notify').onclick();
-    assert(
-      nativeMessages[0]?.action === 'request' &&
-        $('notify').getAttribute('aria-pressed') === 'true',
-      'the macOS app asks for permission natively because WKWebView has no permission prompt',
-    );
-    show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
-    show([{ ...a, idleSec: 15 }]);
-    const posted = nativeMessages.at(-1);
-    assert(
-      posted.action === 'post' &&
-        posted.pid === a.pid &&
-        posted.body.includes('not a request') &&
-        notifications === 2,
-      'the macOS app posts quiet notifications natively instead of through WKWebView',
-    );
-    delete window.webkit;
 
     const b = agent(200, '/b');
     show([a, b]);
@@ -1059,14 +985,12 @@ const {
     );
 
     search('no-such-task');
-    const beforeHiddenNotification = notifications;
     show([{ ...coordinator, recentCpu: 0.1, idleSec: 0 }]);
     show([{ ...coordinator, idleSec: 20 }]);
     assert(
       !$('quiet').hidden &&
-        document.title === '(1) recently quiet · Swarmview' &&
-        notifications === beforeHiddenNotification + 1,
-      'the palette does not filter or suppress global quiet observations, badges, or notifications',
+        document.title === '(1) recently quiet · Swarmview',
+      'the palette does not filter or suppress global quiet observations or badges',
     );
     $('clear-search').click();
     assert(
@@ -1751,20 +1675,17 @@ const {
       recentCpu: 0,
       idleSec: 15 + i,
     }));
-    const beforeQuiet = notifications;
     show(quietObservations);
     assert(
       $('quiet-list').children.length === 3 &&
-        quietRows.size === 3 &&
-        notifications === beforeQuiet + observations.length,
-      'recent observation cards stay bounded while transitions notify once',
+        quietRows.size === 3,
+      'recent observation cards stay bounded',
     );
     const observationElements = $('quiet-list').querySelectorAll('*').length;
     for (let i = 0; i < 20; i++) show(quietObservations);
     assert(
-      $('quiet-list').querySelectorAll('*').length === observationElements &&
-        notifications === beforeQuiet + observations.length,
-      'quiet observations neither grow DOM nor repeat notifications',
+      $('quiet-list').querySelectorAll('*').length === observationElements,
+      'repeated quiet observations do not grow the DOM',
     );
     show(observations.map((it) => ({ ...it, recentCpu: 0, idleSec: 301 })));
     assert(
@@ -1773,17 +1694,15 @@ const {
         document.title === 'Swarmview',
       'quiet observations expire after five minutes instead of becoming an alert queue',
     );
-    const beforeStale = notifications,
-      snapshotNow = Date.now();
+    const snapshotNow = Date.now();
     render({ agents: observations, at: snapshotNow });
     render({ agents: quietObservations, at: snapshotNow - 20000 });
     assert(
       $('quiet').hidden &&
-        notifications === beforeStale &&
         [...rows.values()]
           .filter((r) => !r.node.classList.contains('s-exiting'))
           .every((r) => r.st.textContent === 'stale'),
-      'stale snapshots cannot produce quiet observations, notifications, or live state labels',
+      'stale snapshots cannot produce quiet observations or live state labels',
     );
     const queryNow = Date.now;
     try {
@@ -1806,7 +1725,7 @@ const {
         groups.size === 0 &&
         quietRows.size === 0 &&
         eps.size === 0,
-      'exited fleets release rows, observations, and notification episode metadata',
+      'exited fleets release rows, observations, and episode metadata',
     );
 
     const sourceHost = agent(44000, '/source-cases', {
@@ -3431,10 +3350,6 @@ const {
       !$('tree-actions').hidden &&
         $('expand').getBoundingClientRect().height > 0,
       'Expand all and Collapse all return once rows exist',
-    );
-    assert(
-      getComputedStyle($('notify')).marginTop === '8px',
-      'the Notifications button keeps 8px below its heading',
     );
     const quietCard = quietRows.get('a:52000');
     assert(

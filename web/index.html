@@ -176,12 +176,12 @@
           Age of the last snapshot. If offline appears, the visible data is
           retained and keeps aging while Swarmview retries.
         </dd>
-        <dt>Recently quiet notifications</dt>
+        <dt>Recently quiet</dt>
         <dd>
           At most three observations are shown, from 15 seconds to 5 minutes
-          quiet, after activity was observed in this page session. Optional
-          notifications and tab counts use that same observation (the tab counts
-          all matches), not a human request. No agents are closed automatically.
+          quiet, after activity was observed in this page session. Tab counts
+          use that same observation (the tab counts all matches), not a human
+          request. No agents are closed automatically.
         </dd>
         <dt>Hierarchy and communication</dt>
         <dd>
@@ -250,14 +250,6 @@
           detected process activity remains independent.
         </p>
       </details>
-    </section>
-    <section>
-      <h3>Recently quiet notifications</h3>
-      <button id="notify" hidden></button>
-      <p>
-        Optional OS notifications after observed activity becomes quiet—not a
-        request for input. Permission is requested only when you enable them.
-      </p>
     </section>
   </dialog>
   <script type="module" src="/assets/app.js"></script>
