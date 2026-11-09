@@ -340,7 +340,7 @@ export async function focusTerminal(r) {
   }
   return !err;
 }
-// Compact keyed terminal links for bounded quiet observations and search results.
+// Compact keyed terminal links for search results.
 function createAgentCard() {
   const node = el('div'),
     btn = el('button', 'agent');

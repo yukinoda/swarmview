@@ -103,10 +103,6 @@
       agent:opencode status:quiet (waiting is also accepted)
     </p>
   </dialog>
-  <section id="quiet" class="sec" hidden>
-    <h2>Recently quiet</h2>
-    <div id="quiet-list"></div>
-  </section>
   <div id="empty" hidden>No agents running</div>
   <main id="tree" aria-label="Repositories and agents"></main>
   <template id="pin-icon"
@@ -123,7 +119,7 @@
           The header counts detected agents, excluding subagents. Repository
           counts show working and quiet agents, plus detected workers.
         </dd>
-        <dt>State and Recently quiet</dt>
+        <dt>State</dt>
         <dd>
           Working means recent CPU activity (or subagent log writes), not task
           progress or communication. Quiet means previously active, now quiet;
@@ -175,13 +171,6 @@
         <dd>
           Age of the last snapshot. If offline appears, the visible data is
           retained and keeps aging while Swarmview retries.
-        </dd>
-        <dt>Recently quiet</dt>
-        <dd>
-          At most three observations are shown, from 15 seconds to 5 minutes
-          quiet, after activity was observed in this page session. Tab counts
-          use that same observation (the tab counts all matches), not a human
-          request. No agents are closed automatically.
         </dd>
         <dt>Hierarchy and communication</dt>
         <dd>

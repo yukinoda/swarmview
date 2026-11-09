@@ -122,7 +122,7 @@ func (s *server) focus(pid int) (bool, string, error) {
 }
 
 //go:embed web/index.html web/app.css web/app.js web/agents.js web/dashboard.js web/rows.js
-//go:embed web/search.js web/notifications.js web/icons.js web/dom.js web/storage.js web/communication.js
+//go:embed web/search.js web/icons.js web/dom.js web/storage.js web/communication.js
 var webFiles embed.FS
 
 //go:embed assets/logo.svg
@@ -156,7 +156,7 @@ func (s *server) writeJSON(w http.ResponseWriter, code int, v any, extra ...stri
 	w.Write(marshal(v))
 }
 
-// The UI loads only same-origin scripts, styles, fetches, and its data: favicon badge.
+// The UI loads only same-origin scripts, styles, fetches, and its data: CSS mask icon.
 const csp = "default-src 'self'; " +
 	"img-src 'self' data:; " +
 	"object-src 'none'; " +
@@ -187,7 +187,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page, _ := webFiles.ReadFile("web/index.html")
 		w.Write(uiAsset("web/index.html", page))
 	case "GET /assets/app.js", "GET /assets/agents.js", "GET /assets/dashboard.js",
-		"GET /assets/rows.js", "GET /assets/search.js", "GET /assets/notifications.js",
+		"GET /assets/rows.js", "GET /assets/search.js",
 		"GET /assets/icons.js", "GET /assets/dom.js", "GET /assets/storage.js",
 		"GET /assets/communication.js", "GET /assets/app.css":
 		name := "web/" + path.Base(r.URL.Path)

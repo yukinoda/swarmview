@@ -1,12 +1,10 @@
 import { $, el, txt, cls, attr, uniqueID } from './dom.js';
 import { load, save } from './storage.js';
-import { HEAT, stateLabel, fmtBytes, formatDuration, snapshotItems } from './agents.js';
-import { createAgentRow, updateAgentRow, syncAgentCards, setupDetails, refreshDetails } from './rows.js';
+import { HEAT, stateLabel, fmtBytes, snapshotItems } from './agents.js';
+import { createAgentRow, updateAgentRow, setupDetails, refreshDetails } from './rows.js';
 
-const QUIET_LIMIT = 3;
 const rows = new Map(),
-  groups = new Map(),
-  quietRows = new Map();
+  groups = new Map();
 let last = new Map(),
   rerender;
 let liveCount = '',
@@ -222,7 +220,7 @@ export function renderDashboard(data, again = false) {
   const workers = items.filter((it) => it.sub && !it.dying).length;
   const workerNoun = workers === 1 ? 'worker' : 'workers';
   txt($('tree-count'), `${repos.size} ${repos.size === 1 ? 'repository' : 'repositories'} · ${workers} ${workerNoun}`);
-  return { items: new Map([...rows.keys()].map((key) => [key, last.get(key)])), agents: mine };
+  return { items: new Map([...rows.keys()].map((key) => [key, last.get(key)])) };
 }
 
 export function refreshDashboard(retained) {
@@ -240,17 +238,7 @@ export function refreshDashboard(retained) {
     const note = offline || stale ? ' (retained)' : '';
     attr(r.toggle, 'aria-label', `Details for ${it.name}: ${state}, RAM ${ram}${note}`);
   }
-  if (retained) $('quiet').hidden = true;
   refreshDetails(retained);
-}
-
-export function showQuiet(quiet) {
-  syncAgentCards(
-    $('quiet-list'),
-    quietRows,
-    quiet.slice(0, QUIET_LIMIT),
-    (it) => 'quiet ' + formatDuration(it.idleSec)
-  );
 }
 
 // Read-only row lookup for communication; tree ownership stays in this module.

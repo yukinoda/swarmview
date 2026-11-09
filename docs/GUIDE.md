@@ -49,10 +49,7 @@ Stale/offline rows lose the working accent; monitoring-only terminal controls ca
 still show observed activity. Green does not mean task progress or success.
 
 **Quiet is an activity heuristic, not a request.** Network, tool, worker, and
-I/O waits can all look quiet. **Recently quiet** shows at most three observations,
-from 15 seconds to five minutes quiet, after work was observed in that page
-session. It is not a permanent alert queue or proof that work is done. The tab
-badge describes quiet activity, not confirmed attention requests.
+I/O waits can all look quiet. Quiet is not proof that work is done.
 Restarting Swarmview resets activity history.
 
 Native questions, permission requests and task-completion signals are unavailable.
@@ -89,7 +86,7 @@ System/Light/Dark appearance. App preferences are stored in this page's browser
 profile, not agent CLI configuration. **Last updated** shows snapshot age even
 when the server is offline; the page retries failed or timed-out polls. After 15
 seconds, retained rows are labeled **stale**; failed polls label them **offline**.
-These states suppress quiet observations and badges instead of presenting old
+These states replace live status labels instead of presenting old
 measurements as live activity.
 
 Details also lets you hide/show a worker branch without folding its siblings.
@@ -139,8 +136,7 @@ and return keyboard focus. **Clear** resets the query while keeping search open.
 An activation error stays visible in the palette instead of silently closing it.
 `status:waiting` remains an alias for the visible quiet state.
 
-The tree, saved folds, recent observations, and tab badge
-remain unchanged. Typing makes no requests: it scans cached strings and reuses
+The tree and saved folds remain unchanged. Typing makes no requests: it scans cached strings and reuses
 the bounded result cards. The index is built lazily only for an active query
 and released when the query is cleared or search closes. Temporary result cards
 are removed too. Exited rows are discarded, with no history or background indexing.

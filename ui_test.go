@@ -82,9 +82,8 @@ func TestUI(t *testing.T) {
 		"app_test.js": string(checks),
 	}
 	for name, extra := range map[string]string{
-		"dashboard.js":     "export const testState = { rows, groups, quietRows };",
+		"dashboard.js":     "export const testState = { rows, groups };",
 		"search.js":        "export const testState = { searchRows, searchIndex, get searchReturnFocus() { return searchReturnFocus; } };",
-		"notifications.js": "export const testState = { eps };",
 		"communication.js": "export const testState = { activeFeedback, pendingFeedback, showFeedback, communicationFeedback, communicationStatus, get source() { return communicationSource; }, closeSource() { communicationSource?.close(); communicationSource = null; } };",
 	} {
 		code, err := webFiles.ReadFile("web/" + name)
