@@ -69,8 +69,8 @@ Use `PORT=4888 ./swarmview` to choose another port.
 ### macOS desktop app (prototype)
 
 For a dedicated window, run `bash desktop/macos/build.sh`, then
-`open dist/Swarmview.app`. Releases include ARM/Intel `.dmg` installers and
-`.app.zip` archives. To build a drag-to-Applications image, run
+`open dist/Swarmview.app`. Releases include ARM/Intel `.dmg` installers.
+To build a drag-to-Applications image, run
 `bash desktop/macos/dmg.sh` after building the app.
 Requires macOS 13.3+; ad-hoc signed, not notarized.
 [Desktop app setup →](desktop/macos/README.md)

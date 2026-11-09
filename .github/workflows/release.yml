@@ -56,19 +56,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Build app archive
+      - name: Build app disk image
         env:
           ARCH: ${{ matrix.arch }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}" bash desktop/macos/build.sh
-          ditto -c -k --sequesterRsrc --keepParent dist/Swarmview.app "swarmview_${GITHUB_REF_NAME}_darwin_${ARCH}.app.zip"
           bash desktop/macos/dmg.sh dist/Swarmview.app "swarmview_${GITHUB_REF_NAME}_darwin_${ARCH}.dmg"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: swarmview-app-${{ matrix.arch }}
-          path: |
-            swarmview_*.app.zip
-            swarmview_*.dmg
+          path: swarmview_*.dmg
           retention-days: 7
 
   publish:
@@ -86,12 +83,11 @@ jobs:
           path: dist
       - name: Write checksums
         working-directory: dist
-        run: sha256sum ./*.tar.gz ./*.app.zip ./*.dmg > SHA256SUMS
+        run: sha256sum ./*.tar.gz ./*.dmg > SHA256SUMS
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
             dist/*.tar.gz
-            dist/*.app.zip
             dist/*.dmg
             dist/SHA256SUMS
       - name: Publish archives and checksums
@@ -102,4 +98,4 @@ jobs:
         run: |
           args=(--verify-tag --generate-notes --title "Swarmview $GITHUB_REF_NAME")
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" "${args[@]}" ./*.tar.gz ./*.app.zip ./*.dmg SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" "${args[@]}" ./*.tar.gz ./*.dmg SHA256SUMS
