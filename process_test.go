@@ -592,7 +592,7 @@ func TestNotARepositoryNotRetried(t *testing.T) {
 			return "p100\nn/tmp/scratch\n", nil
 		case "git":
 			gitCalls++
-			_, err := exec.Command("git", "-C", "/", "rev-parse", "--git-common-dir").Output() // exit 128
+			err := exec.Command("sh", "-c", "exit 128").Run() // git's "not a git repository" exit
 			return "", err
 		}
 		return "", nil
