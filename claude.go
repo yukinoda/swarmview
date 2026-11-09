@@ -17,6 +17,17 @@ import (
 type sessionTitle struct {
 	metaKey, logKey  [2]int64 // zero until the file has been stable for a full mtime tick
 	id, title, model string
+	cwd              string // the cwd sessions/<pid>.json recorded when Claude started, "" if unknown
+}
+
+// projectCwd is the cwd that names the session's project dir under root. Claude
+// keeps writing there after its directory is renamed, while lsof reports the new
+// name, so the recorded cwd wins over the live one.
+func (c *sessionTitle) projectCwd(liveCwd string) string {
+	if c.cwd != "" {
+		return c.cwd
+	}
+	return liveCwd
 }
 
 type metaEntry struct {
@@ -167,8 +178,9 @@ func fileKey(fi os.FileInfo, now int64) [2]int64 {
 }
 
 // claudeSessionTitle re-reads only files whose size or mtime changed since the cached read.
-// The session's latest model is left in c.model.
-func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionTitle) string {
+// The session's latest model is left in c.model. start is the process's start
+// in Unix seconds (see processStart), NaN if unknown.
+func claudeSessionTitle(root string, pid int, start float64, cwd string, now int64, c *sessionTitle) string {
 	metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
 	fi, err := os.Stat(metaPath)
 	if err != nil {
@@ -176,7 +188,7 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 		return ""
 	}
 	if k := fileKey(fi, now); k == [2]int64{} || k != c.metaKey {
-		id, ok := readSessionID(metaPath, pid, cwd)
+		id, recordedCwd, ok := readSessionID(metaPath, pid, start)
 		if !ok {
 			// I/O error: keep the cached session and retry next poll like an uncached read
 			c.metaKey = [2]int64{}
@@ -185,13 +197,14 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 			if id != c.id {
 				*c = sessionTitle{id: id}
 			}
+			c.cwd = recordedCwd
 			c.metaKey = k
 		}
 	}
 	if c.id == "" {
 		return ""
 	}
-	logPath := path.Join(root, claudeSlug(cwd), c.id+".jsonl")
+	logPath := path.Join(root, claudeSlug(c.projectCwd(cwd)), c.id+".jsonl")
 	if fi, err = os.Stat(logPath); err != nil {
 		c.logKey, c.title, c.model = [2]int64{}, "", ""
 		return ""
@@ -211,25 +224,40 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 }
 
 // readSessionID and readSessionTitle report ok=false on I/O errors, which must not be cached.
-func readSessionID(metaPath string, pid int, cwd string) (string, bool) {
+// readSessionID also returns the cwd the session was started in. That cwd is
+// untrusted, but claudeSlug turns it into [A-Za-z0-9-] only, so it cannot leave root.
+// A file written before the process started (start, Unix seconds) is left by an
+// earlier Claude with a reused pid that crashed before deleting it.
+func readSessionID(metaPath string, pid int, start float64) (string, string, bool) {
 	f, err := os.Open(metaPath)
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	var session struct {
 		Pid       int    `json:"pid"`
 		SessionID string `json:"sessionId"`
 		Cwd       string `json:"cwd"`
+		StartedAt int64  `json:"startedAt"` // Unix ms, written once when Claude starts
 	}
 	err = json.NewDecoder(io.LimitReader(f, 16<<10)).Decode(&session)
 	f.Close()
 	if err != nil {
-		return "", false // read or decode error: retry rather than cache
+		return "", "", false // read or decode error: retry rather than cache
 	}
-	if session.Pid != pid || session.Cwd != cwd || !sessionIDRe.MatchString(session.SessionID) {
-		return "", true
+	if session.Pid != pid || !sessionIDRe.MatchString(session.SessionID) {
+		return "", "", true
 	}
-	return session.SessionID, true
+	// an unknown start or a file without startedAt can't be checked: accept it
+	startKnown := !math.IsNaN(start) && session.StartedAt > 0
+	writtenBeforeStart := float64(session.StartedAt)/1000 < start-startSlackSec
+	if startKnown && writtenBeforeStart {
+		return "", "", true
+	}
+	// a relative or empty cwd can't name a project dir: fall back to the live cwd
+	if !path.IsAbs(session.Cwd) {
+		return session.SessionID, "", true
+	}
+	return session.SessionID, session.Cwd, true
 }
 
 // readSessionTitle also returns the model of the session's last assistant record in the tail.
@@ -304,46 +332,53 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 	// Every record left names a Claude PID that is still running.
 	pruneWorkerHosts(hosts, agents, now)
 	type group struct {
-		cwd      string
-		pids     []int
-		sessions []string // each process's cached current session id, "" if unknown
+		projectCwd string // names the project dir, see sessionTitle.projectCwd
+		pids       []int
+		cwds       []string // each process's live cwd, shown for its workers
+		sessions   []string // each process's cached current session id, "" if unknown
 	}
 	var groups []*group
 	for _, a := range agents {
-		if a.Kind != "claude" || a.Cwd == nil {
+		if a.Kind != "claude" {
+			continue
+		}
+		// both are set when lsof gave the live cwd; an empty slug would name root itself
+		if a.Cwd == nil || a.projectCwd == "" {
 			continue
 		}
 		var g *group
 		for _, x := range groups {
-			if x.cwd == *a.Cwd {
+			if x.projectCwd == a.projectCwd {
 				g = x
 			}
 		}
 		if g == nil {
-			g = &group{cwd: *a.Cwd}
+			g = &group{projectCwd: a.projectCwd}
 			groups = append(groups, g)
 		}
 		g.pids = append(g.pids, a.Pid)
+		g.cwds = append(g.cwds, *a.Cwd)
 		g.sessions = append(g.sessions, a.session)
 	}
 	out := []Subagent{}
 	seen := map[string]bool{}
 	seenDir := map[string]bool{}
 	for _, g := range groups {
-		dir := path.Join(root, claudeSlug(g.cwd))
+		dir := path.Join(root, claudeSlug(g.projectCwd))
 		dmt, err := mtimeMs(dir)
 		if err != nil {
 			continue
 		}
 		seenDir[dir] = true
-		// Several claude processes share this cwd: attribute sessions by each process's
+		// Several claude processes share this project dir: attribute sessions by each process's
 		// sessions/<pid>.json, read only in this ambiguous case. A session claimed by
 		// two processes (e.g. resumed in a second terminal) has several claimants.
 		claimants := map[string][]int{}
 		if len(g.pids) > 1 {
 			for _, pid := range g.pids {
 				metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
-				id, _ := readSessionID(metaPath, pid, g.cwd)
+				a, _ := findClaude(agents, pid)
+				id, _, _ := readSessionID(metaPath, pid, processStart(a, now))
 				if id != "" {
 					claimants[id] = append(claimants[id], pid)
 				}
@@ -433,7 +468,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				if c.logModel != "" {
 					model = c.logModel
 				}
-				// Attach to the sole claude in that cwd unless its known current session is
+				// Attach to the sole claude in that project dir unless its known current session is
 				// another one (the worker outlived an earlier session) and its SubagentStart
 				// hook didn't report this worker (one it started before a /clear). Else attach
 				// to the one process whose session metadata claims this session. Of several
@@ -454,7 +489,18 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				} else if claimed && host.proven(agents, now) {
 					pp = &host.pid
 				}
-				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, model, now-jt < 60e3})
+				// Processes sharing a project dir can have different live cwds when its
+				// directory was renamed and then recreated: show the parent's.
+				// A worker without a known parent belongs to the project dir: prefer a
+				// member still in it over one whose directory was renamed.
+				cwd := g.cwds[0]
+				if slices.Contains(g.cwds, g.projectCwd) {
+					cwd = g.projectCwd
+				}
+				if pp != nil {
+					cwd = g.cwds[slices.Index(g.pids, *pp)]
+				}
+				out = append(out, Subagent{id, pp, c.parentAgentId, cwd, c.description, model, now-jt < 60e3})
 			}
 		}
 	}

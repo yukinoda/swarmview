@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -40,7 +41,7 @@ func TestClaudeGeneratedTitle(t *testing.T) {
 	write(transcript, strings.Repeat("x", 70<<10)+"\n"+record("Old title", id)+reply("claude-sonnet-5-5", id)+record("Generated task", id)+
 		reply("claude-opus-5-5", id)+reply("<synthetic>", id)+reply("claude-haiku-5-5", "other")+record("Wrong session", "other")+`{"type":"ai-title",`)
 	c := &sessionTitle{}
-	if got := claudeSessionTitle(root, 100, cwd, nowMs(), c); got != "Generated task" || c.model != "claude-opus-5-5" {
+	if got := claudeSessionTitle(root, 100, math.NaN(), cwd, nowMs(), c); got != "Generated task" || c.model != "claude-opus-5-5" {
 		t.Fatalf("generated title = %q, model = %q", got, c.model)
 	}
 	paneTitle := "✳ Claude Code"
@@ -62,9 +63,9 @@ func TestClaudeGeneratedTitle(t *testing.T) {
 	if a := mustList(t, s, 2000)[0]; a.Title == nil || *a.Title != "Renamed task" || a.Model != "claude-opus-5-5" {
 		t.Fatalf("rename must take precedence and keep the model: %+v", a)
 	}
-	for _, data := range []string{meta(200, id, cwd), meta(100, id, "/other"), meta(100, "../invalid", cwd), "{"} {
+	for _, data := range []string{meta(200, id, cwd), meta(100, "../invalid", cwd), "{"} {
 		write(metadata, data)
-		if got := claudeSessionTitle(root, 100, cwd, nowMs(), &sessionTitle{}); got != "" {
+		if got := claudeSessionTitle(root, 100, math.NaN(), cwd, nowMs(), &sessionTitle{}); got != "" {
 			t.Fatalf("invalid session metadata returned %q", got)
 		}
 	}
@@ -89,7 +90,7 @@ func TestClaudeTitleCachedByFileKey(t *testing.T) {
 		return `{"type":"ai-title","aiTitle":"` + title + `","sessionId":"` + session + `"}` + "\n"
 	}
 	c := &sessionTitle{}
-	title := func() string { return claudeSessionTitle(root, 100, cwd, now, c) }
+	title := func() string { return claudeSessionTitle(root, 100, math.NaN(), cwd, now, c) }
 	write(metadata, meta(id), 10e3)
 	write(log(id), record("Title A", id), 10e3)
 	if got := title(); got != "Title A" {
@@ -167,7 +168,9 @@ func mk(t *testing.T, root, cwd, session, id string, meta any, ageSec int64, now
 	must(t, os.Chtimes(j, tm, tm))
 }
 
-func claude(pid int, cwd string) Agent { return Agent{Pid: pid, Kind: "claude", Cwd: &cwd} }
+func claude(pid int, cwd string) Agent {
+	return Agent{Pid: pid, Kind: "claude", Cwd: &cwd, projectCwd: cwd}
+}
 
 func subs(root string, now int64, as ...Agent) []Subagent {
 	return subsWithHosts(root, now, map[hostKey]workerHost{}, as...)
@@ -754,5 +757,86 @@ func TestSessionScanRepeatedWhileDirUnsettled(t *testing.T) {
 	must(t, os.Chtimes(dir, tm, tm)) // second create lands in that same tick
 	if got := listClaudeSubagents([]Agent{claude(100, "/w/a")}, root, now+1, map[string]metaEntry{}, sessions, nil); len(got) != 2 {
 		t.Errorf("got %d", len(got))
+	}
+}
+
+// A Claude whose directory was renamed while it ran keeps its session file,
+// transcript and workers under the cwd it started in; lsof reports the new name.
+func TestRenamedClaudeCwdUsesRecordedProjectDir(t *testing.T) {
+	root, now := filepath.Join(t.TempDir(), "projects"), nowMs()
+	renamed := "11111111-1111-1111-1111-111111111111"
+	fresh := "22222222-2222-2222-2222-222222222222"
+	recreated := "33333333-3333-3333-3333-333333333333"
+	unclaimed := "44444444-4444-4444-4444-444444444444"
+	// the processes below started 60 s ago
+	writeMetaAt := func(pid int, session, cwd string, startedAt int64) {
+		t.Helper()
+		file := filepath.Join(filepath.Dir(root), "sessions", strconv.Itoa(pid)+".json")
+		must(t, os.MkdirAll(filepath.Dir(file), 0700))
+		data := marshal(map[string]any{"pid": pid, "sessionId": session, "cwd": cwd, "startedAt": startedAt})
+		must(t, os.WriteFile(file, data, 0600))
+	}
+	writeMeta := func(pid int, session, cwd string) {
+		t.Helper()
+		writeMetaAt(pid, session, cwd, now-59e3)
+	}
+	// pid 100 started in /w/old, since renamed to /w/new; pid 101 started in /w/new
+	// after the rename, and pid 102 in a recreated /w/old
+	writeMeta(100, renamed, "/w/old")
+	writeMeta(101, fresh, "/w/new")
+	writeMeta(102, recreated, "/w/old")
+	// pid 103 reused the pid of a Claude that crashed in /w/old without deleting its file
+	writeMetaAt(103, unclaimed, "/w/old", now-600e3)
+	mk(t, root, "/w/old", renamed, "a1", map[string]any{"description": "Old worker"}, 3, now)
+	mk(t, root, "/w/new", fresh, "a2", map[string]any{"description": "New worker"}, 3, now)
+	mk(t, root, "/w/old", recreated, "a3", map[string]any{"description": "Recreated worker"}, 3, now)
+	mk(t, root, "/w/old", unclaimed, "a4", map[string]any{"description": "Unclaimed worker"}, 3, now)
+	transcript := filepath.Join(root, claudeSlug("/w/old"), renamed+".jsonl")
+	title := `{"type":"ai-title","aiTitle":"Renamed task","sessionId":"` + renamed + `"}` + "\n"
+	must(t, os.WriteFile(transcript, []byte(title), 0600))
+
+	s := srvWith(func(cmd string, args ...string) (string, error) {
+		if cmd == "ps" {
+			return "100 10 1000 0:01 01:00 claude\n101 10 1000 0:01 01:00 claude\n102 10 1000 0:01 01:00 claude\n103 10 1000 0:01 01:00 claude\n", nil
+		}
+		return "", errors.New("unavailable")
+	})
+	s.root = root
+	s.cache[100] = &cacheEntry{cwd: "/w/new", etime: "01:00"}
+	s.cache[101] = &cacheEntry{cwd: "/w/new", etime: "01:00"}
+	s.cache[102] = &cacheEntry{cwd: "/w/old", etime: "01:00"}
+	s.cache[103] = &cacheEntry{cwd: "/w/other", etime: "01:00"}
+	agents := mustList(t, s, now)
+	old := agentByPid(agents, 100)
+	if old.Title == nil || *old.Title != "Renamed task" || old.session != renamed {
+		t.Fatalf("renamed claude lost its session: %+v", old)
+	}
+	if *old.Cwd != "/w/new" || old.Project != "new" {
+		t.Errorf("dashboard must keep the live cwd: %+v", old)
+	}
+	if reused := agentByPid(agents, 103); reused.session != "" || reused.projectCwd != "/w/other" {
+		t.Errorf("a session file older than the process must be ignored: %+v", reused)
+	}
+
+	got := subs(root, now, agents...)
+	p100, p101, p102 := 100, 101, 102
+	want := []Subagent{
+		{"a1", &p100, nil, "/w/new", "Old worker", nil, true},
+		{"a3", &p102, nil, "/w/old", "Recreated worker", nil, true},
+		{"a4", nil, nil, "/w/old", "Unclaimed worker", nil, true},
+		{"a2", &p101, nil, "/w/new", "New worker", nil, true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v", got)
+	}
+
+	// a recorded cwd that can't name a project dir falls back to the live cwd
+	for _, recorded := range []string{"", "w/old"} {
+		writeMeta(100, renamed, recorded)
+		c := &sessionTitle{}
+		claudeSessionTitle(root, 100, math.NaN(), "/w/new", now, c)
+		if c.id != renamed || c.projectCwd("/w/new") != "/w/new" {
+			t.Errorf("recorded cwd %q: id %q, project cwd %q", recorded, c.id, c.projectCwd("/w/new"))
+		}
 	}
 }
