@@ -28,10 +28,10 @@ jobs:
         run: go test -race -v -count=1 -run 'TestDiagProduction$' .
       - name: warm production x20
         continue-on-error: true
-        run: go test -race -v -count=20 -run 'TestDiagProduction$' . 2>&1 | grep -v '^        [0-9]' 
+        run: go test -race -v -count=20 -run 'TestDiagProduction$' .
       - name: warm static x20
         continue-on-error: true
-        run: go test -race -v -count=20 -run 'TestDiagStatic$' . 2>&1 | grep -v '^        [0-9]'
+        run: go test -race -v -count=20 -run 'TestDiagStatic$' .
       - name: full suite
         continue-on-error: true
-        run: go test -race -v ./... 2>&1 | grep -E '^(---|FAIL|ok)|DIAG|^        ' | grep -v '^        [0-9]' | head -200
+        run: go test -race -v ./... 2>&1 | grep -E '^(---|FAIL|ok)|DIAG|^        ' | head -300

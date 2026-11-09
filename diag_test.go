@@ -45,7 +45,7 @@ func diagRun(t *testing.T, handler http.Handler, port *int, want string) {
 		defer mu.Unlock()
 		t.Fatalf("DIAG HANG (%v) after %v\nrequests:\n%s\noutput:\n%s", err, time.Since(start), strings.Join(events, "\n"), out)
 	}
-	t.Logf("ok in %v\n%s", time.Since(start), strings.Join(events, "\n"))
+	t.Logf("ok in %v", time.Since(start))
 }
 
 func TestDiagProduction(t *testing.T) {
