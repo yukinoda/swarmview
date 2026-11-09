@@ -14,6 +14,11 @@ vector artwork is included under the repository's [MIT license](../LICENSE).
 - The dashboard uses system fonts and a separate semantic status palette;
   logo colors do not indicate agent status.
 
+`social-preview.png` is the 1280×640 card (exported at 2x) shown when the
+repository is linked. GitHub has no API for it: upload it under Settings →
+General → Social preview. It uses the logo, tagline, and supported-agent list
+from the README, so update it when those change.
+
 The README dashboard screenshot uses illustrative demo data, not real sessions.
 `dashboard-guide.svg` is the annotated dashboard illustration linked from the
 README, also using synthetic tasks and metrics. Keep its labels aligned with the
