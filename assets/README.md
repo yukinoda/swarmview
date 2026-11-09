@@ -19,11 +19,12 @@ repository is linked. GitHub has no API for it: upload it under Settings →
 General → Social preview. It uses the logo, tagline, and supported-agent list
 from the README, so update it when those change.
 
-The README dashboard screenshot uses illustrative demo data, not real sessions.
-`dashboard-guide.svg` is the annotated dashboard illustration linked from the
-README, also using synthetic tasks and metrics. Keep its labels aligned with the
-dashboard when changing UI terminology; `screenshot.png` shows the fuller
-multi-repository layout.
+`demo.gif` is the README dashboard recording (720 px wide, exported at 2x). It
+plays scripted demo data, not real sessions: the real `web/` UI served with a
+mocked `/agents` response, recorded in headless Chromium, and encoded with
+ffmpeg. `dashboard-guide.svg` is the annotated dashboard illustration linked
+from the README, also using synthetic tasks and metrics. Keep the labels in both
+aligned with the dashboard when changing UI terminology.
 
 `installer-light.svg` is the selected installer artwork, exported as vectors
 with outlined typography from the maintainer's private Figma source. The
