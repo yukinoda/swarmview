@@ -272,6 +272,7 @@ type Agent struct {
 	Model        string   `json:"model,omitempty"`
 	pane         string
 	session      string // Claude's current session id from the cached sessions/<pid>.json, or ""
+	projectCwd   string // Claude's project dir cwd, see sessionTitle.projectCwd; "" for other kinds
 }
 
 type cacheEntry struct {
@@ -403,6 +404,7 @@ func (s *server) listAgents(now int64) ([]Agent, error) {
 			}
 			a.Model = c.title.model
 			a.session = c.title.id
+			a.projectCwd = c.title.projectCwd(c.cwd)
 		}
 		agents = append(agents, a)
 	}

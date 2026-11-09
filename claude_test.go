@@ -756,3 +756,54 @@ func TestSessionScanRepeatedWhileDirUnsettled(t *testing.T) {
 		t.Errorf("got %d", len(got))
 	}
 }
+
+// A Claude whose directory was renamed while it ran keeps its session file,
+// transcript and workers under the cwd it started in; lsof reports the new name.
+func TestRenamedClaudeCwdUsesRecordedProjectDir(t *testing.T) {
+	root, now := filepath.Join(t.TempDir(), "projects"), nowMs()
+	renamed := "11111111-1111-1111-1111-111111111111"
+	fresh := "22222222-2222-2222-2222-222222222222"
+	writeMeta := func(pid int, session, cwd string) {
+		t.Helper()
+		file := filepath.Join(filepath.Dir(root), "sessions", strconv.Itoa(pid)+".json")
+		must(t, os.MkdirAll(filepath.Dir(file), 0700))
+		data := marshal(map[string]any{"pid": pid, "sessionId": session, "cwd": cwd})
+		must(t, os.WriteFile(file, data, 0600))
+	}
+	// pid 100 started in /w/old, since renamed to /w/new; pid 101 started in /w/new after the rename
+	writeMeta(100, renamed, "/w/old")
+	writeMeta(101, fresh, "/w/new")
+	mk(t, root, "/w/old", renamed, "a1", map[string]any{"description": "Old worker"}, 3, now)
+	mk(t, root, "/w/new", fresh, "a2", map[string]any{"description": "New worker"}, 3, now)
+	transcript := filepath.Join(root, claudeSlug("/w/old"), renamed+".jsonl")
+	title := `{"type":"ai-title","aiTitle":"Renamed task","sessionId":"` + renamed + `"}` + "\n"
+	must(t, os.WriteFile(transcript, []byte(title), 0600))
+
+	s := srvWith(func(cmd string, args ...string) (string, error) {
+		if cmd == "ps" {
+			return "100 10 1000 0:01 01:00 claude\n101 10 1000 0:01 01:00 claude\n", nil
+		}
+		return "", errors.New("unavailable")
+	})
+	s.root = root
+	s.cache[100] = &cacheEntry{cwd: "/w/new", etime: "01:00"}
+	s.cache[101] = &cacheEntry{cwd: "/w/new", etime: "01:00"}
+	agents := mustList(t, s, now)
+	old := agentByPid(agents, 100)
+	if old.Title == nil || *old.Title != "Renamed task" || old.session != renamed {
+		t.Fatalf("renamed claude lost its session: %+v", old)
+	}
+	if *old.Cwd != "/w/new" || old.Project != "new" {
+		t.Errorf("dashboard must keep the live cwd: %+v", old)
+	}
+
+	got := subs(root, now, agents...)
+	p100, p101 := 100, 101
+	want := []Subagent{
+		{"a1", &p100, nil, "/w/new", "Old worker", nil, true},
+		{"a2", &p101, nil, "/w/new", "New worker", nil, true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v", got)
+	}
+}
