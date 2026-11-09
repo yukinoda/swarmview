@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private let output = Pipe()
     private var window: NSWindow!
     private var webView: WKWebView!
-    private var titleObserver: NSKeyValueObservation?
     private var startupTimeout: DispatchWorkItem?
     private var log = ""
     private var ready = false
@@ -53,9 +52,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             window.center()
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
-            titleObserver = webView.observe(\.title, options: [.new]) { [weak self] view, _ in
-                self?.window.title = view.title ?? "Swarmview"
-            }
             try startBackend()
         } catch { fail("Could not start Swarmview: \(error.localizedDescription)") }
     }

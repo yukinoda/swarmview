@@ -8,7 +8,6 @@
   --line: #dce1de;
   --accent: #087c70;
   --working: #147149;
-  --idle: #5c6869;
   --waiting: #8c570a;
   --new: #1767c0;
   --exiting: #b42332;
@@ -27,7 +26,6 @@
   --line: #303b3c;
   --accent: #71c7b4;
   --working: #8bd0a8;
-  --idle: #a4b0af;
   --waiting: #efc277;
   --new: #87baff;
   --exiting: #ffa0a9;
@@ -551,13 +549,6 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.sec {
-  margin-bottom: 16px;
-}
-.sec h2 {
-  color: var(--mut);
-  font-size: 12px;
 }
 #empty {
   text-align: center;

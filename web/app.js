@@ -5,11 +5,9 @@ import { closeDetails } from './rows.js';
 import {
   renderDashboard,
   refreshDashboard,
-  showQuiet,
   setupDashboard
 } from './dashboard.js';
 import { setupSearch, updateSearch, refreshSearch } from './search.js';
-import { updateNotifications, clearBadge } from './notifications.js';
 import { setupCommunication, refreshCommunication, communicationStream, clearPulses } from './communication.js';
 
 const POLL_MS = 2000;
@@ -25,9 +23,7 @@ function snapshotState(now = Date.now()) {
 
 function render(data, again = false) {
   lastData = data;
-  const { items, agents } = renderDashboard(data, again);
-  const stale = data.at != null && Date.now() - data.at > 15000;
-  showQuiet(updateNotifications(agents, { observe: !again, stale }));
+  const { items } = renderDashboard(data, again);
   updateSearch(items);
   freshness();
 }
@@ -44,7 +40,6 @@ function freshness(now = Date.now()) {
   txt($('freshness'), prefix + updated);
   refreshDashboard(retained);
   refreshSearch(retained);
-  if (retained) clearBadge();
   refreshCommunication(lastData);
 }
 

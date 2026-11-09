@@ -81,9 +81,8 @@ The one-shot check is off the UI thread, with no polling or resident helper.
 - Ghostty Automation permission belongs to the packaged app's execution context;
   existing terminal permission may not carry over. Allow access when prompted,
   then retry a click if the initial prompt outlasted the backend's timeout.
-- The native window follows the page's waiting-count title. The app posts no
-  notifications and has no Dock badge. Minimized/background timers may be
-  throttled.
+- The app posts no notifications and has no Dock badge. Minimized/background
+  timers may be throttled.
 
 ## Checks and memory
 

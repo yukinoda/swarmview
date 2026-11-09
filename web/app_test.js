@@ -7,7 +7,6 @@ import {
   closeSearch,
   applySearch,
 } from './search.js';
-import { testState as notificationsState } from './notifications.js';
 import { LOGOS, logo } from './icons.js';
 import { MB, GB, snapshotItems, testState as agentsState } from './agents.js';
 import { testState as rowsState } from './rows.js';
@@ -19,9 +18,8 @@ import {
 } from './communication.js';
 import { $ } from './dom.js';
 
-const { rows, groups, quietRows } = dashboard;
+const { rows, groups } = dashboard;
 const { searchRows, searchIndex } = searchState;
-const { eps } = notificationsState;
 const { render, poll, freshness } = app;
 const {
   activeFeedback,
@@ -231,13 +229,6 @@ const {
         path && path.getAttribute('d') === LOGOS[kind],
         kind + ' uses its embedded SVG logo in agent rows',
       );
-      assert(
-        quietRows
-          .get('a:100')
-          .logo.querySelector('svg path')
-          .getAttribute('d') === LOGOS[kind],
-        kind + ' uses its logo in recently quiet cards after observed work',
-      );
       openSearch();
       $('search').value = 'pid:100';
       applySearch();
@@ -432,32 +423,17 @@ const {
     );
 
     show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
-    show([{ ...a, idleSec: 14 }]);
-    assert($('quiet').hidden, 'quiet observation grace period');
     show([{ ...a, idleSec: 15 }]);
+    const favicon = document.querySelector('link[rel="icon"]');
     assert(
-      !$('quiet').hidden && $('quiet-list').children.length === 1,
-      'recently quiet observation section',
+      rows.get('a:100').st.textContent === 'quiet',
+      'a working agent going quiet shows the quiet status on its own row',
     );
     assert(
-      document.title === '(1) recently quiet · Swarmview',
-      'quiet observation badge',
-    );
-    show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
-    assert(
-      $('quiet').hidden && document.title === 'Swarmview',
-      'working clears quiet badge',
-    );
-    show([{ ...a, idleSec: 15 }]);
-    assert(
-      !$('quiet').hidden,
-      'a new working episode is observed as quiet again',
-    );
-    show([]);
-    show([{ ...a, idleSec: 15 }]);
-    assert(
-      $('quiet').hidden,
-      'unseen quiet processes are not presented as newly observed transitions',
+      document.title === 'Swarmview' &&
+        favicon.getAttribute('href') === '/logo.svg' &&
+        !$('quiet'),
+      'going quiet leaves the plain title, static favicon, and no quiet section',
     );
 
     const b = agent(200, '/b');
@@ -616,18 +592,6 @@ const {
       !rows.get('sub:child').btn.disabled && rows.get('sub:child').pid === 100,
       'subagent uses its actual parent focus target',
     );
-    show([{ ...focusable, recentCpu: 0.1, idleSec: 0 }]);
-    show([{ ...focusable, idleSec: 15 }]);
-    assert(
-      !quietRows.get('a:100').btn.disabled,
-      'quiet observation card allows tmux selection',
-    );
-    show([agent(100, '/b', { idleSec: 15 })]);
-    assert(
-      quietRows.get('a:100').btn.disabled,
-      'monitoring-only card is not clickable',
-    );
-
     render({ agents: [a], at: 100000 });
     freshness(140000);
     assert(
@@ -985,19 +949,10 @@ const {
     );
 
     search('no-such-task');
-    show([{ ...coordinator, recentCpu: 0.1, idleSec: 0 }]);
-    show([{ ...coordinator, idleSec: 20 }]);
-    assert(
-      !$('quiet').hidden &&
-        document.title === '(1) recently quiet · Swarmview',
-      'the palette does not filter or suppress global quiet observations or badges',
-    );
     $('clear-search').click();
     assert(
-      !$('quiet').hidden &&
-        $('search').value === '' &&
-        !$('search-panel').hidden,
-      'clear preserves quiet cards and keeps search open',
+      $('search').value === '' && !$('search-panel').hidden,
+      'clear empties the query and keeps search open',
     );
     search('task:Coordinator');
     $('close-search').click();
@@ -1660,49 +1615,26 @@ const {
     show([agent(20000, '/synthetic', { recentCpu: null, idleSec: 30 })]);
     assert(
       rows.get('a:20000').st.textContent === 'unknown' &&
-        rows.get('a:20000').item.cpu === 'Unavailable' &&
-        $('quiet').hidden,
+        rows.get('a:20000').item.cpu === 'Unavailable',
       'missing activity telemetry is unknown, never quiet or zero CPU',
     );
 
     const observations = Array.from({ length: 12 }, (_, i) =>
       agent(30000 + i, '/observations', { recentCpu: 0.2, idleSec: 0 }),
     );
-    show(observations);
-    show(observations);
     const quietObservations = observations.map((it, i) => ({
       ...it,
       recentCpu: 0,
       idleSec: 15 + i,
     }));
-    show(quietObservations);
-    assert(
-      $('quiet-list').children.length === 3 &&
-        quietRows.size === 3,
-      'recent observation cards stay bounded',
-    );
-    const observationElements = $('quiet-list').querySelectorAll('*').length;
-    for (let i = 0; i < 20; i++) show(quietObservations);
-    assert(
-      $('quiet-list').querySelectorAll('*').length === observationElements,
-      'repeated quiet observations do not grow the DOM',
-    );
-    show(observations.map((it) => ({ ...it, recentCpu: 0, idleSec: 301 })));
-    assert(
-      $('quiet').hidden &&
-        quietRows.size === 0 &&
-        document.title === 'Swarmview',
-      'quiet observations expire after five minutes instead of becoming an alert queue',
-    );
     const snapshotNow = Date.now();
     render({ agents: observations, at: snapshotNow });
     render({ agents: quietObservations, at: snapshotNow - 20000 });
     assert(
-      $('quiet').hidden &&
-        [...rows.values()]
-          .filter((r) => !r.node.classList.contains('s-exiting'))
-          .every((r) => r.st.textContent === 'stale'),
-      'stale snapshots cannot produce quiet observations or live state labels',
+      [...rows.values()]
+        .filter((r) => !r.node.classList.contains('s-exiting'))
+        .every((r) => r.st.textContent === 'stale'),
+      'stale snapshots cannot produce live state labels',
     );
     const queryNow = Date.now;
     try {
@@ -1721,11 +1653,8 @@ const {
     show([]);
     show([]);
     assert(
-      rows.size === 0 &&
-        groups.size === 0 &&
-        quietRows.size === 0 &&
-        eps.size === 0,
-      'exited fleets release rows, observations, and episode metadata',
+      rows.size === 0 && groups.size === 0,
+      'exited fleets release rows and groups',
     );
 
     const sourceHost = agent(44000, '/source-cases', {
@@ -3350,11 +3279,6 @@ const {
       !$('tree-actions').hidden &&
         $('expand').getBoundingClientRect().height > 0,
       'Expand all and Collapse all return once rows exist',
-    );
-    const quietCard = quietRows.get('a:52000');
-    assert(
-      quietCard && getComputedStyle(quietCard.meta).fontSize === '12px',
-      'quiet card status text matches the 12px tree status column',
     );
     assert(
       getComputedStyle(rows.get('a:52000').workers).whiteSpace === 'nowrap',

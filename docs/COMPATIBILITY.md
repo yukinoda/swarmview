@@ -153,7 +153,7 @@ session status or conversation metadata.
   2.1.275+, and older versions add the marketplace first. Other providers remain
   unsupported for communication. Live relationships do not establish worker
   process status.
-  Recently quiet observations do not confirm that
+  Quiet status does not confirm that
   someone needs to act. Nesting indicates discovered parentage, not communication.
 - Per-agent RAM is approximate process-tree RSS and remains neutral regardless of
   size. Missing measurements (including Claude workers' own) remain unavailable,
@@ -201,10 +201,9 @@ compact and native-window widths, both shortcut platforms, light/dark themes,
 and reduced motion. These are browser checks, not a claim of native WKWebView or
 Firefox/Safari visual verification.
 
-Recent quiet observations appear in the page, tab title, and favicon; Swarmview
-does not post OS notifications. Appearance in Preferences supports
-System/Light/Dark using browser-local storage, without changing provider or CLI
-configuration.
+Swarmview does not post OS notifications or badge the tab title or favicon.
+Appearance in Preferences supports System/Light/Dark using browser-local
+storage, without changing provider or CLI configuration.
 Background-tab throttling can delay polling; Chrome may poll
 about once per minute after the tab has been hidden for over five minutes.
 

@@ -22,9 +22,8 @@ Runs locally: one Go binary, no account, no analytics, no hosted service.
 
 ### Check → choose → continue
 
-1. **Check what might need you.** Recently active agents that go quiet appear
-   under **Recently quiet** as bounded observations. Quiet activity is not a
-   confirmed request for help.
+1. **Check what might need you.** Each task row shows whether its agent is
+   working or quiet. Quiet activity is not a confirmed request for help.
 2. **Choose a task.** Browse by repository or press **⌘ K / Ctrl K**
    to search task names, agents, and repositories.
 3. **Continue in its terminal.** Click an enabled task identity to select its tmux pane.
