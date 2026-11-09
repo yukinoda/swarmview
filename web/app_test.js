@@ -244,6 +244,11 @@ const {
       'metrics and explicit Details keep a separate breathing gap',
     );
     assert(
+      metricStyle.textAlign === 'center' &&
+        metricStyle.paddingLeft === metricStyle.paddingRight,
+      'Details centres its label so the focus ring and hover fill frame it evenly',
+    );
+    assert(
       metrics.toggle.getBoundingClientRect().width >= 56 &&
         metrics.btn.getBoundingClientRect().height === 47,
       'explicit Details retains a usable width and short rows remain 47px',
