@@ -12,7 +12,7 @@ metric help at the bottom explains the numbers without leaving your sessions.
 | Example | Meaning |
 | --- | --- |
 | `2 agents · 2 working` | Detected agent processes and how many are active; excludes subagent rows |
-| `2 working` | Working agents in this repository or worktree; quiet and worker counts appear separately |
+| `2 working` | Working agents in this repository; quiet and worker counts appear separately |
 | `~1.6 GB` in RAM | Approximate resident RAM of the agent and its child processes |
 | `—` in a process RAM cell, or unavailable metrics in worker Details | Missing measurements, not zero; live metadata workers omit empty process-metric cells |
 | `Process age` = `1h` in Details | Process age, not duration of the current task |
@@ -78,7 +78,12 @@ count once per process: it is a comparison tool, not a promise of reclaimable
 RAM. Swarmview does not infer reclaimable memory or recommend closing an agent
 merely because it is large or quiet. System RAM/swap indicators are macOS-only.
 
-Pin repositories and fold worktrees in the overview. Open **Preferences** for
+Agents are grouped by the Git repository of their working directory, so all
+worktrees of a repository share one group. A process's directory shows where the
+agent was started or last moved, not which worktrees it edits, so the overview
+doesn't sort agents by worktree; Details shows that directory.
+
+Pin and fold repositories in the overview. Open **Preferences** for
 System/Light/Dark appearance and opt-in quiet notifications. Opening Preferences
 does not request notification permission; enabling notifications is an explicit
 action. App preferences are stored in this page's browser profile, not agent CLI
@@ -91,7 +96,7 @@ measurements as live activity.
 Details also lets you hide/show a worker branch without folding its siblings.
 Hidden-worker counts include every worker descendant hidden by that branch,
 not just its direct children. Mixed process/worker branches are labeled nested
-agents rather than workers. Repository/worktree headers count each worker once
+agents rather than workers. Repository headers count each worker once
 and keep those totals when collapsed. Only task identity is indented. Measured
 process activity and RAM stay aligned; live metadata workers use that space for
 identity, communication text and a visible Details control instead of empty
@@ -106,7 +111,7 @@ space so the unconfirmed qualifier can wrap without cue-induced row movement.
 Search opens a compact native command-palette dialog when you press **⌘ K on
 macOS** or **Ctrl K elsewhere**, or click the small **Search** shortcut button.
 Its hint follows your platform. Opening it does not shift or filter the dashboard
-behind it. Plain terms search visible task, agent, repository/worktree, status,
+behind it. Plain terms search visible task, agent, repository, status,
 and pane labels—not hidden absolute paths or process IDs. It searches metadata
 already loaded in the browser. Terms are
 case-insensitive and combined with AND; quote a phrase to keep its words together.

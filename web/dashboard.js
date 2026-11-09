@@ -23,14 +23,14 @@ function toggleFold(k) {
   save('swarmview.folded', [...folded]);
   rerender();
 }
-// fold every repo/worktree on screen (also drops keys of groups that no longer exist), or unfold everything
+// fold every repo on screen (also drops keys of groups that no longer exist), or unfold everything
 const foldAll = (on) => {
   folded = new Set(on ? [...groups.keys(), ...rows.keys()] : []);
   save('swarmview.folded', [...folded]);
   rerender();
 };
-function group(key, wt) {
-  // repo or worktree header: fold toggle, label, status counts, pin (repos only)
+function group(key) {
+  // repo header: fold toggle, label, status counts, pin
   let g = groups.get(key);
   if (g) return g;
   g = {
@@ -47,14 +47,11 @@ function group(key, wt) {
   g.fold.setAttribute('aria-controls', g.kids.id);
   g.fold.append(g.chev, g.label);
   g.fold.onclick = () => toggleFold(key);
-  g.head.append(g.fold, g.counts);
-  if (!wt) {
-    g.pin = el('button', 'pin');
-    g.pin.append($('pin-icon').content.cloneNode(true));
-    g.pin.setAttribute('aria-label', 'Pin ' + key.slice(2).split('/').pop());
-    g.pin.onclick = () => togglePin(key.slice(2));
-    g.head.append(g.pin);
-  }
+  g.pin = el('button', 'pin');
+  g.pin.append($('pin-icon').content.cloneNode(true));
+  g.pin.setAttribute('aria-label', 'Pin ' + key.slice(2).split('/').pop());
+  g.pin.onclick = () => togglePin(key.slice(2));
+  g.head.append(g.fold, g.counts, g.pin);
   g.node.append(g.head, g.kids);
   groups.set(key, g);
   return g;
@@ -79,7 +76,8 @@ function updateSystemMemory(sys) {
 
 export function renderDashboard(data, again = false) {
   const cur = (last = snapshotItems(data, last, again));
-  // repo -> worktrees, with rolled-up status for headers
+  // Group by repository only: an agent's working directory says where its process sits,
+  // not which worktrees it edits, so a worktree level would misattribute work.
   const repos = new Map();
   const stat = () => ({ n: { working: 0, waiting: 0, workers: 0 }, heat: 9 });
   const add = (s, it) => {
@@ -92,17 +90,9 @@ export function renderDashboard(data, again = false) {
   for (const it of cur.values()) {
     let r = repos.get(it.repo);
     if (!r)
-      repos.set(it.repo, (r = { key: it.repo, name: it.repoName, wts: new Map(), ...stat() }));
-    let w = r.wts.get(it.wt);
-    if (!w) r.wts.set(it.wt, (w = stat()));
+      repos.set(it.repo, (r = { key: it.repo, name: it.repoName, ...stat() }));
     add(r, it);
-    add(w, it);
   }
-  const showWt = (r) => r.wts.size > 1 || !r.wts.has(r.key); // hide the level for a lone main checkout
-  const box = (it) => {
-    const r = repos.get(it.repo);
-    return showWt(r) ? 'w:' + it.wt : 'r:' + it.repo;
-  };
 
   const at = new Map(); // next child index per container
   const put = (b, e) => {
@@ -110,11 +100,11 @@ export function renderDashboard(data, again = false) {
     at.set(b, i + 1);
     if (b.children[i] !== e) b.insertBefore(e, b.children[i] ?? null);
   };
-  const head = (g, key, label, title, s, wt) => {
-    cls(g.node, (wt ? 'group wt' : 'group') + ' h-' + HEAT[s.heat]);
+  const head = (g, key, label, title, s) => {
+    cls(g.node, 'group h-' + HEAT[s.heat]);
     txt(g.label, label);
     const f = folded.has(key),
-      p = !!g.pin && pins.includes(key.slice(2));
+      p = pins.includes(key.slice(2));
     const n = Object.entries(s.n).filter(([, v]) => v),
       ck = [f, p, title, ...n.flat()].join();
     if (g.ck === ck) return; // nothing changed since last poll
@@ -130,10 +120,8 @@ export function renderDashboard(data, again = false) {
         return e;
       })
     );
-    if (g.pin) {
-      g.pin.setAttribute('aria-pressed', p);
-      g.pin.title = p ? 'Unpin' : 'Pin to top';
-    }
+    g.pin.setAttribute('aria-pressed', p);
+    g.pin.title = p ? 'Unpin' : 'Pin to top';
   };
   const pi = (k) => {
     const i = pins.indexOf(k);
@@ -145,17 +133,8 @@ export function renderDashboard(data, again = false) {
   )) {
     const g = group('r:' + rk);
     live.add('r:' + rk);
-    head(g, 'r:' + rk, r.name, rk, r, false);
+    head(g, 'r:' + rk, r.name, rk, r);
     put($('tree'), g.node);
-    if (!showWt(r)) continue;
-    for (const [wk, w] of [...r.wts].sort(
-      ([a], [b]) => (b === rk) - (a === rk) || a.localeCompare(b)
-    )) {
-      const wg = group('w:' + wk, true);
-      live.add('w:' + wk);
-      head(wg, 'w:' + wk, wk === rk ? 'main checkout' : wk.split('/').pop(), wk, w, true);
-      put(g.kids, wg.node);
-    }
   }
   const hot = (it) => !pins.includes(it.repo) && it.status === 'working';
   const items = [...cur.values()].sort((a, b) => hot(b) - hot(a) || a.ord - b.ord);
@@ -218,7 +197,7 @@ export function renderDashboard(data, again = false) {
       p = it.parent ? rows.get(it.parent) : null;
     // A changed parent can still be inside this row until its own placement runs.
     if (p && r.node.contains(p.node)) p.node.remove();
-    put(p ? p.kids : groups.get(box(it)).kids, r.node);
+    put(p ? p.kids : groups.get('r:' + it.repo).kids, r.node);
   }
   for (const [k, r] of rows)
     if (!cur.has(k)) {

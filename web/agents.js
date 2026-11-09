@@ -170,8 +170,7 @@ function liveItem(worker, index, host) {
       worker.key,
   };
 }
-export const label = (it) =>
-  it.wt === it.repo ? it.repoName : it.repoName + ' / ' + it.wt.split('/').pop();
+export const label = (it) => it.repoName;
 
 export function snapshotItems(data, last, again = false) {
   const { agents, subagents = [] } = data;

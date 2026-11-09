@@ -25,7 +25,7 @@ Runs locally: one Go binary, no account, no analytics, no hosted service.
 1. **Check what might need you.** Recently active agents that go quiet appear
    under **Recently quiet** as bounded observations; optionally enable desktop
    notifications. Quiet activity is not a confirmed request for help.
-2. **Choose a task.** Browse by repository/worktree or press **⌘ K / Ctrl K**
+2. **Choose a task.** Browse by repository or press **⌘ K / Ctrl K**
    to search task names, agents, and repositories.
 3. **Continue in its terminal.** Click an enabled task identity to select its tmux pane.
    With Ghostty on macOS, Swarmview also brings the matching terminal view forward.
@@ -95,7 +95,7 @@ Details → CPU: 13% · Process age: 24m
 | `Process age` = `24m` in Details | How long the process has been running, not time spent on this task |
 | `CPU` = `13%` in Details | Recent CPU use, **not percent complete**. 100% = one core; can exceed 100% |
 | `In parent process · 13%` in a Claude worker's Details | The parent Claude process's figure, shared with the main agent and its other workers; not the worker's own. Without a live detected Claude parent it reads `Unavailable · runs inside its Claude process` |
-| `2 working` | Two working agents in that repository or worktree |
+| `2 working` | Two working agents in that repository |
 | `swap … · RAM …% free` | Machine-wide memory indicators on macOS |
 
 RAM stays neutral regardless of agent size. Warning colors reflect actual OS
