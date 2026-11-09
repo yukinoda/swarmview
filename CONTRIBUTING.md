@@ -196,7 +196,8 @@ signing/notarization. CLI archives retain their existing build path.
 4. Inspect the published archives, checksums, and generated notes, and run the
    README's `gh attestation verify` command on a downloaded asset. Tags with a
    prerelease suffix are published as GitHub prereleases. If attestation fails,
-   nothing is published; re-run the failed `publish` job.
+   nothing is published; re-run the failed `publish` job within the 7-day
+   artifact retention, or re-run the whole workflow after that.
 
 Release archives contain the binary, license, README, compatibility/contribution/
 security documentation, and brand assets. Go build info can be inspected with

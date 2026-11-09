@@ -43,7 +43,7 @@ The app is ad-hoc signed, not notarized; see [first-launch help](desktop/macos/I
 
 Releases published after v0.2.0 carry build provenance attestations. To check
 that a downloaded file was built by this repository's release workflow, run
-this before opening or extracting it:
+this (after `gh auth login`) before opening or extracting it:
 
 ```sh
 gh attestation verify <file> --repo yukinoda/swarmview \

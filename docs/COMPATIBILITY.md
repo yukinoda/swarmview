@@ -39,8 +39,8 @@ architectures, rather than testing every target architecture separately.
 
 Builds disable CGO; Linux binaries are statically linked. macOS binaries are not
 signed or notarized by the release workflow. Archives include SHA-256 checksums
-as a separate release asset, and release assets carry build provenance
-attestations (see the README).
+as a separate release asset. Releases published after v0.2.0 also carry build
+provenance attestations (see the README).
 
 Separate macOS `.dmg` images and `.app.zip` archives bundle a Swift/AppKit WKWebView launcher and
 the Go backend for ARM/Intel. They are ad-hoc signed, not Developer ID signed or
