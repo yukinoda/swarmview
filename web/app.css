@@ -448,19 +448,18 @@ kbd {
   color: var(--mut);
   white-space: nowrap;
 }
+/* Details is a quiet text button like Expand all: its label is centred in the padded box, so
+   the hover fill and focus ring frame it evenly, and it shares the buttons' hover fill. */
 .metrics {
   width: 64px;
   min-height: 47px;
-  text-align: right;
+  text-align: center;
   font-size: 12px;
   color: var(--mut);
-  padding: 8px 5px;
+  white-space: nowrap;
 }
 .metrics:hover:not(:disabled) {
-  background: transparent;
   color: var(--fg);
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 .worker-caption {
   font-size: 12px;
@@ -766,7 +765,7 @@ select {
   }
   .metrics {
     width: 56px;
-    padding-inline: 2px;
+    padding-inline: 4px;
   }
   .live-worker > .row-line {
     grid-template-columns: minmax(0, 1fr) 56px;

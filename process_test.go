@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"os/exec"
 	"reflect"
 	"slices"
 	"strings"
@@ -545,5 +546,60 @@ func TestTreeRSS(t *testing.T) {
 	}
 	if got := cyc.treeRSS(3, nil); got != 4*1024 {
 		t.Errorf("self parent: %d", got)
+	}
+}
+
+func TestTransientGitFailureRetried(t *testing.T) {
+	gitCalls := 0
+	timedOut := true
+	s := srvWith(func(cmd string, args ...string) (string, error) {
+		switch cmd {
+		case "ps":
+			return "  100 1 1000 0:01.00 00:10 claude\n", nil
+		case "lsof":
+			return "p100\nn/repo/.claude/worktrees/agent-1\n", nil
+		case "git":
+			gitCalls++
+			if timedOut {
+				return "", errors.New("signal: killed")
+			}
+			return "/repo/.git\n/repo/.claude/worktrees/agent-1\n", nil
+		}
+		return "", nil
+	})
+	if a := mustList(t, s, 1000); a[0].RepoName != "agent-1" {
+		t.Fatalf("fallback repo = %q", a[0].RepoName)
+	}
+	timedOut = false
+	if mustList(t, s, 1000+cwdRetryMs-1); gitCalls != 1 {
+		t.Errorf("git retried before backoff: %d calls", gitCalls)
+	}
+	if a := mustList(t, s, 1000+cwdRetryMs); a[0].RepoName != "repo" {
+		t.Errorf("repo after retry = %q", a[0].RepoName)
+	}
+	if mustList(t, s, 1000+3*cwdRetryMs); gitCalls != 2 {
+		t.Errorf("git kept retrying after success: %d calls", gitCalls)
+	}
+}
+
+func TestNotARepositoryNotRetried(t *testing.T) {
+	gitCalls := 0
+	s := srvWith(func(cmd string, args ...string) (string, error) {
+		switch cmd {
+		case "ps":
+			return "  100 1 1000 0:01.00 00:10 claude\n", nil
+		case "lsof":
+			return "p100\nn/tmp/scratch\n", nil
+		case "git":
+			gitCalls++
+			err := exec.Command("sh", "-c", "exit 128").Run() // git's "not a git repository" exit
+			return "", err
+		}
+		return "", nil
+	})
+	mustList(t, s, 1000)
+	mustList(t, s, 1000+3*cwdRetryMs)
+	if gitCalls != 1 {
+		t.Errorf("non-repository cwd re-asked git: %d calls", gitCalls)
 	}
 }
