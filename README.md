@@ -17,7 +17,7 @@ pane instead of checking every terminal.
 Works with **Claude Code, Codex, OpenCode, Gemini, Aider, and Cursor Agent**.
 Runs locally: one Go binary, no account, no analytics, no hosted service.
 
-<p align="center"><img src="assets/screenshot.png" width="720" alt="Swarmview dashboard showing agents grouped by repository and worktree, a Claude worker nested under its session, and each session's status and approximate RAM, with a Details control per row."></p>
+<p align="center"><img src="assets/demo.gif" width="720" alt="Animated Swarmview dashboard: agents grouped by repository and worktree with status and approximate RAM, a Claude worker appearing under its session, a Gemini agent moving to Recently quiet, and a ⌘ K search for codex."></p>
 <p align="center"><sub>Illustrative data; CPU and process age live in Details. Activity is inferred, not a native completion or human-request signal.</sub></p>
 
 ### Check → choose → continue
