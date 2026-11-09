@@ -23,15 +23,16 @@ jobs:
           cache: false
       - run: sudo apt-get update && sudo apt-get install -y tmux lsof
       - run: google-chrome --version
+      - name: warm chrome files (odd shards)
+        if: matrix.shard % 2 == 1
+        run: time cat $(find -L /opt/google/chrome -type f) > /dev/null
       - name: cold first launch
         continue-on-error: true
+        env:
+          DIAG_CHROME_LOG: '1'
         run: go test -race -v -count=1 -run 'TestDiagProduction$' .
-      - name: warm production x20
+      - name: second launch
         continue-on-error: true
-        run: go test -race -v -count=20 -run 'TestDiagProduction$' .
-      - name: warm static x20
-        continue-on-error: true
-        run: go test -race -v -count=20 -run 'TestDiagStatic$' .
-      - name: full suite
-        continue-on-error: true
-        run: go test -race -v ./... 2>&1 | grep -E '^(---|FAIL|ok)|DIAG|^        ' | head -300
+        run: go test -race -v -count=1 -run 'TestDiagProduction$' .
+      - name: about blank cold-ish
+        run: time google-chrome --headless --no-sandbox --disable-gpu --user-data-dir=$(mktemp -d) --dump-dom about:blank

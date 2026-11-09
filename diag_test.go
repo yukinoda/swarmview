@@ -36,7 +36,8 @@ func diagRun(t *testing.T, handler http.Handler, port *int, want string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
-		"--user-data-dir="+t.TempDir(), "--virtual-time-budget=3000", "--timeout=10000", "--dump-dom", srv.URL)
+		"--user-data-dir="+t.TempDir(), "--virtual-time-budget=3000", "--timeout=10000", "--dump-dom", "--enable-logging=stderr", "--v=0", srv.URL)
+	logf("exec chrome")
 	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.CombinedOutput()
 	logf("chrome exited")
@@ -45,7 +46,7 @@ func diagRun(t *testing.T, handler http.Handler, port *int, want string) {
 		defer mu.Unlock()
 		t.Fatalf("DIAG HANG (%v) after %v\nrequests:\n%s\noutput:\n%s", err, time.Since(start), strings.Join(events, "\n"), out)
 	}
-	t.Logf("ok in %v", time.Since(start))
+	t.Logf("ok in %v\n%s\n%s", time.Since(start), strings.Join(events, "\n"), out)
 }
 
 func TestDiagProduction(t *testing.T) {
