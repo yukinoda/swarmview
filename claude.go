@@ -328,7 +328,7 @@ func assistantModel(line []byte, sessionID string) string {
 
 // ancestorFinished reports whether a foreground worker's parent worker has finished, following
 // foreground parents up to the first finished or background ancestor. A background worker can
-// outlive its parent and gets its own meta.finished, so it stops the walk. It only consults
+// outlive its parent and can get its own meta.finished, so it stops the walk. It only consults
 // cached metas from the same subagents dir: an unknown ancestor stops the walk, so the worker
 // stays listed. maxHops bounds a parentAgentId cycle.
 func ancestorFinished(metaCache map[string]metaEntry, sub string, c metaEntry, maxHops int) bool {
@@ -354,9 +354,9 @@ func ancestorFinished(metaCache map[string]metaEntry, sub string, c metaEntry, m
 }
 
 // Claude Code subagents live in <root>/<slug>/<session>/subagents/agent-<id>.{jsonl,meta.json}.
-// Claude Code sets meta.finished on background workers but never on foreground ones, so liveness
-// is the .jsonl mtime (alive < 30 min, working < 60 s), and a foreground worker whose parent
-// worker has finished is over too.
+// Claude Code can set meta.finished on a background worker but never on a foreground one, so
+// liveness is the .jsonl mtime (alive < 30 min, working < 60 s), and a foreground worker whose
+// parent worker has finished is over too.
 // hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
 func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[hostKey]workerHost) []Subagent {
 	// Every record left names a Claude PID that is still running.
@@ -480,6 +480,12 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				if c.finished {
 					continue
 				}
+				// Foreground workers never get meta.finished, so one spawned by another worker would
+				// linger as quiet for the full window. Its parent waits for it, so it cannot outlive
+				// that parent.
+				if ancestorFinished(metaCache, sub, c, len(ids)) {
+					continue
+				}
 				logPath := path.Join(sub, "agent-"+id+".jsonl")
 				logInfo, err := os.Stat(logPath)
 				if err != nil {
@@ -487,12 +493,6 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				}
 				jt := logInfo.ModTime().UnixMilli()
 				if now-jt > 30*60e3 {
-					continue
-				}
-				// Foreground workers never get meta.finished, so one spawned by another worker would
-				// linger as quiet for the full window. Its parent waits for it, so it cannot outlive
-				// that parent.
-				if ancestorFinished(metaCache, sub, c, len(ids)) {
 					continue
 				}
 				// The meta file only names the requested alias; the transcript has the resolved model.

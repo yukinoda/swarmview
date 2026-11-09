@@ -177,7 +177,7 @@ session status or conversation metadata.
   workers finished, so a foreground worker is also dropped once the worker
   that spawned it is marked finished, or, when that worker is itself a
   foreground worker, once one further up the chain is. Background workers can
-  outlive their parent and stay listed until marked finished themselves.
+  outlive their parent, so its finishing does not drop them.
   Top-level foreground workers have no parent worker and still stay listed for
   the full 30 minutes.
 - When Claude's pane title is generic or unavailable, generated task titles are
