@@ -1,0 +1,38 @@
+name: diag-smoke
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        load: [none, cpu]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: bash desktop/macos/build.sh
+      - name: Loop the app check
+        run: |
+          if [ "${{ matrix.load }}" = cpu ]; then
+            for i in $(sysctl -n hw.ncpu | xargs seq); do yes > /dev/null & done
+          fi
+          failures=0
+          for i in $(seq 1 30); do
+            if ! python3 desktop/macos/check.py dist/Swarmview.app > out.txt 2>&1; then
+              failures=$((failures + 1))
+              echo "::warning::iteration $i failed"
+              cat out.txt
+            fi
+          done
+          echo "failures=$failures of 30"
+          test "$failures" = 0
