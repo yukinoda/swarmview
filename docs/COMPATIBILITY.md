@@ -153,7 +153,7 @@ session status or conversation metadata.
   2.1.275+, and older versions add the marketplace first. Other providers remain
   unsupported for communication. Live relationships do not establish worker
   process status.
-  Recently quiet observations and notifications do not confirm that
+  Recently quiet observations do not confirm that
   someone needs to act. Nesting indicates discovered parentage, not communication.
 - Per-agent RAM is approximate process-tree RSS and remains neutral regardless of
   size. Missing measurements (including Claude workers' own) remain unavailable,
@@ -201,15 +201,11 @@ compact and native-window widths, both shortcut platforms, light/dark themes,
 and reduced motion. These are browser checks, not a claim of native WKWebView or
 Firefox/Safari visual verification.
 
-Desktop notifications are optional and require the browser's Notification API,
-site permission, and OS notification settings. The macOS app posts them through
-macOS notifications instead, because WKWebView has no web notification permission
-prompt; macOS asks once when you enable them. If neither is available, the
-notification control in Preferences is hidden; recent quiet observations, the
-tab title, and favicon still work. Appearance in Preferences supports
+Recent quiet observations appear in the page, tab title, and favicon; Swarmview
+does not post OS notifications. Appearance in Preferences supports
 System/Light/Dark using browser-local storage, without changing provider or CLI
 configuration.
-Background-tab throttling can delay polling and notifications; Chrome may poll
+Background-tab throttling can delay polling; Chrome may poll
 about once per minute after the tab has been hidden for over five minutes.
 
 The server listens on `127.0.0.1` only and accepts its configured

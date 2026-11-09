@@ -647,12 +647,8 @@ dialog::backdrop {
   gap: 8px;
   margin-top: 12px;
 }
-.button-row button,
-#notify {
+.button-row button {
   border: 1px solid var(--mut);
-}
-#notify {
-  margin-top: 8px;
 }
 .field {
   display: block;

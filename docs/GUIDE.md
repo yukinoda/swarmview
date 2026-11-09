@@ -51,9 +51,8 @@ still show observed activity. Green does not mean task progress or success.
 **Quiet is an activity heuristic, not a request.** Network, tool, worker, and
 I/O waits can all look quiet. **Recently quiet** shows at most three observations,
 from 15 seconds to five minutes quiet, after work was observed in that page
-session. It is not a permanent alert queue or proof that work is done. Optional
-notifications and the tab badge describe quiet activity, not confirmed attention requests.
-Notifications fire once per quiet episode for agents seen working in that tab.
+session. It is not a permanent alert queue or proof that work is done. The tab
+badge describes quiet activity, not confirmed attention requests.
 Restarting Swarmview resets activity history.
 
 Native questions, permission requests and task-completion signals are unavailable.
@@ -86,10 +85,8 @@ agent was started or last moved, not which worktrees it edits, so the overview
 doesn't sort agents by worktree; Details shows that directory.
 
 Pin and fold repositories in the overview. Open **Preferences** for
-System/Light/Dark appearance and opt-in quiet notifications. Opening Preferences
-does not request notification permission; enabling notifications is an explicit
-action. App preferences are stored in this page's browser profile, not agent CLI
-configuration. **Last updated** shows snapshot age even
+System/Light/Dark appearance. App preferences are stored in this page's browser
+profile, not agent CLI configuration. **Last updated** shows snapshot age even
 when the server is offline; the page retries failed or timed-out polls. After 15
 seconds, retained rows are labeled **stale**; failed polls label them **offline**.
 These states suppress quiet observations and badges instead of presenting old
@@ -142,7 +139,7 @@ and return keyboard focus. **Clear** resets the query while keeping search open.
 An activation error stays visible in the palette instead of silently closing it.
 `status:waiting` remains an alias for the visible quiet state.
 
-The tree, saved folds, recent observations, tab badge, and notifications
+The tree, saved folds, recent observations, and tab badge
 remain unchanged. Typing makes no requests: it scans cached strings and reuses
 the bounded result cards. The index is built lazily only for an active query
 and released when the query is cleared or search closes. Temporary result cards
@@ -183,7 +180,7 @@ throttle background polling further. Provider icons and hierarchy lines are
 static; there is no continuously animated swarm or communication animation.
 
 Sampling is request-driven: closing all dashboard tabs stops recurring sampling;
-hidden tabs keep polling for notifications. Idle agents still own their session
+hidden tabs keep polling at a slower rate. Idle agents still own their session
 state and caches—Swarmview cannot safely free another process's heap. Exiting an
 agent releases its private memory, but surviving helper processes can retain RAM.
 

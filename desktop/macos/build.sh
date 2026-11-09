@@ -31,7 +31,7 @@ swift "$root/desktop/macos/Icon.swift" "$root/assets/logo.svg" "$temporary/Swarm
 iconutil -c icns "$temporary/Swarmview.iconset" -o "$app/Contents/Resources/Swarmview.icns"
 CGO_ENABLED=0 GOOS=darwin GOARCH="$goarch" go -C "$root" build -trimpath -ldflags='-s -w' -o "$app/Contents/MacOS/swarmview-server" .
 swiftc -O -swift-version 5 -target "$arch-apple-macos13.3" \
-  -framework Cocoa -framework WebKit -framework UserNotifications "$root/desktop/macos/Swarmview.swift" "$root/desktop/macos/Installer.swift" \
+  -framework Cocoa -framework WebKit "$root/desktop/macos/Swarmview.swift" "$root/desktop/macos/Installer.swift" \
   -o "$app/Contents/MacOS/Swarmview"
 codesign --force --sign - "$app/Contents/MacOS/swarmview-server"
 codesign --force --sign - --entitlements "$root/desktop/macos/entitlements.plist" "$app"
