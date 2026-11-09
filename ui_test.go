@@ -14,10 +14,17 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
+var warmChrome sync.Once
+
+// chromeBinary returns a Chrome that has already launched once. On a fresh CI
+// runner Chrome's files are still on a cold disk: the first launch took 6-28s
+// before requesting the page, warm launches about 0.5s. Paying that once here
+// keeps it out of each test's 30s page budget.
 func chromeBinary(t *testing.T) string {
 	t.Helper()
 	chrome := os.Getenv("CHROME_BIN")
@@ -32,6 +39,16 @@ func chromeBinary(t *testing.T) string {
 	if chrome == "" {
 		t.Skip("Chrome/Chromium not found; set CHROME_BIN to run UI checks")
 	}
+	warmChrome.Do(func() {
+		start := time.Now()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
+			"--user-data-dir="+t.TempDir(), "--dump-dom", "about:blank")
+		cmd.WaitDelay = 5 * time.Second
+		err := cmd.Run() // a broken Chrome fails the real launch with its output
+		t.Logf("Chrome warm-up launch took %v (%v)", time.Since(start).Round(time.Millisecond), err)
+	})
 	return chrome
 }
 
@@ -179,41 +196,31 @@ func TestUI(t *testing.T) {
 		{"LinuxNativeDarkReduced", "Linux", "680,820", "dark", true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			var out []byte
-			var err error
-			// A cold Chrome on a fresh CI runner can hang at launch; one retry absorbs it.
-			for attempt := 0; attempt < 2; attempt++ {
-				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				args := []string{"--headless", "--no-sandbox", "--disable-gpu",
-					"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size,
-					"--virtual-time-budget=10000", "--dump-dom", "--timeout=10000"}
-				if scenario.theme == "dark" {
-					args = append(args, "--force-dark-mode")
-				} else {
-					args = append(args, "--blink-settings=preferredColorScheme=1")
-				}
-				if scenario.reduced {
-					args = append(args, "--force-prefers-reduced-motion")
-				} else {
-					args = append(args, "--force-prefers-no-reduced-motion")
-				}
-				size := "compact"
-				if strings.HasPrefix(scenario.size, "680,") {
-					size = "native"
-				}
-				args = append(args, srv.URL+"?platform="+scenario.platform+"&theme="+scenario.theme+"&reduced="+strconv.FormatBool(scenario.reduced)+"&size="+size)
-				cmd := exec.CommandContext(ctx, chrome, args...)
-				cmd.WaitDelay = 5 * time.Second // Chrome helpers can hold the output pipe open after the kill
-				out, err = cmd.CombinedOutput()
-				if errors.Is(err, exec.ErrWaitDelay) {
-					err = nil // Chrome exited cleanly; only a lingering helper held the pipe
-				}
-				timedOut := err != nil && ctx.Err() != nil
-				cancel()
-				if !timedOut {
-					break
-				}
-				t.Logf("Chrome timed out (attempt %d)", attempt+1)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			args := []string{"--headless", "--no-sandbox", "--disable-gpu",
+				"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size,
+				"--virtual-time-budget=10000", "--dump-dom", "--timeout=10000"}
+			if scenario.theme == "dark" {
+				args = append(args, "--force-dark-mode")
+			} else {
+				args = append(args, "--blink-settings=preferredColorScheme=1")
+			}
+			if scenario.reduced {
+				args = append(args, "--force-prefers-reduced-motion")
+			} else {
+				args = append(args, "--force-prefers-no-reduced-motion")
+			}
+			size := "compact"
+			if strings.HasPrefix(scenario.size, "680,") {
+				size = "native"
+			}
+			args = append(args, srv.URL+"?platform="+scenario.platform+"&theme="+scenario.theme+"&reduced="+strconv.FormatBool(scenario.reduced)+"&size="+size)
+			cmd := exec.CommandContext(ctx, chrome, args...)
+			cmd.WaitDelay = 5 * time.Second // Chrome helpers can hold the output pipe open after the kill
+			out, err := cmd.CombinedOutput()
+			if errors.Is(err, exec.ErrWaitDelay) {
+				err = nil // Chrome exited cleanly; only a lingering helper held the pipe
 			}
 			if err != nil || !strings.Contains(string(out), `data-ui-tests="passed"`) {
 				failure := string(out)
