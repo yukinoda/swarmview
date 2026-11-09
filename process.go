@@ -398,7 +398,7 @@ func (s *server) listAgents(now int64) ([]Agent, error) {
 			}
 		}
 		if r.Kind == "claude" && c != nil {
-			title := claudeSessionTitle(s.root, r.Pid, c.cwd, now, &c.title)
+			title := claudeSessionTitle(s.root, r.Pid, processStart(a, now), c.cwd, now, &c.title)
 			if title != "" && (a.Title == nil || *a.Title == "Claude Code") {
 				a.Title = &title
 			}

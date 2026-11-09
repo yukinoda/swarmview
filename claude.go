@@ -178,8 +178,9 @@ func fileKey(fi os.FileInfo, now int64) [2]int64 {
 }
 
 // claudeSessionTitle re-reads only files whose size or mtime changed since the cached read.
-// The session's latest model is left in c.model.
-func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionTitle) string {
+// The session's latest model is left in c.model. start is the process's start
+// in Unix seconds (see processStart), NaN if unknown.
+func claudeSessionTitle(root string, pid int, start float64, cwd string, now int64, c *sessionTitle) string {
 	metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
 	fi, err := os.Stat(metaPath)
 	if err != nil {
@@ -187,7 +188,7 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 		return ""
 	}
 	if k := fileKey(fi, now); k == [2]int64{} || k != c.metaKey {
-		id, recordedCwd, ok := readSessionID(metaPath, pid)
+		id, recordedCwd, ok := readSessionID(metaPath, pid, start)
 		if !ok {
 			// I/O error: keep the cached session and retry next poll like an uncached read
 			c.metaKey = [2]int64{}
@@ -225,7 +226,9 @@ func claudeSessionTitle(root string, pid int, cwd string, now int64, c *sessionT
 // readSessionID and readSessionTitle report ok=false on I/O errors, which must not be cached.
 // readSessionID also returns the cwd the session was started in. That cwd is
 // untrusted, but claudeSlug turns it into [A-Za-z0-9-] only, so it cannot leave root.
-func readSessionID(metaPath string, pid int) (string, string, bool) {
+// A file written before the process started (start, Unix seconds) is left by an
+// earlier Claude with a reused pid that crashed before deleting it.
+func readSessionID(metaPath string, pid int, start float64) (string, string, bool) {
 	f, err := os.Open(metaPath)
 	if err != nil {
 		return "", "", false
@@ -234,6 +237,7 @@ func readSessionID(metaPath string, pid int) (string, string, bool) {
 		Pid       int    `json:"pid"`
 		SessionID string `json:"sessionId"`
 		Cwd       string `json:"cwd"`
+		StartedAt int64  `json:"startedAt"` // Unix ms, written once when Claude starts
 	}
 	err = json.NewDecoder(io.LimitReader(f, 16<<10)).Decode(&session)
 	f.Close()
@@ -241,6 +245,12 @@ func readSessionID(metaPath string, pid int) (string, string, bool) {
 		return "", "", false // read or decode error: retry rather than cache
 	}
 	if session.Pid != pid || !sessionIDRe.MatchString(session.SessionID) {
+		return "", "", true
+	}
+	// an unknown start or a file without startedAt can't be checked: accept it
+	startKnown := !math.IsNaN(start) && session.StartedAt > 0
+	writtenBeforeStart := float64(session.StartedAt)/1000 < start-startSlackSec
+	if startKnown && writtenBeforeStart {
 		return "", "", true
 	}
 	// a relative or empty cwd can't name a project dir: fall back to the live cwd
@@ -329,8 +339,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 	}
 	var groups []*group
 	for _, a := range agents {
-		// projectCwd is set exactly when the live cwd is known
-		if a.Kind != "claude" || a.projectCwd == "" {
+		if a.Kind != "claude" || a.Cwd == nil || a.projectCwd == "" {
 			continue
 		}
 		var g *group
@@ -364,7 +373,8 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 		if len(g.pids) > 1 {
 			for _, pid := range g.pids {
 				metaPath := path.Join(path.Dir(root), "sessions", strconv.Itoa(pid)+".json")
-				id, _, _ := readSessionID(metaPath, pid)
+				a, _ := findClaude(agents, pid)
+				id, _, _ := readSessionID(metaPath, pid, processStart(a, now))
 				if id != "" {
 					claimants[id] = append(claimants[id], pid)
 				}
@@ -477,7 +487,12 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				}
 				// Processes sharing a project dir can have different live cwds when its
 				// directory was renamed and then recreated: show the parent's.
+				// A worker without a known parent belongs to the project dir: prefer a
+				// member still in it over one whose directory was renamed.
 				cwd := g.cwds[0]
+				if slices.Contains(g.cwds, g.projectCwd) {
+					cwd = g.projectCwd
+				}
 				if pp != nil {
 					cwd = g.cwds[slices.Index(g.pids, *pp)]
 				}
