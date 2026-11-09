@@ -176,9 +176,10 @@ session status or conversation metadata.
   and its metadata is not marked finished. Claude Code never marks foreground
   workers finished, so a foreground worker is also dropped once the worker
   that spawned it is marked finished, or, when that worker is itself a
-  foreground worker, once one further up the chain is. Background workers can outlive their parent and stay listed until
-  marked finished themselves. Top-level foreground workers have no parent
-  worker and still stay listed for the full 30 minutes.
+  foreground worker, once one further up the chain is. Background workers can
+  outlive their parent and stay listed until marked finished themselves.
+  Top-level foreground workers have no parent worker and still stay listed for
+  the full 30 minutes.
 - When Claude's pane title is generic or unavailable, generated task titles are
   read from `ai-title` metadata records in the last 64 KiB of the session JSONL.
   This requires matching PID and working directory metadata in
