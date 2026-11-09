@@ -43,12 +43,19 @@ const paintBell = () => {
     'Recently quiet notifications ' + (notifyOn ? 'on' : 'off') + ' · not requests for input';
   bell.setAttribute('aria-label', bell.title);
 };
+// The macOS app's WKWebView has no web notification permission UI, so it bridges to native.
+const native = () => window.webkit?.messageHandlers?.notify;
+addEventListener('swarmview-notification', (event) => activateAgent(event.detail));
 function fire(it) {
-  if (!notifyOn || !('Notification' in window) || Notification.permission !== 'granted') return;
-  const n = new Notification(it.name, {
-    body: 'Recently quiet · ' + it.repoName + ' · activity observation, not a request for input',
-    tag: 'swarmview-' + it.pid
-  });
+  if (!notifyOn) return;
+  const body = 'Recently quiet · ' + it.repoName + ' · activity observation, not a request for input';
+  const tag = 'swarmview-' + it.pid;
+  if (native()) {
+    native().postMessage({ action: 'post', title: it.name, body, tag, pid: it.pid });
+    return;
+  }
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const n = new Notification(it.name, { body, tag });
   n.onclick = () => {
     window.focus();
     activateAgent(it.pid);
@@ -72,16 +79,19 @@ function watch(list) {
   for (const pid of eps.keys()) if (!alive.has(pid)) eps.delete(pid);
 }
 
+async function permitted() {
+  if (native()) return (await native().postMessage({ action: 'request' })) === true;
+  if (Notification.permission === 'granted') return true;
+  return (await Notification.requestPermission()) === 'granted';
+}
+
 export function setupNotifications(onActivate) {
   activateAgent = onActivate;
-  if ('Notification' in window) {
+  if (native() || 'Notification' in window) {
     bell.hidden = false;
     paintBell();
     bell.onclick = async () => {
-      notifyOn =
-        !notifyOn &&
-        (Notification.permission === 'granted' ||
-          (await Notification.requestPermission()) === 'granted');
+      notifyOn = !notifyOn && (await permitted());
       save('swarmview.notify', notifyOn);
       paintBell();
     };

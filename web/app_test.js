@@ -453,6 +453,35 @@ const {
       $('quiet').hidden,
       'unseen quiet processes are not presented as newly observed transitions',
     );
+    const nativeMessages = [];
+    window.webkit = {
+      messageHandlers: {
+        notify: {
+          postMessage: async (message) => {
+            nativeMessages.push(message);
+            return message.action === 'request';
+          },
+        },
+      },
+    };
+    await $('notify').onclick(); // turn off, then enable through the native bridge
+    await $('notify').onclick();
+    assert(
+      nativeMessages[0]?.action === 'request' &&
+        $('notify').getAttribute('aria-pressed') === 'true',
+      'the macOS app asks for permission natively because WKWebView has no permission prompt',
+    );
+    show([{ ...a, recentCpu: 0.1, idleSec: 0 }]);
+    show([{ ...a, idleSec: 15 }]);
+    const posted = nativeMessages.at(-1);
+    assert(
+      posted.action === 'post' &&
+        posted.pid === a.pid &&
+        posted.body.includes('not a request') &&
+        notifications === 2,
+      'the macOS app posts quiet notifications natively instead of through WKWebView',
+    );
+    delete window.webkit;
 
     const b = agent(200, '/b');
     show([a, b]);
