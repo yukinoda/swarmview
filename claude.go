@@ -323,30 +323,28 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 	pruneWorkerHosts(hosts, agents, now)
 	type group struct {
 		projectCwd string // names the project dir, see sessionTitle.projectCwd
-		cwd        string // live cwd shown for the workers
 		pids       []int
+		cwds       []string // each process's live cwd, shown for its workers
 		sessions   []string // each process's cached current session id, "" if unknown
 	}
 	var groups []*group
 	for _, a := range agents {
-		if a.Kind != "claude" || a.Cwd == nil {
+		// projectCwd is set exactly when the live cwd is known
+		if a.Kind != "claude" || a.projectCwd == "" {
 			continue
-		}
-		projectCwd := *a.Cwd
-		if a.projectCwd != "" {
-			projectCwd = a.projectCwd
 		}
 		var g *group
 		for _, x := range groups {
-			if x.projectCwd == projectCwd {
+			if x.projectCwd == a.projectCwd {
 				g = x
 			}
 		}
 		if g == nil {
-			g = &group{projectCwd: projectCwd, cwd: *a.Cwd}
+			g = &group{projectCwd: a.projectCwd}
 			groups = append(groups, g)
 		}
 		g.pids = append(g.pids, a.Pid)
+		g.cwds = append(g.cwds, *a.Cwd)
 		g.sessions = append(g.sessions, a.session)
 	}
 	out := []Subagent{}
@@ -477,7 +475,13 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				} else if claimed && host.proven(agents, now) {
 					pp = &host.pid
 				}
-				out = append(out, Subagent{id, pp, c.parentAgentId, g.cwd, c.description, model, now-jt < 60e3})
+				// Processes sharing a project dir can have different live cwds when its
+				// directory was renamed and then recreated: show the parent's.
+				cwd := g.cwds[0]
+				if pp != nil {
+					cwd = g.cwds[slices.Index(g.pids, *pp)]
+				}
+				out = append(out, Subagent{id, pp, c.parentAgentId, cwd, c.description, model, now-jt < 60e3})
 			}
 		}
 	}

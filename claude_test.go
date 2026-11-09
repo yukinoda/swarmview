@@ -167,7 +167,9 @@ func mk(t *testing.T, root, cwd, session, id string, meta any, ageSec int64, now
 	must(t, os.Chtimes(j, tm, tm))
 }
 
-func claude(pid int, cwd string) Agent { return Agent{Pid: pid, Kind: "claude", Cwd: &cwd} }
+func claude(pid int, cwd string) Agent {
+	return Agent{Pid: pid, Kind: "claude", Cwd: &cwd, projectCwd: cwd}
+}
 
 func subs(root string, now int64, as ...Agent) []Subagent {
 	return subsWithHosts(root, now, map[hostKey]workerHost{}, as...)
@@ -763,6 +765,7 @@ func TestRenamedClaudeCwdUsesRecordedProjectDir(t *testing.T) {
 	root, now := filepath.Join(t.TempDir(), "projects"), nowMs()
 	renamed := "11111111-1111-1111-1111-111111111111"
 	fresh := "22222222-2222-2222-2222-222222222222"
+	recreated := "33333333-3333-3333-3333-333333333333"
 	writeMeta := func(pid int, session, cwd string) {
 		t.Helper()
 		file := filepath.Join(filepath.Dir(root), "sessions", strconv.Itoa(pid)+".json")
@@ -770,24 +773,28 @@ func TestRenamedClaudeCwdUsesRecordedProjectDir(t *testing.T) {
 		data := marshal(map[string]any{"pid": pid, "sessionId": session, "cwd": cwd})
 		must(t, os.WriteFile(file, data, 0600))
 	}
-	// pid 100 started in /w/old, since renamed to /w/new; pid 101 started in /w/new after the rename
+	// pid 100 started in /w/old, since renamed to /w/new; pid 101 started in /w/new
+	// after the rename, and pid 102 in a recreated /w/old
 	writeMeta(100, renamed, "/w/old")
 	writeMeta(101, fresh, "/w/new")
+	writeMeta(102, recreated, "/w/old")
 	mk(t, root, "/w/old", renamed, "a1", map[string]any{"description": "Old worker"}, 3, now)
 	mk(t, root, "/w/new", fresh, "a2", map[string]any{"description": "New worker"}, 3, now)
+	mk(t, root, "/w/old", recreated, "a3", map[string]any{"description": "Recreated worker"}, 3, now)
 	transcript := filepath.Join(root, claudeSlug("/w/old"), renamed+".jsonl")
 	title := `{"type":"ai-title","aiTitle":"Renamed task","sessionId":"` + renamed + `"}` + "\n"
 	must(t, os.WriteFile(transcript, []byte(title), 0600))
 
 	s := srvWith(func(cmd string, args ...string) (string, error) {
 		if cmd == "ps" {
-			return "100 10 1000 0:01 01:00 claude\n101 10 1000 0:01 01:00 claude\n", nil
+			return "100 10 1000 0:01 01:00 claude\n101 10 1000 0:01 01:00 claude\n102 10 1000 0:01 01:00 claude\n", nil
 		}
 		return "", errors.New("unavailable")
 	})
 	s.root = root
 	s.cache[100] = &cacheEntry{cwd: "/w/new", etime: "01:00"}
 	s.cache[101] = &cacheEntry{cwd: "/w/new", etime: "01:00"}
+	s.cache[102] = &cacheEntry{cwd: "/w/old", etime: "01:00"}
 	agents := mustList(t, s, now)
 	old := agentByPid(agents, 100)
 	if old.Title == nil || *old.Title != "Renamed task" || old.session != renamed {
@@ -798,12 +805,23 @@ func TestRenamedClaudeCwdUsesRecordedProjectDir(t *testing.T) {
 	}
 
 	got := subs(root, now, agents...)
-	p100, p101 := 100, 101
+	p100, p101, p102 := 100, 101, 102
 	want := []Subagent{
 		{"a1", &p100, nil, "/w/new", "Old worker", nil, true},
+		{"a3", &p102, nil, "/w/old", "Recreated worker", nil, true},
 		{"a2", &p101, nil, "/w/new", "New worker", nil, true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v", got)
+	}
+
+	// a recorded cwd that can't name a project dir falls back to the live cwd
+	for _, recorded := range []string{"", "w/old"} {
+		writeMeta(100, renamed, recorded)
+		c := &sessionTitle{}
+		claudeSessionTitle(root, 100, "/w/new", now, c)
+		if c.id != renamed || c.projectCwd("/w/new") != "/w/new" {
+			t.Errorf("recorded cwd %q: id %q, project cwd %q", recorded, c.id, c.projectCwd("/w/new"))
+		}
 	}
 }
