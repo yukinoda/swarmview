@@ -1,8 +1,10 @@
 import Cocoa
 import WebKit
+import UserNotifications
 import Darwin
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate,
+    WKScriptMessageHandlerWithReply, UNUserNotificationCenterDelegate {
     private let home = URL(string: "http://127.0.0.1:4778/")!
     private let backend = Process()
     private let lifetime = Pipe()
@@ -40,7 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 return
             }
             installMenu()
+            UNUserNotificationCenter.current().delegate = self
             let configuration = WKWebViewConfiguration()
+            // WKWebView has no web notification permission UI, so the page posts through this bridge.
+            configuration.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "notify")
             webView = WKWebView(frame: .zero, configuration: configuration)
             webView.navigationDelegate = self
             webView.uiDelegate = self
@@ -210,6 +215,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             }
             decisionHandler(.cancel)
         }
+    }
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping (Any?, String?) -> Void) {
+        guard message.frameInfo.isMainFrame,
+              let body = message.body as? [String: Any],
+              let action = body["action"] as? String else {
+            replyHandler(nil, "invalid notification message")
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        switch action {
+        case "request":
+            center.requestAuthorization(options: [.alert]) { granted, _ in
+                DispatchQueue.main.async { replyHandler(granted, nil) }
+            }
+        case "post":
+            let content = UNMutableNotificationContent()
+            content.title = body["title"] as? String ?? "Swarmview"
+            content.body = body["body"] as? String ?? ""
+            if let pid = body["pid"] as? Int {
+                content.userInfo = ["pid": pid]
+            }
+            let identifier = body["tag"] as? String ?? UUID().uuidString
+            center.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+            replyHandler(true, nil)
+        default:
+            replyHandler(nil, "unknown notification action")
+        }
+    }
+
+    // Show banners while Swarmview is frontmost too, matching the browser behavior.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        completionHandler([.banner, .list])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        defer { completionHandler() }
+        window?.deminiaturize(nil)
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        guard let pid = response.notification.request.content.userInfo["pid"] as? Int else { return }
+        webView?.evaluateJavaScript("dispatchEvent(new CustomEvent('swarmview-notification', {detail: \(pid)}))")
     }
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,

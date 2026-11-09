@@ -202,7 +202,9 @@ and reduced motion. These are browser checks, not a claim of native WKWebView or
 Firefox/Safari visual verification.
 
 Desktop notifications are optional and require the browser's Notification API,
-site permission, and OS notification settings. If the API is unavailable, the
+site permission, and OS notification settings. The macOS app posts them through
+macOS notifications instead, because WKWebView has no web notification permission
+prompt; macOS asks once when you enable them. If neither is available, the
 notification control in Preferences is hidden; recent quiet observations, the
 tab title, and favicon still work. Appearance in Preferences supports
 System/Light/Dark using browser-local storage, without changing provider or CLI

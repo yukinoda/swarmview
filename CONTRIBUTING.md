@@ -57,7 +57,7 @@ build, using a temporary Python 3.10+ environment with pinned dmgbuild.
     notification ownership stays in `notifications.js`, server capability in `communication.js`.
 - `web/app_test.js`, `ui_test.go`: browser assertions and their Go test harness.
 - `*_test.go`: tests beside their subjects; `test_helpers_test.go` contains shared fixtures.
-- `desktop/macos/`: native WebView host, installer, and packaging checks.
+- `desktop/macos/`: native WebView host (including the OS notification bridge WKWebView lacks), installer, and packaging checks.
 - `integrations/opencode/`: manually configured TUI-only metadata observer; uses
   the existing provider connection and forwards identifiers to local IPC.
 - `integrations/claude/`: optional Claude Code plugin (async hooks plus a
