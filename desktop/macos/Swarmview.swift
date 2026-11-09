@@ -21,7 +21,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         return flagged || stored
     }()
     private var checkedInstaller = false
-    private var smokeLoads = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -232,9 +231,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard smoke else { offerInstallerCleanup(); return }
-        smokeLoads += 1
         webView.callAsyncJavaScript("""
             const assert = (ok, message) => { if (!ok) throw Error(message); };
+            // WebKit can report didFinish while the module graph is still loading (readyState 'interactive'),
+            // before app.js has wired any controls. The load event comes after every module has run.
+            if (document.readyState !== 'complete') {
+                await new Promise((resolve) => addEventListener('load', resolve, { once: true }));
+            }
             const response = await fetch('/agents', { signal: AbortSignal.timeout(5000) });
             assert(response.ok, 'same-origin agent request');
             const data = await response.json();
@@ -250,10 +253,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             toggle.click();
             // Describe the page when the dialog stays shut: an intermittent CI failure needs this to be diagnosed.
             assert(panel.open, 'search dialog ' + JSON.stringify({
-                loads,
                 readyState: document.readyState,
-                navigation: performance.getEntriesByType('navigation').map((e) => e.type),
-                onclick: typeof toggle.onclick,
+                wired: typeof toggle.onclick === 'function',
                 searchKey: document.getElementById('search-key').textContent,
                 before,
                 after: `hidden=${panel.hidden} open=${panel.open}`,
@@ -275,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             await new Promise(resolve => setTimeout(resolve, 100));
             assert(location.href === 'http://127.0.0.1:4778/', 'external navigation blocked');
             return {passed:true};
-            """, arguments: ["communication": !communicationDisabled, "loads": smokeLoads], in: nil, in: .page) { [weak self] result in
+            """, arguments: ["communication": !communicationDisabled], in: nil, in: .page) { [weak self] result in
                 switch result {
                 case .success:
                     self?.checkEscape()

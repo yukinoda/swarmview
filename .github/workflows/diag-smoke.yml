@@ -28,8 +28,6 @@ jobs:
           fi
           failures=0
           for i in $(seq 1 30); do
-            # Start each iteration as a fresh runner would: no WebKit data or caches.
-            rm -rf ~/Library/WebKit/dev.swarmview.desktop ~/Library/Caches/dev.swarmview.desktop ~/Library/HTTPStorages/dev.swarmview.desktop
             if ! python3 desktop/macos/check.py dist/Swarmview.app > out.txt 2>&1; then
               failures=$((failures + 1))
               echo "::warning::iteration $i failed"
