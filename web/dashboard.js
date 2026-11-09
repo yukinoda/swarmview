@@ -121,7 +121,6 @@ export function renderDashboard(data, again = false) {
     g.ck = ck;
     g.kids.hidden = f;
     g.label.title = title;
-    txt(g.chev, f ? '▸' : '▾');
     g.fold.setAttribute('aria-expanded', !f);
     g.counts.replaceChildren(
       ...n.map(([st, v]) => {

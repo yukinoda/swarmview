@@ -218,13 +218,19 @@ kbd {
   border-top: 1px solid var(--line);
   padding-top: 12px;
 }
+/* Within a repository the trunk already separates worktrees; a rule would cross it. */
+.wt + .wt {
+  border-top: 0;
+}
 .gh {
   display: flex;
   align-items: center;
   gap: 4px;
   min-height: 48px;
 }
+/* Positioned so a worktree header's hover fill paints over its parent's trunk. */
 .fold {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -239,11 +245,33 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The caret sits centred on the tree trunk (a group's --connector-origin minus the
+   line's half pixel), so the trunk runs out of a repository caret and through each
+   worktree caret. The negative margin cancels the button's 8px padding; the
+   background patch cuts the parent trunk where it passes behind a worktree caret. */
 .chev {
-  color: var(--mut);
-  width: 10px;
-  font-size: 12px;
+  position: relative;
   flex: none;
+  width: 15px;
+  height: 15px;
+  margin-left: -8px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--mut);
+}
+.chev::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5 5 6.5 8 3.5' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+    center / 10px 10px no-repeat;
+}
+.fold:hover .chev {
+  background: var(--hov);
+}
+.fold[aria-expanded='false'] .chev::before {
+  transform: rotate(-90deg);
 }
 .counts {
   display: flex;
