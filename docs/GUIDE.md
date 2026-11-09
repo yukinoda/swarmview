@@ -4,7 +4,9 @@
 
 Use the dashboard to see activity across your coding agents, compare memory,
 and return to the right terminal. Click a task's separate **Details** control to open
-**Details** for CPU and process age; opening it does not open a terminal. The
+**Details** for CPU and process age; opening it does not open a terminal. Close
+Details, Preferences, or search with **×**/**Done**, **Esc**, or a click outside
+the panel; keyboard focus returns to the control that opened it. The
 metric help at the bottom explains the numbers without leaving your sessions.
 
 ## Reading the dashboard

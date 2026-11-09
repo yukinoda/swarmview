@@ -1,4 +1,4 @@
-import { $, el, txt, cls, attr } from './dom.js';
+import { $, el, txt, cls, attr, closeOnBackdrop } from './dom.js';
 import { fmtBytes } from './agents.js';
 import { logo } from './icons.js';
 
@@ -14,6 +14,7 @@ export function setupDetails(lookup, beforeOpen, snapshotState) {
   beforeDetails = beforeOpen;
   readDetailsState = snapshotState;
   $('close-details').onclick = closeDetails;
+  closeOnBackdrop($('detail-dialog'), closeDetails);
   $('detail-dialog').oncancel = (event) => {
     event.preventDefault();
     closeDetails();

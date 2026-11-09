@@ -1,4 +1,4 @@
-import { $, txt, cls } from './dom.js';
+import { $, txt, cls, closeOnBackdrop } from './dom.js';
 import { syncAgentCards, focusTerminal } from './rows.js';
 
 let items = new Map();
@@ -134,17 +134,7 @@ export function setupSearch(snapshotState, onOpen = () => {}) {
     e.preventDefault();
     closeSearch();
   };
-  $('search-panel').onclick = (e) => {
-    if (e.target !== $('search-panel')) return;
-    const rect = $('search-panel').getBoundingClientRect();
-    if (
-      e.clientX < rect.left ||
-      e.clientX > rect.right ||
-      e.clientY < rect.top ||
-      e.clientY > rect.bottom
-    )
-      closeSearch();
-  };
+  closeOnBackdrop($('search-panel'), closeSearch);
   $('search').oninput = applySearch;
   $('clear-search').onclick = () => {
     $('search').value = '';

@@ -20,3 +20,25 @@ export function attr(element, name, value) {
 
 let nextID = 0;
 export const uniqueID = (prefix) => prefix + nextID++;
+
+// A click on a modal's ::backdrop targets the <dialog> itself, outside its box.
+// Both the press and the click must land there, so a text selection dragged out of the panel never closes it.
+// Native closedby="any" would do this, but WebKit (the macOS app) does not support it.
+export function closeOnBackdrop(dialog, close) {
+  const onBackdrop = (event) => {
+    if (event.target !== dialog) return false;
+    const rect = dialog.getBoundingClientRect();
+    const insideX = event.clientX >= rect.left && event.clientX <= rect.right;
+    const insideY = event.clientY >= rect.top && event.clientY <= rect.bottom;
+    return !(insideX && insideY);
+  };
+  let pressedBackdrop = false;
+  dialog.addEventListener('pointerdown', (event) => {
+    pressedBackdrop = onBackdrop(event);
+  });
+  dialog.addEventListener('click', (event) => {
+    const dismiss = pressedBackdrop && onBackdrop(event);
+    pressedBackdrop = false;
+    if (dismiss) close();
+  });
+}
