@@ -39,7 +39,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 return
             }
             installMenu()
-            webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+            let configuration = WKWebViewConfiguration()
+            if smoke {
+                // Record page errors from the first byte, so a failed smoke check can report them.
+                configuration.userContentController.addUserScript(WKUserScript(source: """
+                    window.smokeErrors = [];
+                    addEventListener('error', (e) => smokeErrors.push(e.message || 'failed to load ' + (e.target.src || e.target.href)), true);
+                    addEventListener('unhandledrejection', (e) => smokeErrors.push('rejection: ' + e.reason));
+                    """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            }
+            webView = WKWebView(frame: .zero, configuration: configuration)
             webView.navigationDelegate = self
             webView.uiDelegate = self
             window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 680, height: 820),
@@ -215,12 +224,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         fail("Could not load the dashboard: \(error.localizedDescription)")
     }
 
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { webView.reload() }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if smoke { FileHandle.standardError.write(Data("WebContent process terminated; reloading\n".utf8)) }
+        webView.reload()
+    }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         guard smoke else { offerInstallerCleanup(); return }
         webView.callAsyncJavaScript("""
             const assert = (ok, message) => { if (!ok) throw Error(message); };
+            // WebKit can report didFinish while the module graph is still loading (readyState 'interactive'),
+            // before app.js has wired any controls. The load event comes after every module has run.
+            if (document.readyState !== 'complete') {
+                await new Promise((resolve) => addEventListener('load', resolve, { once: true }));
+            }
             const response = await fetch('/agents', { signal: AbortSignal.timeout(5000) });
             assert(response.ok, 'same-origin agent request');
             const data = await response.json();
@@ -230,8 +247,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             assert(localStorage.getItem('swarmview.smoke') === 'ok', 'persistent storage');
             localStorage.removeItem('swarmview.smoke');
             const toggle = document.getElementById('search-toggle');
-            toggle.focus(); toggle.click();
-            assert(document.getElementById('search-panel').open, 'search dialog');
+            const panel = document.getElementById('search-panel');
+            const before = `hidden=${panel.hidden} open=${panel.open}`;
+            toggle.focus();
+            toggle.click();
+            // Describe the page when the dialog stays shut: an intermittent CI failure needs this to be diagnosed.
+            assert(panel.open, 'search dialog ' + JSON.stringify({
+                readyState: document.readyState,
+                wired: typeof toggle.onclick === 'function',
+                searchKey: document.getElementById('search-key').textContent,
+                before,
+                after: `hidden=${panel.hidden} open=${panel.open}`,
+                errors: window.smokeErrors,
+                assets: performance.getEntriesByType('resource').map((e) => `${e.name.split('/').pop()} ${Math.round(e.duration)}ms`),
+            }));
             const search = document.getElementById('search');
             search.value = 'agent:claude'; search.dispatchEvent(new Event('input'));
             document.getElementById('close-search').click();
