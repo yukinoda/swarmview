@@ -3000,6 +3000,18 @@ const {
           groups.get('w:/connector-branches/feature').kids,
       'connector fixtures cover all 26 rows and both repository and worktree root junctions',
     );
+    for (const g of groups.values()) {
+      const caret = g.fold.querySelector('.chev').getBoundingClientRect(),
+        trunk = getComputedStyle(g.kids, '::before');
+      const trunkCenter =
+        g.kids.getBoundingClientRect().left +
+        parseFloat(trunk.left) +
+        parseFloat(trunk.borderLeftWidth) / 2;
+      assert(
+        Math.abs(caret.left + caret.width / 2 - trunkCenter) < 0.01,
+        'group carets centre on their trunk',
+      );
+    }
     for (let i = 0; i < 8; i++) {
       for (const [key, parent] of [
         ['a:' + (47001 + i), 'a:' + (47000 + i)],
