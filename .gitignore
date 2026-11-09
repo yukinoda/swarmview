@@ -4,7 +4,6 @@
 /*.test
 /coverage.out
 /swarmview_*.tar.gz
-/swarmview_*.app.zip
 /swarmview_*.dmg
 /SHA256SUMS
 

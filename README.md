@@ -38,8 +38,8 @@ monitoring-only.
 
 **[Get the macOS installer or macOS/Linux CLI binaries →](https://github.com/yukinoda/swarmview/releases)**
 
-For the macOS app, choose **arm64** for Apple Silicon or **amd64** for Intel,
-then drag **Swarmview.app** to Applications. Requires macOS 13.3 or later.
+For the macOS app, download the `.dmg` (one universal image for Apple Silicon
+and Intel), then drag **Swarmview.app** to Applications. Requires macOS 13.3 or later.
 The app is ad-hoc signed, not notarized; see [first-launch help](desktop/macos/Installation.txt).
 
 Releases published after v0.2.0 carry build provenance attestations. To check
@@ -69,8 +69,8 @@ Use `PORT=4888 ./swarmview` to choose another port.
 ### macOS desktop app (prototype)
 
 For a dedicated window, run `bash desktop/macos/build.sh`, then
-`open dist/Swarmview.app`. Releases include ARM/Intel `.dmg` installers and
-`.app.zip` archives. To build a drag-to-Applications image, run
+`open dist/Swarmview.app`. Releases include a universal `.dmg` installer.
+To build a drag-to-Applications image, run
 `bash desktop/macos/dmg.sh` after building the app.
 Requires macOS 13.3+; ad-hoc signed, not notarized.
 [Desktop app setup →](desktop/macos/README.md)
