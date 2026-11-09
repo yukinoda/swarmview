@@ -9,7 +9,7 @@ capabilities.
 | Capability | macOS | Linux | Windows |
 | --- | --- | --- | --- |
 | Agent discovery, CPU status, and process-tree RSS | Supported; checked locally | Covered by Ubuntu CI | Unsupported |
-| Repository/worktree grouping | Supported with Git and `lsof` | Supported with Git and `lsof` | Unsupported |
+| Repository grouping | Supported with Git and `lsof` | Supported with Git and `lsof` | Unsupported |
 | Select an attached tmux client's pane | Supported | Supported; live isolated-server check in CI | Unsupported |
 | Bring a terminal OS window forward | Ghostty 1.3+ only | Not implemented | Not implemented |
 | Open a terminal window for a detached tmux session | Ghostty 1.3+ only | Not implemented | Not implemented |
@@ -58,7 +58,7 @@ and optional eject/Trash cleanup is a one-shot native action after installation.
   `ps -axo pid=,ppid=,rss=,time=,etime=,args=`. Processes must be visible to the
   user running Swarmview.
 - **Directory/repository metadata:** `lsof` for working directories and Git for
-  repository/worktree grouping. Missing or inaccessible directories appear as
+  repository grouping. Missing or inaccessible directories appear as
   unknown; failed Git lookups fall back to directory-based grouping.
 - **Pane selection:** tmux on `PATH`. No minimum tmux version is currently
   enforced; discovery needs `list-panes`, `list-clients`, and their format fields,

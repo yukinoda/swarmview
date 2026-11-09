@@ -1,5 +1,5 @@
 import { $, el, txt, cls, attr } from './dom.js';
-import { fmtBytes, label } from './agents.js';
+import { fmtBytes } from './agents.js';
 import { logo } from './icons.js';
 
 let selectedRow = null,
@@ -377,7 +377,7 @@ export function syncAgentCards(box, store, list, meta) {
     txt(r.name, it.name);
     txt(
       r.sub,
-      [it.agentLabel, label(it), it.target].filter(Boolean).join(' · '),
+      [it.agentLabel, it.repoName, it.target].filter(Boolean).join(' · '),
     );
     txt(r.meta, meta(it));
     if (r.btn.title !== it.tip) r.btn.title = it.tip;

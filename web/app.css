@@ -301,14 +301,6 @@ kbd {
 .pin[aria-pressed='true'] {
   color: var(--accent);
 }
-.wt {
-  margin: 0 0 6px;
-}
-.wt > .gh .fold {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--mut);
-}
 /* Tree geometry lives on #tree so group carets and row connectors share it. */
 #tree {
   --tree-step: 24px;

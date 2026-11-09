@@ -498,20 +498,18 @@ const {
       cwd: '/a/feature',
     });
     show([a, branch]);
+    const repoKids = groups.get('r:/a').kids;
     assert(
-      row.parentElement === groups.get('w:/a').kids,
-      'main checkout gains worktree group',
+      row.parentElement === repoKids &&
+        rows.get('a:300').node.parentElement === repoKids,
+      'worktrees share their repository group',
     );
     assert(
-      rows.get('a:300').node.parentElement === groups.get('w:/a/feature').kids,
-      'branch in its worktree',
+      [...groups.keys()].every((k) => k.startsWith('r:')),
+      'no worktree groups',
     );
     show([a]);
-    show([a]);
-    assert(
-      row.parentElement === groups.get('r:/a').kids && !groups.has('w:/a'),
-      'lone checkout drops worktree level',
-    );
+    show([a]); // Remove the exiting worktree row before moving repos.
     show([agent(100, '/b')]);
     assert(
       rows.get('a:100').node === row &&
@@ -868,6 +866,10 @@ const {
     assert(
       $('search-count').textContent === '1 match' && searchRows.has('a:502'),
       'kind and worktree filters retain normalized identity and worktree semantics',
+    );
+    assert(
+      searchRows.get('a:502').sub.textContent === 'OpenCode · api · dev:%42',
+      'results name the repository, not the worktree folder',
     );
     search('pid:504 status:quiet');
     assert(
@@ -2997,8 +2999,8 @@ const {
         rows.get('a:47000').node.parentElement ===
           groups.get('r:/connector-root').kids &&
         rows.get('a:48000').node.parentElement ===
-          groups.get('w:/connector-branches/feature').kids,
-      'connector fixtures cover all 26 rows and both repository and worktree root junctions',
+          groups.get('r:/connector-branches').kids,
+      'connector fixtures cover all 26 rows and both repository root junctions',
     );
     for (const g of groups.values()) {
       const caret = g.fold.querySelector('.chev').getBoundingClientRect(),

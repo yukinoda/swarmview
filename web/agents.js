@@ -108,7 +108,7 @@ function agentItem(a) {
   };
 }
 
-// Claude subagent: nests under the subagent that spawned it, else its claude session, else the worktree.
+// Claude subagent: nests under the subagent that spawned it, else its claude session, else its repository group.
 // Recent writes are activity, not communication; click focuses the top-level Claude (if known).
 function subItem(s, i, host) {
   // A same-directory host is only a guess; inherit a model from the real parent alone.
@@ -170,8 +170,6 @@ function liveItem(worker, index, host) {
       worker.key,
   };
 }
-export const label = (it) =>
-  it.wt === it.repo ? it.repoName : it.repoName + ' / ' + it.wt.split('/').pop();
 
 export function snapshotItems(data, last, again = false) {
   const { agents, subagents = [] } = data;
