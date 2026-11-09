@@ -426,10 +426,14 @@ const {
     show([{ ...a, idleSec: 15 }]);
     const favicon = document.querySelector('link[rel="icon"]');
     assert(
+      rows.get('a:100').st.textContent === 'quiet',
+      'a working agent going quiet shows the quiet status on its own row',
+    );
+    assert(
       document.title === 'Swarmview' &&
         favicon.getAttribute('href') === '/logo.svg' &&
         !$('quiet'),
-      'a working agent going quiet leaves the plain title, static favicon, and no quiet section',
+      'going quiet leaves the plain title, static favicon, and no quiet section',
     );
 
     const b = agent(200, '/b');
