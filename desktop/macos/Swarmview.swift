@@ -254,7 +254,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        defer { completionHandler() }
+        // The delegate protocol promises no thread, and AppKit and WebKit must run on the main thread.
+        DispatchQueue.main.async {
+            self.activateAgent(from: response)
+            completionHandler()
+        }
+    }
+
+    private func activateAgent(from response: UNNotificationResponse) {
         window?.deminiaturize(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -298,6 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             assert(focus.status === 404, 'focus origin accepted, invalid target rejected');
             assert(CSS.supports('color', 'color-mix(in srgb, red, blue)'), 'color-mix');
             assert(CSS.supports('selector(:has(*))'), ':has');
+            assert(window.webkit?.messageHandlers?.notify, 'native notification bridge');
             window.location.href = 'https://example.invalid/';
             await new Promise(resolve => setTimeout(resolve, 100));
             assert(location.href === 'http://127.0.0.1:4778/', 'external navigation blocked');
