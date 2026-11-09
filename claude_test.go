@@ -710,45 +710,70 @@ func subagentIds(got []Subagent) []string {
 	return out
 }
 
-func TestQuietWorkerOfFinishedParentHidden(t *testing.T) {
+// fg is a foreground worker's meta, spawned by parent ("" for the session).
+func fg(parent string) map[string]any {
+	meta := map[string]any{"requestShape": "foreground"}
+	if parent != "" {
+		meta["parentAgentId"] = parent
+	}
+	return meta
+}
+
+func TestQuietForegroundWorkerOfFinishedParentHidden(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	// ReadDir sorts c1 before p1, so the parent's meta must be loaded before filtering.
-	mk(t, root, "/w/a", "s1", "p1", map[string]any{"description": "Parent", "finished": true}, 90, now)
-	mk(t, root, "/w/a", "s1", "c1", map[string]any{"parentAgentId": "p1", "spawnDepth": 2}, 90, now)
-	mk(t, root, "/w/a", "s1", "p2", map[string]any{"description": "Running parent"}, 90, now)
-	mk(t, root, "/w/a", "s1", "c2", map[string]any{"parentAgentId": "p2", "spawnDepth": 2}, 90, now)
+	mk(t, root, "/w/a", "s1", "p1", map[string]any{"requestShape": "background", "finished": true}, 90, now)
+	mk(t, root, "/w/a", "s1", "c1", fg("p1"), 90, now)
+	mk(t, root, "/w/a", "s1", "p2", map[string]any{"requestShape": "background"}, 90, now)
+	mk(t, root, "/w/a", "s1", "c2", fg("p2"), 90, now)
 	got := subagentIds(subs(root, now, claude(100, "/w/a")))
 	if !slices.Equal(got, []string{"c2", "p2"}) {
 		t.Errorf("got %v, want c2 and p2", got)
 	}
 }
 
-func TestQuietWorkerOfFinishedGrandparentHidden(t *testing.T) {
+func TestQuietForegroundChainOfFinishedAncestorHidden(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	mk(t, root, "/w/a", "s1", "g1", map[string]any{"finished": true}, 90, now)
-	mk(t, root, "/w/a", "s1", "p1", map[string]any{"parentAgentId": "g1"}, 90, now)
-	mk(t, root, "/w/a", "s1", "c1", map[string]any{"parentAgentId": "p1"}, 90, now)
+	mk(t, root, "/w/a", "s1", "p1", fg("g1"), 90, now)
+	mk(t, root, "/w/a", "s1", "c1", fg("p1"), 90, now)
 	if got := subagentIds(subs(root, now, claude(100, "/w/a"))); len(got) != 0 {
 		t.Errorf("got %v, want none", got)
 	}
 }
 
-func TestWorkerOfUnknownParentKept(t *testing.T) {
+// A background worker can outlive its parent and has its own finished flag, even while a
+// long tool call keeps its transcript quiet; so can the foreground workers it spawned.
+func TestBackgroundWorkerOfFinishedParentKept(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
-	mk(t, root, "/w/a", "s1", "c1", map[string]any{"parentAgentId": "gone"}, 90, now)
-	mk(t, root, "/w/a", "s1", "x1", map[string]any{"parentAgentId": "x2"}, 90, now)
-	mk(t, root, "/w/a", "s1", "x2", map[string]any{"parentAgentId": "x1"}, 90, now)
+	mk(t, root, "/w/a", "s1", "g1", map[string]any{"finished": true}, 90, now)
+	mk(t, root, "/w/a", "s1", "p1", map[string]any{"requestShape": "background", "parentAgentId": "g1"}, 90, now)
+	mk(t, root, "/w/a", "s1", "c1", fg("p1"), 90, now)
+	mk(t, root, "/w/a", "s1", "o1", map[string]any{"parentAgentId": "g1"}, 90, now)
 	got := subagentIds(subs(root, now, claude(100, "/w/a")))
-	if !slices.Equal(got, []string{"c1", "x1", "x2"}) {
-		t.Errorf("got %v, want the orphan and the cycle kept", got)
+	if !slices.Equal(got, []string{"c1", "o1", "p1"}) {
+		t.Errorf("got %v, want background p1, its child and o1 without a request shape kept", got)
 	}
 }
 
-// A worker the parent backgrounded can keep running after the parent finished.
-func TestWorkingWorkerOfFinishedParentKept(t *testing.T) {
+func TestWorkerOfUnknownParentKept(t *testing.T) {
+	root, now := t.TempDir(), nowMs()
+	mk(t, root, "/w/a", "s1", "c1", fg("gone"), 90, now)
+	mk(t, root, "/w/a", "s1", "x1", fg("x2"), 90, now)
+	mk(t, root, "/w/a", "s1", "x2", fg("x1"), 90, now)
+	// a finished worker in another session, listed first, must not be reached through ".."
+	mk(t, root, "/w/a", "s0", "p1", map[string]any{"finished": true}, 90, now)
+	mk(t, root, "/w/a", "s1", "y1", fg("../../../../s0/subagents/agent-p1"), 90, now)
+	got := subagentIds(subs(root, now, claude(100, "/w/a")))
+	if !slices.Equal(got, []string{"c1", "x1", "x2", "y1"}) {
+		t.Errorf("got %v, want the orphans and the cycle kept", got)
+	}
+}
+
+func TestWorkingForegroundWorkerOfFinishedParentKept(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
 	mk(t, root, "/w/a", "s1", "p1", map[string]any{"finished": true}, 90, now)
-	mk(t, root, "/w/a", "s1", "c1", map[string]any{"parentAgentId": "p1"}, 3, now)
+	mk(t, root, "/w/a", "s1", "c1", fg("p1"), 3, now)
 	got := subs(root, now, claude(100, "/w/a"))
 	if len(got) != 1 || got[0].Id != "c1" || !got[0].Working {
 		t.Errorf("got %+v, want working c1", got)

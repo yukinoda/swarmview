@@ -33,6 +33,7 @@ func (c *sessionTitle) projectCwd(liveCwd string) string {
 type metaEntry struct {
 	mt                                int64
 	finished                          bool
+	foreground                        bool // requestShape "foreground": its parent waits for it
 	parentAgentId, description, model any
 	logKey                            [2]int64 // transcript size and mtime at the last tail read
 	logModel                          string   // last model in the transcript, "" if none seen yet
@@ -325,16 +326,22 @@ func assistantModel(line []byte, sessionID string) string {
 	return record.Message.Model
 }
 
-// ancestorFinished reports whether a worker's parent worker, or one of its ancestors, has
-// finished. It only consults cached metas from the same subagents dir: an ancestor whose meta
-// is unknown stops the walk, so the worker stays listed. maxHops bounds a parentAgentId cycle.
+// ancestorFinished reports whether a foreground worker's parent worker has finished, following
+// foreground parents up to the first finished or background ancestor. A background worker can
+// outlive its parent and gets its own meta.finished, so it stops the walk. It only consults
+// cached metas from the same subagents dir: an unknown ancestor stops the walk, so the worker
+// stays listed. maxHops bounds a parentAgentId cycle.
 func ancestorFinished(metaCache map[string]metaEntry, sub string, c metaEntry, maxHops int) bool {
 	for range maxHops {
+		if !c.foreground {
+			return false
+		}
 		parentId, _ := c.parentAgentId.(string)
 		if parentId == "" {
 			return false
 		}
-		parent, ok := metaCache[path.Join(sub, "agent-"+parentId+".meta.json")]
+		// Concatenated, not path.Join: a parentAgentId with ".." must not name another dir's meta.
+		parent, ok := metaCache[sub+"/agent-"+parentId+".meta.json"]
 		if !ok {
 			return false
 		}
@@ -348,8 +355,8 @@ func ancestorFinished(metaCache map[string]metaEntry, sub string, c metaEntry, m
 
 // Claude Code subagents live in <root>/<slug>/<session>/subagents/agent-<id>.{jsonl,meta.json}.
 // Claude Code sets meta.finished on background workers but never on foreground ones, so liveness
-// is the .jsonl mtime (alive < 30 min, working < 60 s), and a quiet worker whose ancestor
-// worker has finished is over too.
+// is the .jsonl mtime (alive < 30 min, working < 60 s), and a quiet foreground worker whose
+// parent worker has finished is over too.
 // hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
 func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[hostKey]workerHost) []Subagent {
 	// Every record left names a Claude PID that is still running.
@@ -452,9 +459,11 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 						continue
 					}
 					fin, _ := obj["finished"].(bool)
+					shape, _ := obj["requestShape"].(string)
 					c = metaEntry{
 						mt:            mmt,
 						finished:      fin,
+						foreground:    shape == "foreground",
 						parentAgentId: obj["parentAgentId"],
 						description:   obj["description"],
 						model:         obj["model"],
@@ -482,8 +491,8 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				}
 				working := now-jt < 60e3
 				// Foreground workers never get meta.finished, so one spawned by another worker would
-				// linger as quiet for the full window. A worker can outlive its parent only when the
-				// parent backgrounded it, and then it keeps writing: keep working ones.
+				// linger as quiet for the full window. Its parent waits for it, so it cannot outlive
+				// that parent. A worker still writing is kept anyway, in case that ever changes.
 				if !working && ancestorFinished(metaCache, sub, c, len(ids)) {
 					continue
 				}

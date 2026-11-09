@@ -174,9 +174,11 @@ session status or conversation metadata.
   started before Swarmview was listening stay unnested.
 - A Claude worker is listed while its transcript was written within 30 minutes
   and its metadata is not marked finished. Claude Code never marks foreground
-  workers finished, so a quiet worker is also dropped once its parent worker
-  (or an earlier ancestor) is marked finished. A worker still writing stays
-  listed, since a worker its parent backgrounded can outlive it.
+  workers finished, so a quiet foreground worker is also dropped once the
+  worker that spawned it (or an earlier foreground-spawned ancestor) is marked
+  finished. Background workers can outlive their parent and stay listed until
+  marked finished themselves. Top-level foreground workers have no parent
+  worker and still stay listed for the full 30 minutes.
 - When Claude's pane title is generic or unavailable, generated task titles are
   read from `ai-title` metadata records in the last 64 KiB of the session JSONL.
   This requires matching PID and working directory metadata in
