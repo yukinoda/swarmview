@@ -41,6 +41,10 @@ For the macOS app, choose **arm64** for Apple Silicon or **amd64** for Intel,
 then drag **Swarmview.app** to Applications. Requires macOS 13.3 or later.
 The app is ad-hoc signed, not notarized; see [first-launch help](desktop/macos/Installation.txt).
 
+Releases after v0.2.0 carry build provenance attestations. To check that a
+download was built by this repository's release workflow, run
+`gh attestation verify <file> --repo yukinoda/swarmview`.
+
 ## Quick start
 
 Requires **Go 1.27+**, `ps`, and `lsof`. Git enables repository grouping;
