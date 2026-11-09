@@ -42,8 +42,8 @@ then drag **Swarmview.app** to Applications. Requires macOS 13.3 or later.
 The app is ad-hoc signed, not notarized; see [first-launch help](desktop/macos/Installation.txt).
 
 Releases after v0.2.0 carry build provenance attestations. To check that a
-download was built by this repository's release workflow, run
-`gh attestation verify <file> --repo yukinoda/swarmview`.
+downloaded file was built by this repository's release workflow, run
+`gh attestation verify <file> --repo yukinoda/swarmview` on it before extracting.
 
 ## Quick start
 

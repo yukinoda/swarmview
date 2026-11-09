@@ -181,8 +181,8 @@ subjects alone do not determine the category.
 
 The release workflow verifies the repository on macOS and Linux, builds binary
 archives for `darwin`/`linux` on `arm64`/`amd64`, and publishes SHA-256 checksums,
-build provenance attestations, and generated notes when a version tag is pushed. It does not sign or notarize
-macOS binaries.
+build provenance attestations, and generated notes when a version tag is pushed.
+It does not sign or notarize macOS binaries.
 
 The release workflow also builds ARM/Intel macOS `.dmg` and `.app.zip` archives on a Mac.
 They use ad-hoc signatures for the bundle and helper, without Developer ID
