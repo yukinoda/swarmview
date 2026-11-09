@@ -172,6 +172,11 @@ session status or conversation metadata.
   a session that two agents claim (resumed in a second terminal) nests each
   worker under the claimant whose `SubagentStart` hook reported it; workers
   started before Swarmview was listening stay unnested.
+- A Claude worker is listed while its transcript was written within 30 minutes
+  and its metadata is not marked finished. Claude Code never marks foreground
+  workers finished, so a quiet worker is also dropped once its parent worker
+  (or an earlier ancestor) is marked finished. A worker still writing stays
+  listed, since a worker its parent backgrounded can outlive it.
 - When Claude's pane title is generic or unavailable, generated task titles are
   read from `ai-title` metadata records in the last 64 KiB of the session JSONL.
   This requires matching PID and working directory metadata in
