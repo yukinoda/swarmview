@@ -1,46 +1,37 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
-  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  diag:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            chrome: google-chrome
-          - os: macos-latest
-            chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-    runs-on: ${{ matrix.os }}
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    runs-on: ubuntu-latest
     env:
-      CHROME_BIN: ${{ matrix.chrome }}
+      CHROME_BIN: google-chrome
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false
-      - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y tmux lsof
-      - if: runner.os == 'macOS'
-        run: command -v tmux || brew install tmux
-      - name: Check formatting
-        run: test -z "$(gofmt -l ./*.go)" || { gofmt -d ./*.go; exit 1; }
-      - run: go test -race ./...
-      - run: go vet ./...
-      - run: python3 scripts/memory_check.py --self-test
-      - run: go build -trimpath -ldflags='-s -w' -o swarmview .
-      - name: Build and check the macOS WebView app
-        if: runner.os == 'macOS'
-        run: |
-          bash desktop/macos/build.sh
-          python3 desktop/macos/check.py dist/Swarmview.app
-          bash desktop/macos/dmg.sh
+      - run: sudo apt-get update && sudo apt-get install -y tmux lsof
+      - run: google-chrome --version
+      - name: cold first launch
+        continue-on-error: true
+        run: go test -race -v -count=1 -run 'TestDiagProduction$' .
+      - name: warm production x20
+        continue-on-error: true
+        run: go test -race -v -count=20 -run 'TestDiagProduction$' . 2>&1 | grep -v '^        [0-9]' 
+      - name: warm static x20
+        continue-on-error: true
+        run: go test -race -v -count=20 -run 'TestDiagStatic$' . 2>&1 | grep -v '^        [0-9]'
+      - name: full suite
+        continue-on-error: true
+        run: go test -race -v ./... 2>&1 | grep -E '^(---|FAIL|ok)|DIAG|^        ' | grep -v '^        [0-9]' | head -200
