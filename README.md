@@ -9,9 +9,10 @@
 
 ## See which coding agent might need you next
 
-Running AI coding agents across several terminals? **Swarmview puts them in one
-live dashboard.** Spot quiet agents, compare memory use, and jump back to the
-right tmux pane instead of checking every terminal.
+Running several AI coding agents, such as Claude Code or Codex, across
+terminals? **Swarmview monitors them in one live dashboard.** Spot quiet agents
+and Claude Code subagents, compare memory use, and jump back to the right tmux
+pane instead of checking every terminal.
 
 Works with **Claude Code, Codex, OpenCode, Gemini, Aider, and Cursor Agent**.
 Runs locally: one Go binary, no account, no analytics, no hosted service.
