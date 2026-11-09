@@ -339,7 +339,11 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 	}
 	var groups []*group
 	for _, a := range agents {
-		if a.Kind != "claude" || a.Cwd == nil || a.projectCwd == "" {
+		if a.Kind != "claude" {
+			continue
+		}
+		// both are set when lsof gave the live cwd; an empty slug would name root itself
+		if a.Cwd == nil || a.projectCwd == "" {
 			continue
 		}
 		var g *group

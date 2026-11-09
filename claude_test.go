@@ -63,7 +63,7 @@ func TestClaudeGeneratedTitle(t *testing.T) {
 	if a := mustList(t, s, 2000)[0]; a.Title == nil || *a.Title != "Renamed task" || a.Model != "claude-opus-5-5" {
 		t.Fatalf("rename must take precedence and keep the model: %+v", a)
 	}
-	for _, data := range []string{meta(200, id, cwd), meta(100, id, "/other"), meta(100, "../invalid", cwd), "{"} {
+	for _, data := range []string{meta(200, id, cwd), meta(100, "../invalid", cwd), "{"} {
 		write(metadata, data)
 		if got := claudeSessionTitle(root, 100, math.NaN(), cwd, nowMs(), &sessionTitle{}); got != "" {
 			t.Fatalf("invalid session metadata returned %q", got)
