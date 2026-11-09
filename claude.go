@@ -337,11 +337,11 @@ func ancestorFinished(metaCache map[string]metaEntry, sub string, c metaEntry, m
 			return false
 		}
 		parentId, _ := c.parentAgentId.(string)
-		if parentId == "" {
+		// a worker id is a file name part; one with "/" could name another dir's meta
+		if parentId == "" || strings.Contains(parentId, "/") {
 			return false
 		}
-		// Concatenated, not path.Join: a parentAgentId with ".." must not name another dir's meta.
-		parent, ok := metaCache[sub+"/agent-"+parentId+".meta.json"]
+		parent, ok := metaCache[path.Join(sub, "agent-"+parentId+".meta.json")]
 		if !ok {
 			return false
 		}
@@ -355,8 +355,8 @@ func ancestorFinished(metaCache map[string]metaEntry, sub string, c metaEntry, m
 
 // Claude Code subagents live in <root>/<slug>/<session>/subagents/agent-<id>.{jsonl,meta.json}.
 // Claude Code sets meta.finished on background workers but never on foreground ones, so liveness
-// is the .jsonl mtime (alive < 30 min, working < 60 s), and a quiet foreground worker whose
-// parent worker has finished is over too.
+// is the .jsonl mtime (alive < 30 min, working < 60 s), and a foreground worker whose parent
+// worker has finished is over too.
 // hosts (from the SubagentStart hook) only chooses among processes that already claim a session.
 func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[string]metaEntry, sessions map[string]sessionScan, hosts map[hostKey]workerHost) []Subagent {
 	// Every record left names a Claude PID that is still running.
@@ -489,11 +489,10 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				if now-jt > 30*60e3 {
 					continue
 				}
-				working := now-jt < 60e3
 				// Foreground workers never get meta.finished, so one spawned by another worker would
 				// linger as quiet for the full window. Its parent waits for it, so it cannot outlive
-				// that parent. A worker still writing is kept anyway, in case that ever changes.
-				if !working && ancestorFinished(metaCache, sub, c, len(ids)) {
+				// that parent.
+				if ancestorFinished(metaCache, sub, c, len(ids)) {
 					continue
 				}
 				// The meta file only names the requested alias; the transcript has the resolved model.
@@ -546,7 +545,7 @@ func listClaudeSubagents(agents []Agent, root string, now int64, metaCache map[s
 				if pp != nil {
 					cwd = g.cwds[slices.Index(g.pids, *pp)]
 				}
-				out = append(out, Subagent{id, pp, c.parentAgentId, cwd, c.description, model, working})
+				out = append(out, Subagent{id, pp, c.parentAgentId, cwd, c.description, model, now-jt < 60e3})
 			}
 		}
 	}

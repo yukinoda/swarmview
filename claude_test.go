@@ -770,13 +770,13 @@ func TestWorkerOfUnknownParentKept(t *testing.T) {
 	}
 }
 
-func TestWorkingForegroundWorkerOfFinishedParentKept(t *testing.T) {
+// Its last records can land just before the parent finishes; it is over all the same.
+func TestRecentForegroundWorkerOfFinishedParentHidden(t *testing.T) {
 	root, now := t.TempDir(), nowMs()
-	mk(t, root, "/w/a", "s1", "p1", map[string]any{"finished": true}, 90, now)
+	mk(t, root, "/w/a", "s1", "p1", map[string]any{"finished": true}, 3, now)
 	mk(t, root, "/w/a", "s1", "c1", fg("p1"), 3, now)
-	got := subs(root, now, claude(100, "/w/a"))
-	if len(got) != 1 || got[0].Id != "c1" || !got[0].Working {
-		t.Errorf("got %+v, want working c1", got)
+	if got := subagentIds(subs(root, now, claude(100, "/w/a"))); len(got) != 0 {
+		t.Errorf("got %v, want none", got)
 	}
 }
 
