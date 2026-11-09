@@ -19,10 +19,14 @@ repository is linked. GitHub has no API for it: upload it under Settings →
 General → Social preview. It uses the logo, tagline, and supported-agent list
 from the README, so update it when those change.
 
-`demo.gif` is the README dashboard recording (720 px wide, exported at 2x). It
-plays scripted demo data, not real sessions: the real `web/` UI served with a
-mocked `/agents` response, recorded in headless Chromium, and encoded with
-ffmpeg. `dashboard-guide.svg` is the annotated dashboard illustration linked
+`demo.gif` is the README dashboard recording (720×860 CSS px at 2x, dark
+scheme, 14 s at 10 fps). It plays scripted demo data, not real sessions: the
+real `web/` files served next to a mocked `/agents` response, driven in headless
+Chrome over the DevTools protocol (a Claude worker appears under its session, a
+Gemini row goes from working to quiet, then ⌘ K searches for `codex`), captured
+one screenshot per frame, and encoded with ffmpeg `palettegen`/`paletteuse`.
+No recording script is kept in the repository; re-record it when the dashboard
+layout or labels change. `dashboard-guide.svg` is the annotated dashboard illustration linked
 from the README, also using synthetic tasks and metrics. Keep the labels in both
 aligned with the dashboard when changing UI terminology.
 
