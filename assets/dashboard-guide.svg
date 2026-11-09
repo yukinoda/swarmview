@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="620" viewBox="0 0 960 620" role="img" aria-labelledby="title desc">
   <title id="title">Your coding agents, explained in one view</title>
-  <desc id="desc">Illustrative swarmview dashboard with five numbered explanations: waiting tasks may need you, repository groups, approximate agent RAM, process age and CPU rather than progress, and agent identity with a clickable tmux target.</desc>
+  <desc id="desc">Illustrative swarmview dashboard with five numbered explanations: quiet tasks may need input, repository groups, approximate agent RAM, process age and CPU rather than progress, and agent identity with a clickable tmux target.</desc>
   <style>
     text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #c9d1d9; font-size: 16px; }
     .muted { fill: #a0a8b5; font-size: 14px; }
@@ -22,17 +22,17 @@
   <text x="44" y="130" class="muted">Last updated 0s ago</text>
 
   <circle cx="55" cy="163" r="12" class="number"/><text x="55" y="168" class="digit">1</text>
-  <text x="77" y="169" class="heading" style="font-size:13px;letter-spacing:1px">NEEDS YOU</text>
+  <text x="77" y="169" class="heading" style="font-size:13px;letter-spacing:1px">QUIET</text>
   <text x="70" y="200" class="heading">Review API changes</text>
   <text x="70" y="223" class="muted">Claude Code · atlas-api · dev:%2</text>
-  <rect x="777" y="181" width="122" height="28" rx="14" fill="#332b18"/>
-  <text x="792" y="201" class="amber">waiting 1m</text>
+  <rect x="815" y="181" width="84" height="28" rx="14" fill="#332b18"/>
+  <text x="830" y="201" class="amber">quiet</text>
 
   <path d="M44 242H916" class="rule"/>
   <circle cx="55" cy="265" r="12" class="number"/><text x="55" y="270" class="digit">2</text>
   <text x="77" y="271" class="heading">▾ atlas-api</text>
   <text x="680" y="271" class="green" style="font-size:14px">● 1 working</text>
-  <text x="800" y="271" class="amber" style="font-size:14px">● 1 waiting</text>
+  <text x="800" y="271" class="amber" style="font-size:14px">● 1 quiet</text>
   <path d="M54 286V391M54 315H66M54 374H66" stroke="#3fb950" fill="none"/>
   <text x="78" y="312" class="heading">Add request tracing</text>
   <text x="78" y="338" class="muted">Codex · dev:%3</text>
@@ -47,7 +47,7 @@
   <text x="78" y="370" class="heading">Review API changes</text>
   <text x="78" y="392" class="muted">Claude Code · dev:%2</text>
   <rect x="433" y="352" width="88" height="27" rx="14" fill="#332b18"/>
-  <text x="446" y="371" class="amber">waiting</text>
+  <text x="446" y="371" class="amber">quiet</text>
   <text x="550" y="371" class="muted">RAM ~240 MB</text>
   <text x="705" y="371" class="muted">up 31m</text>
 
