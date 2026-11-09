@@ -41,6 +41,6 @@ jobs:
       - name: Build and check the macOS WebView app
         if: runner.os == 'macOS'
         run: |
-          ARCH=universal bash desktop/macos/build.sh
+          bash desktop/macos/build.sh
           python3 desktop/macos/check.py dist/Swarmview.app
           bash desktop/macos/dmg.sh

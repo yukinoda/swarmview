@@ -1,12 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-# ARCH=universal builds both architectures and merges them with lipo.
 arch="${ARCH:-$(uname -m)}"
 case "$arch" in
-  arm64) arches=(arm64) ;;
-  amd64|x86_64) arches=(x86_64) ;;
-  universal) arches=(arm64 x86_64) ;;
+  arm64) goarch=arm64 ;;
+  amd64|x86_64) arch=x86_64; goarch=amd64 ;;
   *) exit 1 ;;
 esac
 app="${1:-$root/dist/Swarmview.app}"
@@ -31,18 +29,10 @@ trap 'rm -rf "$temporary"' EXIT
 mkdir "$temporary/Swarmview.iconset"
 swift "$root/desktop/macos/Icon.swift" "$root/assets/logo.svg" "$temporary/Swarmview.iconset"
 iconutil -c icns "$temporary/Swarmview.iconset" -o "$app/Contents/Resources/Swarmview.icns"
-for arch in "${arches[@]}"; do
-  goarch="$arch"
-  if [[ "$arch" == x86_64 ]]; then
-    goarch=amd64
-  fi
-  CGO_ENABLED=0 GOOS=darwin GOARCH="$goarch" go -C "$root" build -trimpath -ldflags='-s -w' -o "$temporary/swarmview-server-$arch" .
-  swiftc -O -swift-version 5 -target "$arch-apple-macos13.3" \
-    -framework Cocoa -framework WebKit "$root/desktop/macos/Swarmview.swift" "$root/desktop/macos/Installer.swift" \
-    -o "$temporary/Swarmview-$arch"
-done
-lipo -create "$temporary"/swarmview-server-* -output "$app/Contents/MacOS/swarmview-server"
-lipo -create "$temporary"/Swarmview-* -output "$app/Contents/MacOS/Swarmview"
+CGO_ENABLED=0 GOOS=darwin GOARCH="$goarch" go -C "$root" build -trimpath -ldflags='-s -w' -o "$app/Contents/MacOS/swarmview-server" .
+swiftc -O -swift-version 5 -target "$arch-apple-macos13.3" \
+  -framework Cocoa -framework WebKit "$root/desktop/macos/Swarmview.swift" "$root/desktop/macos/Installer.swift" \
+  -o "$app/Contents/MacOS/Swarmview"
 codesign --force --sign - "$app/Contents/MacOS/swarmview-server"
 codesign --force --sign - --entitlements "$root/desktop/macos/entitlements.plist" "$app"
 printf '%s\n' "$app"

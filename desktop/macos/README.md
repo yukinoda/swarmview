@@ -17,8 +17,8 @@ open dist/Swarmview.app
 
 Drag the app to Applications to launch it from Finder or the Dock. It includes
 its backend and icon. `ARCH=amd64 bash desktop/macos/build.sh` cross-builds the
-Intel app on a Mac, and `ARCH=universal` builds both and merges them with `lipo`.
-Release tags produce one universal `.dmg` in addition to CLI archives. Builds use ad-hoc signatures; they are not Developer
+Intel app on a Mac. Release tags produce separate ARM/Intel `.dmg`
+downloads in addition to CLI archives. Builds use ad-hoc signatures; they are not Developer
 ID signed or notarized. This is a prototype, not a notarized installer.
 
 ## Drag-to-install disk image

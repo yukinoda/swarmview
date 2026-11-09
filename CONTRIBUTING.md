@@ -186,8 +186,8 @@ archives for `darwin`/`linux` on `arm64`/`amd64`, and publishes SHA-256
 checksums, build provenance attestations, and generated notes when a version tag
 is pushed. It does not sign or notarize macOS binaries.
 
-The release workflow also builds one universal (ARM and Intel) macOS `.dmg` on a Mac.
-Its app bundle and helper use ad-hoc signatures, without Developer ID
+The release workflow also builds ARM/Intel macOS `.dmg` images on a Mac.
+They use ad-hoc signatures for the bundle and helper, without Developer ID
 signing/notarization. CLI archives retain their existing build path.
 
 1. Review the compatibility documentation and CI results for the release commit.
