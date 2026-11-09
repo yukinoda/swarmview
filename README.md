@@ -124,7 +124,6 @@ Read the
 ## Learn more
 
 - [Dashboard guide](docs/GUIDE.md) — statuses, search filters, tmux workflow, and resource use
-- [Annotated dashboard illustration](assets/dashboard-guide.svg) — an earlier layout's numbered guide to task rows and metrics
 - [Compatibility](docs/COMPATIBILITY.md) — platforms, terminals, dependencies, and limitations
 - [Contributing](CONTRIBUTING.md) — code layout, development checks, and release process
 - [Security](SECURITY.md) · [Issues](https://github.com/yukinoda/swarmview/issues) · [Brand assets](assets/README.md)

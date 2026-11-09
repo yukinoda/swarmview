@@ -26,9 +26,8 @@ Chrome over the DevTools protocol (a Claude worker appears under its session, a
 Gemini row goes from working to quiet, then ⌘ K searches for `codex`), captured
 one screenshot per frame, and encoded with ffmpeg `palettegen`/`paletteuse`.
 No recording script is kept in the repository; re-record it when the dashboard
-layout or labels change. `dashboard-guide.svg` is the annotated dashboard illustration linked
-from the README, also using synthetic tasks and metrics. Keep the labels in both
-aligned with the dashboard when changing UI terminology.
+layout or labels change. Keep its labels aligned with the dashboard when changing UI
+terminology.
 
 `installer-light.svg` is the selected installer artwork, exported as vectors
 with outlined typography from the maintainer's private Figma source. The
