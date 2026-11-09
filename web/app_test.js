@@ -867,6 +867,10 @@ const {
       $('search-count').textContent === '1 match' && searchRows.has('a:502'),
       'kind and worktree filters retain normalized identity and worktree semantics',
     );
+    assert(
+      searchRows.get('a:502').sub.textContent === 'OpenCode · api · dev:%42',
+      'results name the repository, not the worktree folder',
+    );
     search('pid:504 status:quiet');
     assert(
       searchRows.has('a:504') && searchRows.size === 1,

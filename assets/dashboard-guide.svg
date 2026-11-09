@@ -56,7 +56,7 @@
   <text x="67" y="476" class="muted">May need input; not proof of completion.</text>
   <circle cx="505" cy="447" r="12" class="number"/><text x="505" y="452" class="digit">2</text>
   <text x="527" y="452" class="heading">Find the right project</text>
-  <text x="527" y="476" class="muted">Agents grouped by repository and worktree.</text>
+  <text x="527" y="476" class="muted">Agents grouped by repository.</text>
   <circle cx="45" cy="513" r="12" class="number"/><text x="45" y="518" class="digit">3</text>
   <text x="67" y="518" class="heading">Compare agent RAM</text>
   <text x="67" y="542" class="muted">Approximate memory, including child processes.</text>

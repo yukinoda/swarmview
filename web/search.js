@@ -1,5 +1,4 @@
 import { $, txt, cls } from './dom.js';
-import { label } from './agents.js';
 import { syncAgentCards, focusTerminal } from './rows.js';
 
 let items = new Map();
@@ -24,7 +23,7 @@ function searchFields(it) {
     pane: it.target || ''
   };
   for (const k in fields) fields[k] = String(fields[k] ?? '').toLowerCase();
-  fields.text = [fields.task, fields.agent, label(it), it.stText, fields.pane]
+  fields.text = [fields.task, fields.agent, it.repoName, it.stText, fields.pane]
     .join(' ')
     .toLowerCase();
   return fields;

@@ -1,6 +1,5 @@
 import { $ } from './dom.js';
 import { load, save } from './storage.js';
-import { label } from './agents.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const QUIET_MIN_SEC = 15,
@@ -47,7 +46,7 @@ const paintBell = () => {
 function fire(it) {
   if (!notifyOn || !('Notification' in window) || Notification.permission !== 'granted') return;
   const n = new Notification(it.name, {
-    body: 'Recently quiet · ' + label(it) + ' · activity observation, not a request for input',
+    body: 'Recently quiet · ' + it.repoName + ' · activity observation, not a request for input',
     tag: 'swarmview-' + it.pid
   });
   n.onclick = () => {
