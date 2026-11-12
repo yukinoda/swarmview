@@ -25,6 +25,13 @@ var warmChrome sync.Once
 // runner Chrome's files are still on a cold disk: the first launch took 6-28s
 // before requesting the page, warm launches about 0.5s. Paying that once here
 // keeps it out of each test's 30s page budget.
+//
+// Every launch passes --test-type. Since about Chrome 154, macOS Chrome arms
+// a teardown watchdog when the browser starts closing and exits with status 2
+// if teardown is still running 10s later (30s from about Chrome 160), after
+// --dump-dom has already printed the page. --test-type is Chrome's switch
+// for automated runs and disables that watchdog; each launch's context still
+// bounds a hung Chrome.
 func chromeBinary(t *testing.T) string {
 	t.Helper()
 	chrome := os.Getenv("CHROME_BIN")
@@ -43,7 +50,7 @@ func chromeBinary(t *testing.T) string {
 		start := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
+		cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu", "--test-type",
 			"--user-data-dir="+t.TempDir(), "--dump-dom", "about:blank")
 		cmd.WaitDelay = 5 * time.Second
 		err := cmd.Run() // a broken Chrome fails the real launch with its output
@@ -61,7 +68,7 @@ func TestUIProduction(t *testing.T) {
 	defer srv.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu",
+	cmd := exec.CommandContext(ctx, chrome, "--headless", "--no-sandbox", "--disable-gpu", "--test-type",
 		"--user-data-dir="+t.TempDir(), "--virtual-time-budget=3000", "--timeout=10000", "--dump-dom", srv.URL)
 	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.CombinedOutput()
@@ -198,7 +205,7 @@ func TestUI(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			args := []string{"--headless", "--no-sandbox", "--disable-gpu",
+			args := []string{"--headless", "--no-sandbox", "--disable-gpu", "--test-type",
 				"--user-data-dir=" + t.TempDir(), "--window-size=" + scenario.size,
 				"--virtual-time-budget=10000", "--dump-dom", "--timeout=10000"}
 			if scenario.theme == "dark" {
