@@ -26,10 +26,10 @@ var warmChrome sync.Once
 // before requesting the page, warm launches about 0.5s. Paying that once here
 // keeps it out of each test's 30s page budget.
 //
-// Every launch passes --test-type. Since Chrome 157, macOS Chrome arms a
-// teardown watchdog when the browser starts closing and exits with status 2
-// if teardown is still running 10s later, after --dump-dom has already
-// printed the page. --test-type is Chrome's switch for automated runs and
+// Every launch passes --test-type. Since about Chrome 154, macOS Chrome arms
+// a teardown watchdog when the browser starts closing and exits with status 2
+// if teardown is still running 10s later (30s from about Chrome 160), after
+// --dump-dom has already printed the page. --test-type is Chrome's switch for automated runs and
 // disables that watchdog; each launch's context still bounds a hung Chrome.
 func chromeBinary(t *testing.T) string {
 	t.Helper()
