@@ -2084,6 +2084,14 @@ const {
       'both themes keep contrast-qualified plain text without chips, stripes or microscopic type',
     );
     assert(
+      badgeStyle.boxShadow === 'none' &&
+        badgeStyle.filter === 'none' &&
+        badgeStyle.willChange === 'auto' &&
+        badgeStyle.transform === 'none' &&
+        badgeStyle.outlineStyle === 'none',
+      'the badge has no shadow, filter, compositing hint, transform or outline',
+    );
+    assert(
       !document.getAnimations().length &&
         getComputedStyle(communicationFeedback).width === '1px',
       'normal and reduced motion share static row feedback and a nonvisual announcement, not a viewport layer',
