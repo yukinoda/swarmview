@@ -2,7 +2,8 @@
 
 package main
 
-func sysctlU32(string) (uint32, bool) { return 0, false }
+// sysctlU32 is nil off macOS so refreshSystem skips the macOS-only sysctl calls.
+var sysctlU32 func(name string) (uint32, bool)
 
 func ghosttyInstalled() bool { return false }
 
