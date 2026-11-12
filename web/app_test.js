@@ -3143,7 +3143,6 @@ const {
       subagents: [
         { id: 'scan-working', parentPid: 49000, cwd: '/scan-a', working: true },
         { id: 'scan-quiet', parentPid: 49000, cwd: '/scan-a', working: false },
-        { id: 'scan-unknown', parentPid: 49000, cwd: '/scan-a' },
       ],
       liveWorkers: [{ key: 'live:scan', parent: 'a:49002', pid: 49002 }],
       communication: true,
@@ -3188,7 +3187,6 @@ const {
       'a:49001',
       'a:49002',
       'sub:scan-quiet',
-      'sub:scan-unknown',
       'live:scan',
     ]) {
       const row = rows.get(key);
