@@ -171,14 +171,16 @@ row only if it belongs to the same Claude. A hook stays connected while it is
 checked, which keeps its PID in use. If the check outlasts the hook's 5-second
 limit, the hook exits and the record is rejected because its process is gone.
 Any program Claude runs is also its descendant, so it could send cues for that
-Claude's own workers. The check keeps sessions from crossing wires by accident. It
-does not stop a malicious program running as the same user: such a program
-could get itself run under a Claude (for example by replacing the hook
-launcher or editing the hook settings) and then send cues and `SubagentStart`
-records for that Claude's workers, or pose as a Claude of its own. Swarmview is
-a single-user local tool and does not defend against other code running as you
-(see [SECURITY.md](../../SECURITY.md#local-access-model)); the effect is
-limited to what the dashboard shows.
+Claude's own workers. The check keeps sessions from crossing wires by
+accident. It does not stop a malicious program running as the same user: such
+a program could get itself run under a Claude (for example by replacing the
+hook launcher or editing the hook settings) and then send cues and
+`SubagentStart` records for that Claude's workers, or pose as a Claude of its
+own. SECURITY.md describes Swarmview as a single-user local tool
+([Local access model](../../SECURITY.md#local-access-model)), and this check
+is not meant to defend against other code running as you. The effect is
+limited to what the dashboard shows, including which Claude a worker is nested
+under and which terminal a click on that worker focuses.
 
 A `SubagentStart` record can only choose a worker's parent among the Claude
 processes whose `~/.claude/sessions/<pid>.json` already claims the worker's
@@ -187,9 +189,8 @@ under one of those claimants could record a worker of that same session before
 its real hook arrives, since the first record for a worker wins. Each
 Claude keeps its own record for a worker and only the claimants' records
 count, so ordinary sessions don't affect each other. The same-user limit
-above still applies. A record names the
-Claude by PID and by its start time, estimated from the elapsed time `ps`
-already reports. A worker is nested only while the running Claude's start time
+above still applies. A record names the Claude by PID and by its start time,
+estimated from the elapsed time `ps` already reports. A worker is nested only while the running Claude's start time
 matches to within two seconds, so a later process that reuses the PID doesn't
 inherit it. Swarmview keeps at most 256 of these records in memory (worker ID,
 Claude PID, and start time only). When full it drops the oldest record of the
