@@ -14,8 +14,8 @@ security fixes for older releases; use the latest revision.
 ## Local access model
 
 Swarmview is a single-user local tool. It binds to `127.0.0.1` and checks the
-request host; focus and communication requests also have origin checks, and
-focus requests also have a content-type check. Responses carry a
+request host; agents, focus, and communication requests also have origin
+checks, and focus requests also have a content-type check. Responses carry a
 Content-Security-Policy (`default-src 'self'`, no plugins, `<base>` or form
 submissions, and no framing). It has no remote authentication layer and is not
 designed to be exposed through a public listener or reverse proxy.

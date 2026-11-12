@@ -167,7 +167,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.Set("content-security-policy", csp)
 	h.Set("x-frame-options", "DENY")
 	h.Set("x-content-type-options", "nosniff")
-	// State-changing and live routes refuse requests from another site.
+	// State-changing, live, and snapshot routes refuse requests from another site.
 	crossSite := func() bool {
 		o := r.Header.Get("Origin")
 		return (o != "" && !slices.Contains(local("http://"), o)) || r.Header.Get("Sec-Fetch-Site") == "cross-site"
@@ -197,6 +197,10 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "image/svg+xml")
 		w.Write(logoSVG)
 	case "GET /agents":
+		if crossSite() {
+			w.WriteHeader(403)
+			return
+		}
 		sn, err := s.currentSnapshot()
 		if err != nil {
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
