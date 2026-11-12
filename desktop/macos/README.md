@@ -76,8 +76,9 @@ The one-shot check is off the UI thread, with no polling or resident helper.
   and uses the default tmux server.
 - Pins/folds use WebKit's persistent storage, separately from browser preferences.
   Command-K search and standard Edit shortcuts use the existing page.
-- Page navigation stays within the dashboard; deliberate external HTTP(S) links
-  open in the default browser. No general native JavaScript bridge is exposed.
+- Page navigation stays within the dashboard; any other navigation is cancelled
+  and nothing opens in the default browser. No general native JavaScript bridge
+  is exposed.
 - Ghostty Automation permission belongs to the packaged app's execution context;
   existing terminal permission may not carry over. Allow access when prompted,
   then retry a click if the initial prompt outlasted the backend's timeout.

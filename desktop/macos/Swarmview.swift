@@ -208,10 +208,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if action.request.url == home, action.targetFrame?.isMainFrame == true {
             decisionHandler(.allow)
         } else {
-            if action.navigationType == .linkActivated, let url = action.request.url,
-               ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.host != home.host {
-                NSWorkspace.shared.open(url)
-            }
             decisionHandler(.cancel)
         }
     }
