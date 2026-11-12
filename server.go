@@ -82,13 +82,6 @@ func toPayload(s snap) payload {
 	return p
 }
 
-// one snapshot per second no matter how many viewers or /focus calls
-func (s *server) snapshot(now int64) (snap, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.snapshotLocked(now)
-}
-
 // currentSnapshot is snapshot at the time the lock is acquired. A time read
 // before waiting for the lock would be paired with ps's later elapsed times,
 // skewing every process start estimated from them.
@@ -98,7 +91,8 @@ func (s *server) currentSnapshot() (snap, error) {
 	return s.snapshotLocked(time.Now().UnixMilli())
 }
 
-// snapshotLocked must be called with s.mu held.
+// snapshotLocked returns at most one snapshot per second no matter how many
+// viewers or /focus calls there are. It must be called with s.mu held.
 func (s *server) snapshotLocked(now int64) (snap, error) {
 	if s.snap == nil || now-s.snap.at >= 1000 {
 		agents, err := s.listAgents(now)

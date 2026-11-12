@@ -41,3 +41,10 @@ func rows(r ...[3]int) []procRow {
 	}
 	return o
 }
+
+// snapshot is currentSnapshot at a caller-chosen time.
+func (s *server) snapshot(now int64) (snap, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.snapshotLocked(now)
+}

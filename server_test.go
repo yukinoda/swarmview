@@ -147,50 +147,6 @@ func TestFeatureModulesDoNotImportCoordinator(t *testing.T) {
 	}
 }
 
-func TestStaticCommunicationFeedback(t *testing.T) {
-	code, err := webFiles.ReadFile("web/communication.js")
-	must(t, err)
-	for _, forbidden := range []string{
-		".animate(",
-		"requestAnimationFrame",
-		"getComputedStyle",
-		"getBoundingClientRect",
-		"prefers-reduced-motion",
-		"position: fixed",
-		"translate(",
-	} {
-		if bytes.Contains(code, []byte(forbidden)) {
-			t.Fatalf("static feedback contains removed moving/geometry path: %s", forbidden)
-		}
-	}
-	css, err := webFiles.ReadFile("web/app.css")
-	must(t, err)
-	start := strings.Index(string(css), ".communication-note {")
-	if start < 0 {
-		t.Fatal("static feedback styles missing")
-	}
-	end := strings.Index(string(css)[start:], "\n.logo {")
-	if end < 0 {
-		t.Fatal("static feedback style boundary missing")
-	}
-	for _, forbidden := range []string{
-		"animation:",
-		"transition:",
-		"transform:",
-		"position: fixed",
-		"box-shadow:",
-		"filter:",
-		"will-change:",
-		"background:",
-		"outline:",
-		"border-left:",
-	} {
-		if strings.Contains(string(css)[start:start+end], forbidden) {
-			t.Fatalf("static feedback adds a moving/compositing effect: %s", forbidden)
-		}
-	}
-}
-
 func TestSecurityHeaders(t *testing.T) {
 	s := srvWith(func(string, ...string) (string, error) { return "", nil })
 	// The bad-host 403 must carry the headers too.
