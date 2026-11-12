@@ -97,12 +97,10 @@ function showFeedback(key, direction, pid, until = Date.now() + 5000) {
     return;
   }
   if (!entry) {
-    const line = child.btn.parentElement;
     const label = el('span', 'communication-note');
     label.setAttribute('aria-hidden', 'true'); // full context is announced once in the polite region
     entry = {
       label,
-      line,
       parent: item.parent,
       pid: item.pid,
       claude: Boolean(pid),

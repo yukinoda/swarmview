@@ -2490,7 +2490,7 @@ const {
           );
         }
         const allowedTargets = [
-          reused.line,
+          rows.get(stableWorkers[0].key).btn.parentElement,
           rows.get(stableWorkers[0].key).context,
           reused.label,
         ];

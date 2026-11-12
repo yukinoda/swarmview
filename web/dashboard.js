@@ -1,6 +1,6 @@
 import { $, el, txt, cls, attr, uniqueID } from './dom.js';
 import { load, save } from './storage.js';
-import { HEAT, stateLabel, fmtBytes, snapshotItems } from './agents.js';
+import { stateLabel, fmtBytes, snapshotItems } from './agents.js';
 import { createAgentRow, updateAgentRow, setupDetails, refreshDetails } from './rows.js';
 
 const rows = new Map(),
@@ -77,13 +77,12 @@ export function renderDashboard(data, again = false) {
   // Group by repository only: an agent's working directory says where its process sits,
   // not which worktrees it edits, so a worktree level would misattribute work.
   const repos = new Map();
-  const stat = () => ({ n: { working: 0, waiting: 0, workers: 0 }, heat: 9 });
+  const stat = () => ({ n: { working: 0, waiting: 0, workers: 0 } });
   const add = (s, it) => {
     if (!it.dying) {
       if (it.sub) s.n.workers++;
       else if (it.status in s.n) s.n[it.status]++;
     }
-    s.heat = Math.min(s.heat, HEAT.indexOf(it.status));
   };
   for (const it of cur.values()) {
     let r = repos.get(it.repo);
@@ -99,7 +98,7 @@ export function renderDashboard(data, again = false) {
     if (b.children[i] !== e) b.insertBefore(e, b.children[i] ?? null);
   };
   const head = (g, key, label, title, s) => {
-    cls(g.node, 'group h-' + HEAT[s.heat]);
+    cls(g.node, 'group');
     txt(g.label, label);
     const f = folded.has(key),
       p = pins.includes(key.slice(2));
@@ -255,12 +254,4 @@ export function setupDashboard(onChange, beforeDetailsChange, snapshotState) {
   }, beforeDetailsChange, snapshotState);
   $('expand').onclick = () => foldAll(false);
   $('collapse').onclick = () => foldAll(true);
-  $('legend').replaceChildren(
-    ...HEAT.map((s) => {
-      const d = el('span', 's-' + s),
-        i = el('i');
-      d.append(i, stateLabel(s));
-      return d;
-    })
-  );
 }
