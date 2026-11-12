@@ -1,7 +1,6 @@
 const WORKING_RATE = 0.025; // CPU cores; keep equal to the server's WORKING_RATE
 export const MB = 1024 ** 2,
   GB = 1024 ** 3;
-export const HEAT = ['working', 'waiting', 'new', 'idle', 'unknown', 'exiting']; // activity first, for group trunk colour
 export const stateLabel = (s) => (s === 'waiting' ? 'quiet' : s);
 // ps etime [[dd-]hh:]mm:ss -> largest unit, e.g. 6d, 5h, 12m, 40s
 const formatProcessAge = (e) => {
@@ -73,9 +72,9 @@ function agentItem(a) {
     pid: a.pid,
     cwd: a.cwd,
     agentName,
-    repo: a.repo ?? a.cwd ?? 'unknown',
-    repoName: a.repoName ?? a.project,
-    wt: a.worktree ?? a.cwd ?? 'unknown',
+    repo: a.repo ?? 'unknown',
+    repoName: a.repoName,
+    wt: a.worktree ?? 'unknown',
     kind: a.kind,
     size: 20,
     name: a.title || agentName,
@@ -95,7 +94,6 @@ function agentItem(a) {
       .filter(Boolean)
       .join(' · '),
     canFocus: a.canFocus === true,
-    idleSec: a.idleSec,
     mem: Number.isFinite(a.memBytes) && a.memBytes > 0 ? a.memBytes : null,
     status,
     stText: stateLabel(status),
@@ -135,8 +133,8 @@ function subItem(s, i, host) {
     target: host ? terminalTarget(host) : 'Worker · parent terminal unavailable',
     tip: s.description ?? 'subagent',
     mem: null,
-    status: s.working === true ? 'working' : s.working === false ? 'idle' : 'unknown',
-    stText: s.working === true ? 'working' : s.working === false ? 'quiet' : 'unknown',
+    status: s.working ? 'working' : 'idle',
+    stText: s.working ? 'working' : 'quiet',
     up: 'Unavailable',
     cpu: 'Unavailable',
     model: subagentModel(s.model, parentHost),
@@ -159,7 +157,6 @@ function liveItem(worker, index, host) {
     mem: null,
     status: 'unknown',
     stText: 'unknown',
-    idleSec: null,
     up: 'Unavailable',
     cpu: 'Unavailable',
     ord: 2e9 + index,
