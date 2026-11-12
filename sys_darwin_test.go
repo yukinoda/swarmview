@@ -278,3 +278,28 @@ func TestGhosttyFocusSwitchesClientInAnotherTerminal(t *testing.T) {
 		}
 	}
 }
+
+func TestGhosttyFocusKeepsGhosttyFailureWithAnotherTerminal(t *testing.T) {
+	switched := false
+	run := func(cmd string, args ...string) (string, error) {
+		if cmd == "osascript" {
+			return "", errors.New("Automation access denied")
+		}
+		switch args[0] {
+		case "display-message":
+			return "socket\t$0", nil
+		case "list-clients":
+			return "ghost\t/dev/null\t$0\txterm-ghostty\niterm\t/dev/ttys002\t$0\txterm-256color\n", nil
+		case "switch-client":
+			switched = true
+		}
+		return "", nil
+	}
+	ok, why := focusGhostty("%42", run)
+	if ok || !strings.Contains(why, "could not be identified") {
+		t.Fatalf("an unidentified Ghostty client must be reported, not hidden: %v %s", ok, why)
+	}
+	if switched {
+		t.Fatal("must not switch another terminal's client when a Ghostty client failed")
+	}
+}

@@ -122,20 +122,20 @@ func focusGhostty(pane string, run Runner) (bool, string) {
 	if err != nil {
 		return false, "cannot check tmux clients"
 	}
-	attached := false
+	ghosttyAttached := false
 	otherClient := ""
 	for _, line := range strings.Split(clients, "\n") {
 		fields := strings.Split(line, "\t")
 		if len(fields) != 4 || fields[2] != session {
 			continue
 		}
-		attached = true
 		if fields[3] != "xterm-ghostty" {
 			if otherClient == "" {
 				otherClient = fields[0]
 			}
 			continue
 		}
+		ghosttyAttached = true
 		id, err := ghosttySurface(fields[1], run)
 		if err != nil {
 			continue
@@ -149,16 +149,17 @@ func focusGhostty(pane string, run Runner) (bool, string) {
 		}
 		return true, ""
 	}
-	// A Ghostty client wins above because only it can be raised; any other
-	// terminal's client can still be switched, as the non-Ghostty path does.
+	// Report a Ghostty failure instead of hiding it behind another terminal.
+	if ghosttyAttached {
+		return false, "session is attached but its Ghostty tab could not be identified; no new tab opened"
+	}
+	// Another terminal's client cannot be raised, but it can still be switched,
+	// as the non-Ghostty path does.
 	if otherClient != "" {
 		if _, err := run("tmux", "switch-client", "-c", otherClient, "-t", pane); err != nil {
 			return false, "tmux switch failed; try again"
 		}
 		return true, ""
-	}
-	if attached {
-		return false, "session is attached but its Ghostty tab could not be identified; no new tab opened"
 	}
 	tmux, err := exec.LookPath("tmux")
 	if err != nil {
