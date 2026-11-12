@@ -73,7 +73,7 @@ and optional eject/Trash cleanup is a one-shot native action after installation.
 
 | Setup | Attached tmux client exists | No attached tmux client |
 | --- | --- | --- |
-| macOS with Ghostty detected | Reuse the Ghostty client attached to the target session; select its pane and focus its existing surface | Open a Ghostty view attached to the target session only if that session has no attached client |
+| macOS with Ghostty detected | Reuse the Ghostty client attached to the target session; select its pane and focus its existing surface; if the attached client runs in another terminal, only select the pane for that client (bring that terminal forward yourself) | Open a Ghostty view attached to the target session only if that session has no attached client |
 | macOS without Ghostty detected | Select the pane in tmux; bring your terminal forward yourself | Row disabled; attach a client first |
 | Linux, including Ghostty on Linux | Select the pane in tmux; bring your terminal forward yourself | Row disabled; attach a client first |
 | Agent running outside tmux | Monitoring only | Monitoring only |
