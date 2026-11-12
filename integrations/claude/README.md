@@ -186,11 +186,12 @@ A `SubagentStart` record can only choose a worker's parent among the Claude
 processes whose `~/.claude/sessions/<pid>.json` already claims the worker's
 session, and never replaces a parent Swarmview already knows. A program running
 under one of those claimants could record a worker of that same session before
-its real hook arrives, since the first record for a worker wins. Each
-Claude keeps its own record for a worker and only the claimants' records
-count, so ordinary sessions don't affect each other. The same-user limit
-above still applies. A record names the Claude by PID and by its start time,
-estimated from the elapsed time `ps` already reports. A worker is nested only while the running Claude's start time
+its real hook arrives, since the first record for a worker wins. Each Claude
+keeps its own record for a worker, so a program under one Claude can't nest
+workers under another live Claude's sessions. Ordinary sessions don't affect
+each other, and the same-user limit above still applies. A record names the
+Claude by PID and by its start time, estimated from the elapsed time `ps`
+already reports. A worker is nested only while the running Claude's start time
 matches to within two seconds, so a later process that reuses the PID doesn't
 inherit it. Swarmview keeps at most 256 of these records in memory (worker ID,
 Claude PID, and start time only). When full it drops the oldest record of the
