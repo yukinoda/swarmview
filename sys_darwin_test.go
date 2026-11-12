@@ -226,3 +226,80 @@ end run`, "/usr/bin/env -u TMUX "+quote(tmux)+" -S "+quote(socket)+" attach-sess
 		}
 	}
 }
+
+func TestGhosttyFocusSwitchesClientInAnotherTerminal(t *testing.T) {
+	iterm := "iterm\t/dev/ttys002\t$0\txterm-256color\n"
+	ghost := "ghost\t/dev/null\t$0\txterm-ghostty\n"
+	cases := []struct {
+		name    string
+		clients string
+		want    string
+	}{
+		{"only iTerm", iterm, "switch-client -c iterm -t %42"},
+		{"iTerm listed before Ghostty", iterm + ghost, "switch-client -c ghost -t %42"},
+	}
+	for _, tc := range cases {
+		var switched []string
+		created := false
+		run := func(cmd string, args ...string) (string, error) {
+			if cmd == "osascript" {
+				if args[0] == "-l" {
+					title := ""
+					if len(args) > 4 {
+						title = args[4]
+					}
+					b, _ := json.Marshal([]map[string]string{{"id": "surface", "name": title}})
+					return string(b), nil
+				}
+				if args[2] == "" {
+					created = true
+				}
+				return args[2], nil
+			}
+			switch args[0] {
+			case "display-message":
+				return "socket\t$0", nil
+			case "list-clients":
+				return tc.clients, nil
+			case "switch-client":
+				switched = append(switched, joined(args))
+			}
+			return "", nil
+		}
+		ok, why := focusGhostty("%42", run)
+		if !ok {
+			t.Fatalf("%s: %s", tc.name, why)
+		}
+		if created {
+			t.Fatalf("%s: must not open a new Ghostty tab", tc.name)
+		}
+		if len(switched) != 1 || switched[0] != tc.want {
+			t.Fatalf("%s: switches = %v, want %s", tc.name, switched, tc.want)
+		}
+	}
+}
+
+func TestGhosttyFocusKeepsGhosttyFailureWithAnotherTerminal(t *testing.T) {
+	switched := false
+	run := func(cmd string, args ...string) (string, error) {
+		if cmd == "osascript" {
+			return "", errors.New("Automation access denied")
+		}
+		switch args[0] {
+		case "display-message":
+			return "socket\t$0", nil
+		case "list-clients":
+			return "ghost\t/dev/null\t$0\txterm-ghostty\niterm\t/dev/ttys002\t$0\txterm-256color\n", nil
+		case "switch-client":
+			switched = true
+		}
+		return "", nil
+	}
+	ok, why := focusGhostty("%42", run)
+	if ok || !strings.Contains(why, "could not be identified") {
+		t.Fatalf("an unidentified Ghostty client must be reported, not hidden: %v %s", ok, why)
+	}
+	if switched {
+		t.Fatal("must not switch another terminal's client when a Ghostty client failed")
+	}
+}
