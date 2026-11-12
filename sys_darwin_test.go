@@ -342,7 +342,11 @@ func TestGhosttyChallengeRestoresTitleOnEveryExit(t *testing.T) {
 			query := func(marker string) ([]ghosttyTerminal, error) {
 				return tc.matches, tc.queryErr
 			}
-			id, _ := ghosttyChallenge(&written, query, before)
+			id, err := ghosttyChallenge(&written, query, before)
+			identified := tc.wantID != ""
+			if (err == nil) != identified {
+				t.Fatalf("err = %v, identified = %v", err, identified)
+			}
 			if id != tc.wantID {
 				t.Fatalf("id = %q, want %q", id, tc.wantID)
 			}
