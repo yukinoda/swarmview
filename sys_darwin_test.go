@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -301,5 +302,63 @@ func TestGhosttyFocusKeepsGhosttyFailureWithAnotherTerminal(t *testing.T) {
 	}
 	if switched {
 		t.Fatal("must not switch another terminal's client when a Ghostty client failed")
+	}
+}
+
+func TestGhosttyChallengeRestoresTitleOnEveryExit(t *testing.T) {
+	before := []ghosttyTerminal{{ID: "mine", Name: "original title"}}
+	cases := []struct {
+		name      string
+		matches   []ghosttyTerminal
+		queryErr  error
+		wantID    string
+		wantTitle string
+	}{
+		{
+			name:      "identified",
+			matches:   []ghosttyTerminal{{ID: "mine", Name: "marker"}},
+			wantID:    "mine",
+			wantTitle: "original title",
+		},
+		{
+			name:      "no terminal shows the marker",
+			matches:   nil,
+			wantTitle: "",
+		},
+		{
+			name:      "match is not a known terminal",
+			matches:   []ghosttyTerminal{{ID: "new", Name: "marker"}},
+			wantTitle: "",
+		},
+		{
+			name:      "automation keeps failing",
+			queryErr:  errors.New("automation denied"),
+			wantTitle: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var written bytes.Buffer
+			query := func(marker string) ([]ghosttyTerminal, error) {
+				return tc.matches, tc.queryErr
+			}
+			id, err := ghosttyChallenge(&written, query, before)
+			identified := tc.wantID != ""
+			if (err == nil) != identified {
+				t.Fatalf("err = %v, identified = %v", err, identified)
+			}
+			if id != tc.wantID {
+				t.Fatalf("id = %q, want %q", id, tc.wantID)
+			}
+			titles := strings.Split(strings.TrimSuffix(written.String(), "\a"), "\a")
+			if len(titles) != 2 {
+				t.Fatalf("want marker then restore, got %q", written.String())
+			}
+			restored := titles[1]
+			wantRestore := "\x1b]2;" + tc.wantTitle
+			if restored != wantRestore {
+				t.Fatalf("last title write = %q, want %q", restored, wantRestore)
+			}
+		})
 	}
 }
