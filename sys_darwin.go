@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,13 +55,14 @@ const ghosttyTerminalsScript = `function run(argv) {
     .filter(t => !argv[0] || t.name === argv[0]));
 }`
 
+type ghosttyTerminal struct{ ID, Name string }
+
 // Ghostty 1.3 doesn't expose TTYs. Challenge the client's output with a unique
 // title instead of guessing by cwd/title or relying on process-local mappings.
 func ghosttySurface(tty string, run Runner) (string, error) {
-	type terminal struct{ ID, Name string }
-	query := func(marker string) ([]terminal, error) {
+	query := func(marker string) ([]ghosttyTerminal, error) {
 		out, err := run("osascript", "-l", "JavaScript", "-e", ghosttyTerminalsScript, marker)
-		var terms []terminal
+		var terms []ghosttyTerminal
 		if err == nil {
 			err = json.Unmarshal([]byte(out), &terms)
 		}
@@ -78,10 +80,33 @@ func ghosttySurface(tty string, run Runner) (string, error) {
 	if info, err := f.Stat(); err != nil || info.Mode()&os.ModeCharDevice == 0 {
 		return "", fmt.Errorf("client TTY is not a character device")
 	}
+	return ghosttyChallenge(f, query, before)
+}
+
+// ghosttyChallenge writes a unique title marker to the client's terminal and
+// looks for the terminal that shows it. The title is restored on every exit
+// path: to the terminal's original title once it is identified, otherwise to
+// an empty title so the terminal falls back to its own default instead of
+// keeping the marker.
+func ghosttyChallenge(w io.Writer, query func(marker string) ([]ghosttyTerminal, error), before []ghosttyTerminal) (id string, err error) {
 	marker := "swarmview-" + rand.Text()
-	if _, err := fmt.Fprintf(f, "\x1b]2;%s\x07", marker); err != nil {
+	if _, err := fmt.Fprintf(w, "\x1b]2;%s\x07", marker); err != nil {
 		return "", err
 	}
+	restoreTitle := ""
+	defer func() {
+		// Do not allow a title to inject terminal control sequences.
+		title := strings.Map(func(r rune) rune {
+			if r < 32 || (r >= 127 && r < 160) {
+				return -1
+			}
+			return r
+		}, restoreTitle)
+		_, restoreErr := fmt.Fprintf(w, "\x1b]2;%s\x07", title)
+		if err == nil {
+			err = restoreErr
+		}
+	}()
 	deadline := time.Now().Add(time.Second)
 	for i := 0; i < 10 && time.Now().Before(deadline); i++ {
 		matches, err := query(marker)
@@ -92,15 +117,8 @@ func ghosttySurface(tty string, run Runner) (string, error) {
 		if len(matches) == 1 {
 			for _, original := range before {
 				if original.ID == matches[0].ID {
-					// Do not allow a title to inject terminal control sequences.
-					title := strings.Map(func(r rune) rune {
-						if r < 32 || (r >= 127 && r < 160) {
-							return -1
-						}
-						return r
-					}, original.Name)
-					_, err := fmt.Fprintf(f, "\x1b]2;%s\x07", title)
-					return original.ID, err
+					restoreTitle = original.Name
+					return original.ID, nil
 				}
 			}
 		}
